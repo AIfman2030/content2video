@@ -1,0 +1,37 @@
+export type StyleType = 'chinese' | 'city' | 'aitech';
+export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
+export type AnimMode = 'grid' | 'single';
+
+export interface ContentPoint {
+  label: string;
+  short: string;
+  desc: string;
+  formatted: string;
+}
+
+export interface GeneratedContent {
+  title: string;
+  points: ContentPoint[];
+}
+
+export interface ChineseOptions {
+  colorScheme: ColorScheme;
+  borderWidth: 1 | 2 | 3 | 4;
+  lineWidth: 1 | 2 | 3 | 4;
+  animMode: AnimMode;
+}
+
+export interface GeneratorConfig {
+  style: StyleType;
+  coverIndex: number;
+  text: string;
+  chineseOptions: ChineseOptions;
+}
+
+export interface ThemeConfig {
+  bg: [string, string, string];
+  accent: string;
+  accent2: string;
+  particle: string;
+  gridColor: string;
+}
