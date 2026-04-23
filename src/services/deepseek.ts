@@ -1,7 +1,7 @@
 import type { GeneratedContent } from '../types/video';
 
-const DEEPSEEK_API_KEY = 'sk-03b7389365fc45aa9964e9378d3c45b9';
 const API_URL = 'https://api.deepseek.com/v1/chat/completions';
+const LS_KEY = 'deepseek_api_key';
 
 const SYSTEM_PROMPT = `你是一个内容提炼专家。用户会给你一段文章或文字，你需要提炼核心要点，以严格的JSON格式返回，不要有任何多余文字。
 
@@ -24,17 +24,21 @@ const SYSTEM_PROMPT = `你是一个内容提炼专家。用户会给你一段文
 - 只返回JSON，不要任何其他文字
 - 确保所有字段都有值`;
 
-export async function extractContent(text: string): Promise<GeneratedContent> {
-  if (text.length < 20) {
-    throw new Error('内容太短，请输入至少20个字符');
-  }
-  if (text.length > 8000) {
-    throw new Error('内容过长，请控制在8000字以内');
-  }
+export function getStoredApiKey(): string {
+  return localStorage.getItem(LS_KEY) ?? '';
+}
 
-  if (!DEEPSEEK_API_KEY) {
-    throw new Error('DeepSeek API 未配置，请联系站长');
-  }
+export function setStoredApiKey(key: string) {
+  if (key.trim()) localStorage.setItem(LS_KEY, key.trim());
+  else localStorage.removeItem(LS_KEY);
+}
+
+export async function extractContent(text: string): Promise<GeneratedContent> {
+  if (text.length < 20) throw new Error('内容太短，请输入至少20个字符');
+  if (text.length > 8000) throw new Error('内容过长，请控制在8000字以内');
+
+  const apiKey = getStoredApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
 
   let response: Response;
   try {
@@ -42,7 +46,7 @@ export async function extractContent(text: string): Promise<GeneratedContent> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
@@ -58,19 +62,15 @@ export async function extractContent(text: string): Promise<GeneratedContent> {
     throw new Error('网络错误，请重试');
   }
 
-  if (!response.ok) {
-    throw new Error(`DeepSeek API 错误: ${response.status}`);
-  }
+  if (response.status === 401) throw new Error('API Key 无效，请检查后重试');
+  if (!response.ok) throw new Error(`DeepSeek 接口错误 (${response.status})`);
 
   const data = await response.json();
   const rawContent = data?.choices?.[0]?.message?.content;
+  if (!rawContent) throw new Error('AI 返回内容为空');
 
-  if (!rawContent) {
-    throw new Error('AI返回内容为空');
-  }
-
-  // Extract JSON from response (handle markdown code blocks)
-  const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) ||
+  const jsonMatch =
+    rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) ||
     rawContent.match(/(\{[\s\S]*\})/);
   const jsonStr = jsonMatch ? jsonMatch[1].trim() : rawContent.trim();
 
@@ -78,11 +78,11 @@ export async function extractContent(text: string): Promise<GeneratedContent> {
   try {
     parsed = JSON.parse(jsonStr);
   } catch {
-    throw new Error('AI返回格式错误，请重试');
+    throw new Error('AI 返回格式错误，请重试');
   }
 
   if (!parsed.title || !Array.isArray(parsed.points) || parsed.points.length === 0) {
-    throw new Error('AI返回数据格式不符合要求，请重试');
+    throw new Error('AI 返回数据不完整，请重试');
   }
 
   return parsed;

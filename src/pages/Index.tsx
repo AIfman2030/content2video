@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Sparkles, Film } from 'lucide-react';
+import { Sparkles, Film, Settings } from 'lucide-react';
 import type { StyleType, ChineseOptions, GeneratedContent, GeneratorConfig } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import VideoGenerator from '../components/VideoGenerator';
-import { extractContent } from '../services/deepseek';
+import ApiKeyDialog from '../components/ApiKeyDialog';
+import { extractContent, getStoredApiKey } from '../services/deepseek';
 
 type Step = 'style' | 'form' | 'video';
 
@@ -33,9 +34,11 @@ export default function Index() {
   const [error, setError] = useState('');
   const [config, setConfig] = useState<GeneratorConfig | null>(null);
   const [content, setContent] = useState<GeneratedContent | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const accent = ACCENT_BY_STYLE[style];
   const bg = BG_BY_STYLE[style];
+  const hasApiKey = !!getStoredApiKey();
 
   const handleStyleNext = () => setStep('form');
 
@@ -45,6 +48,13 @@ export default function Index() {
     chineseOptions: ChineseOptions,
   ) => {
     setError('');
+
+    // Check API key first
+    if (!getStoredApiKey()) {
+      setShowApiKey(true);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = await extractContent(text);
@@ -52,7 +62,12 @@ export default function Index() {
       setConfig({ style, coverIndex, text, chineseOptions });
       setStep('video');
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : '生成失败，请重试');
+      const msg = e instanceof Error ? e.message : '生成失败，请重试';
+      if (msg === 'NO_API_KEY') {
+        setShowApiKey(true);
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -66,10 +81,7 @@ export default function Index() {
   const steps: Step[] = ['style', 'form', 'video'];
 
   return (
-    <div
-      className="min-h-screen transition-all duration-700"
-      style={{ background: bg }}
-    >
+    <div className="min-h-screen transition-all duration-700" style={{ background: bg }}>
       {/* Header */}
       <header className="border-b border-white/8 px-6 py-4">
         <div className="mx-auto flex max-w-2xl items-center justify-between">
@@ -82,7 +94,23 @@ export default function Index() {
             </div>
             <span className="text-base font-bold text-white">小福 · 视频生成器</span>
           </div>
-          <span className="text-xs text-white/30">@小福AI自由</span>
+
+          {/* Settings + API key status */}
+          <div className="flex items-center gap-3">
+            {!hasApiKey && (
+              <span className="hidden sm:flex items-center gap-1 text-xs text-amber-400/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                未设置 API Key
+              </span>
+            )}
+            <button
+              onClick={() => setShowApiKey(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
+            >
+              <Settings size={13} />
+              API Key
+            </button>
+          </div>
         </div>
       </header>
 
@@ -184,6 +212,13 @@ export default function Index() {
           onClose={handleClose}
         />
       )}
+
+      {/* API Key dialog */}
+      <ApiKeyDialog
+        open={showApiKey}
+        onClose={() => setShowApiKey(false)}
+        accent={accent}
+      />
     </div>
   );
 }
