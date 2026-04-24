@@ -1,133 +1,119 @@
-# Plan: Differentiated Theme Animations + City Recording Bug Fix
+# Plan: Differentiated Theme Animations + City Recording Fix
 
-## Context
-Two issues to solve:
-1. **All 3 themes use identical card layout** (rectangular box pop-in grid). The user wants:
-   - **Chinese & City**: Left-panel graphic + right-panel text (split card), each with unique animation
-   - **AI Tech**: Radial polygon layout — central configurable polygon, content items radiate outward one by one, each connected by a glowing line
-2. **City style recording bug**: Cards don't appear when recording; only title shows. Root cause: `handleRecord` calls `createAnimEngine` (async due to `loadShapeImage`), but if city SVG fails to load or is slow, the recording captures a frozen title frame. Fix: add a `restart(cb?)` method to `AnimEngine` to reuse the existing loaded engine.
-
-## Image References
-- **Chinese/City refs**: Cards split into LEFT graphic (shape icon) + RIGHT text content. Clean, modern cards with a decorative divider between panels.
-- **AI Tech ref**: Central polygon with radial spokes; each content item floats at the end of a spoke, appearing sequentially.
+## Clarified Scope
+- **中国风 (Chinese)**: UNCHANGED — keep existing card layout
+- **城市地标 (City)**: New layout — left city-icon panel + right text content; slide-up animation
+- **AI科技 (AITech)**: New layout — central configurable polygon + radial content items, one per edge, sequential appearance
+- **Bug fix**: City style cards don't appear during recording
 
 ---
 
-## File Changes
+## Problem 1: City Recording Bug
+
+**Root cause**: `handleRecord` calls `createAnimEngine` (async, loads SVG image). If loading takes time or fails, the recording captures a frozen title frame (from where preview was stopped). There's no `.catch()`, so failures are silent.
+
+**Fix**: Add `restart(onComplete?: () => void): void` to `AnimEngine` interface. Restarts the existing engine from t=0 with a new completion callback — no async image loading needed.
+
+---
+
+## Problem 2: City Card Redesign (Left Icon + Right Text)
+
+**New layout** (keeps 2-col × 3-row grid):
+- Card: 915px wide × 268px tall
+- **Left panel** (300px): draws the loaded `shapeImg` (city skyline SVG) centered, themed background
+- **Vertical separator**: accent-colored gradient line
+- **Right panel** (615px): label (68px, accent), short text (34px, white/70), desc (26px, white/40)
+- **Animation**: slide up from bottom (`offsetY = (1-eased) * 120`), fade in
+- Left panel background: `rgba(accent, 0.12)` dark, with subtle neon bottom glow
+
+Need to pass `shapeImg: HTMLImageElement` into `drawCards` so city cards can render it.
+
+---
+
+## Problem 3: AI Tech Radial Layout
+
+**New layout**: Completely different from grid — radial arrangement:
+- Central polygon at canvas center (960, 540), radius 130px
+- N content items placed at equal angles starting from top (-90°)  
+- Each item: compact card (460 × 130px) at radius 370px from center
+- Connecting line from polygon edge to each card (glowing, extends during animation)
+- Items appear one by one (existing `T.cardSlot` timing preserved)
+
+**Polygon shape** (user-configurable, defaults to hexagon):
+- triangle (3), quad (4), pentagon (5), hexagon (6), octagon (8), star5 (5-pointed star), decagon (10)
+- Shape is purely visual decoration — items always distributed by count
+- Polygon pulses/rotates gently even before cards appear
+
+**Card design** (compact):
+- Semi-transparent pill/rect with accent border
+- Small numbered circle (index), large label (52px), short text (26px)
+- Right-side glow effect matching polygon style
+
+---
+
+## Implementation Files
 
 ### 1. `src/types/video.ts` (+10 lines)
-- Add `export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon'`
-- Add `export interface AIOptions { polyShape: PolyShape }`
-- Add `aiOptions?: AIOptions` to `GeneratorConfig`
-
-### 2. `src/lib/engine/helpers.ts` (+15 lines, now ~82 lines)
-Add two drawing utilities:
 ```ts
-drawPolygon(ctx, cx, cy, r, sides, rotation=0)  // regular N-gon
-drawStar(ctx, cx, cy, outerR, innerR, points)    // star shape
+export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
+export interface AIOptions { polyShape: PolyShape; }
+// Add to GeneratorConfig:
+aiOptions?: AIOptions;
 ```
 
-### 3. `src/lib/canvasEngine.ts` (modify, ~115 lines)
-- Add `restart(onComplete?: () => void): void` to `AnimEngine` interface
-- Implement `restart` inside the engine (reset startTime, update completion callback, restart RAF)
-- Add `aiOptions?: AIOptions` param to `createAnimEngine`
+### 2. `src/lib/engine/helpers.ts` (~82 lines total, +15 lines)
+Add polygon drawing utilities:
+```ts
+export function drawPolygon(ctx, cx, cy, r, sides, rotation = 0): void
+export function drawStar(ctx, cx, cy, outerR, innerR, points): void
+```
+
+### 3. `src/lib/canvasEngine.ts` (~115 lines total)
+- Add `restart(onComplete?: () => void): void` to `AnimEngine` interface + implementation
+- Add `aiOptions?: AIOptions` parameter to `createAnimEngine`
 - Pass `shapeImg` and `aiOptions?.polyShape` to `drawCards`
 
-### 4. `src/lib/engine/cards.ts` (rewrite as thin dispatcher, ~30 lines)
-```ts
-import { drawCardsLeft } from './cards-left'  // chinese + city
-import { drawCardsAITech } from './cards-aitech'
+### 4. `src/lib/engine/cards.ts` (rewrite as thin dispatcher, ~40 lines)
+- Keep Chinese drawing as-is (inline or import existing logic)
+- New city drawing: import `drawCityCards`
+- New AI drawing: import `drawAITechCards`
 
-export function drawCards(..., shapeImg, polyShape?) {
-  if (style === 'aitech') drawCardsAITech(...)
-  else drawCardsLeft(...)  // chinese & city both use left+right split
-}
-```
+### 5. `src/lib/engine/cards-city.ts` (NEW, ~110 lines)
+City left-icon + right-text cards. Uses `shapeImg` for icon panel.
 
-### 5. `src/lib/engine/cards-left.ts` (NEW, ~120 lines)
-Handles **Chinese** and **City** styles. Same left+right layout for both; only animation direction and colors differ.
+### 6. `src/lib/engine/cards-aitech.ts` (NEW, ~210 lines)
+AI radial polygon layout. Configurable polygon via `polyShape` param.
 
-**Layout** (per card, 1-column centered, 5 cards stacked):
-- Card: `CW * 0.75` wide (~1440px), `cardH = 200px`, `startX = CW * 0.125`
-- Left panel: `panelW = 320px` — draws `shapeImg` centered (at ~200×200px), semi-transparent themed background
-  - Number badge: bottom-left of left panel
-  - Vertical divider line (accent color, gradient) separating left and right
-- Right panel: remaining width
-  - Label (68px, accent), short text (34px, white/70), desc lines (26px, white/40)
+### 7. `src/components/ContentForm.tsx` (~279 lines total)
+- Import `AIOptions, PolyShape`
+- Add `aiOptions` state (default: `{ polyShape: 'hexagon' }`)
+- Update `onGenerate` signature: add `aiOptions: AIOptions` as 4th param
+- Add **AI图形选项** section (shown only for `aitech` style):
+  - 7 shape buttons: 三角形/四边形/五边形/六边形/八边形/五角星/十边形
+  - Styled same as Chinese color scheme buttons
 
-**Animations** (per style):
-- `chinese`: card slides in from LEFT (`offsetX = (1-eased) * 200`); left panel bg = `rgba(accent, 0.12)` ink wash
-- `city`: card slides up from BOTTOM (`offsetY = (1-eased) * 100`); left panel bg = neon-dark gradient; left panel has scanline shimmer
-
-**Layout note**: 5 rows, each `cardH + rowGap` apart:
-- Row 0: y = 140
-- Row 1: y = 366
-- Row 2: y = 592
-- Row 3: y = 818
-- Row 4: y = 1044 (bottom edge 1044+200=1244 > 1080 — OK since cards clip at canvas edge)
-- Actually with `cardH=200, rowGap=22`: last card bottom = 818+200 = 1018 ≤ 1080 ✓ (for 4 rows of 5 cards with 1 col)
-
-Wait — previous layout was 2 columns. With a single column left+right split, 6 cards in a single column at 200px each + 22px gap = 6*200 + 5*22 = 1310px → too tall.
-**Revised**: Keep 2 columns for Chinese/City too, but each card is left+right split.
-- 2 cols × 3 rows, same positions as before: card W=915px
-- Left panel: 320px, right panel: 595px
-- Rows: y=160, y=454, y=748 (last row bottom=748+268=1016 ≤ 1080 ✓)
-
-### 6. `src/lib/engine/cards-aitech.ts` (NEW, ~200 lines)
-Handles **AI Tech** style exclusively.
-
-**Layout**: Radial arrangement around canvas center (960, 540)
-- Central polygon: R=130px, drawn procedurally using `drawPolygon` / `drawStar`
-- Polygon side count: based on `polyShape` param (triangle=3, quad=4, pentagon=5, hexagon=6, octagon=8, star5=5, decagon=10)
-- Content items always placed at N_items equally-spaced angles starting from top (-90°)
-- Card center radius: 370px from canvas center
-- Card size: 460px × 130px
-
-**Sequencing**:
-- `t < T.cardBase`: only polygon is drawn (pulsing, glowing, rotating slowly)
-- At `T.cardBase + i*T.cardSlot`: item i animates in (line extends from polygon, card fades+scales in)
-
-**Per card**:
-- Background: dark semi-transparent pill shape
-- Border: accent gradient
-- Content: small number circle (30px) + label (52px) + short text (28px)
-- Connecting line: from polygon center to card near-edge, drawn with glowing dash
-
-**Polygon with `star5`**: uses `drawStar(ctx, 960, 540, 130, 60, 5)` (5-pointed star)
-
-### 7. `src/components/ContentForm.tsx` (modify, ~279 lines)
-- Import `AIOptions, PolyShape` types
-- Add `aiOptions` state: `{ polyShape: 'hexagon' as PolyShape }`
-- Add `onGenerate` 4th param: `aiOptions: AIOptions`
-- Add "几何图形" selector panel (only shown when `style === 'aitech'`), similar to Chinese advanced options:
-  - Inline (not collapsible): "AI 图形选项" label
-  - 7 buttons: 三角形, 四边形, 五边形, 六边形, 八边形, 五角星, 十边形
-  - Selected button highlighted with accent color
-
-### 8. `src/pages/Index.tsx` (modify, ~230 lines)
+### 8. `src/pages/Index.tsx` (~232 lines total)
 - Import `AIOptions`
-- Update `handleGenerate` signature to accept `aiOptions: AIOptions`
-- Store `aiOptions` in config: `setConfig({ style, coverIndex, text, chineseOptions, aiOptions })`
-- Pass `aiOptions={config.aiOptions}` to `<VideoGenerator>`
+- `handleGenerate` accepts `aiOptions: AIOptions` 4th param
+- Store in config; pass `aiOptions={config.aiOptions}` to `<VideoGenerator>`
 
-### 9. `src/components/VideoGenerator.tsx` (modify, ~280 lines)
+### 9. `src/components/VideoGenerator.tsx` (~280 lines total)
 - Add `aiOptions?: AIOptions` to `Props`
-- Pass `aiOptions` to `createAnimEngine` calls
-- **Fix recording bug**: Replace the second `createAnimEngine` call in `handleRecord` with:
+- **Fix recording bug**: Replace `createAnimEngine(...)` in `handleRecord` with:
   ```ts
   engine.restart(() => {
-    setTimeout(() => recorder.stop(), 500);
-    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+    setTimeout(() => { recorder.stop(); clearInterval(timer); }, 500);
   });
   ```
-  This reuses the already-loaded engine (no async shape-loading) and restarts from t=0.
+- Pass `aiOptions` to `createAnimEngine` (initial load in `useEffect`)
 
 ---
 
 ## Verification
-1. Chinese style: cards have left graphic panel + right text; slide in from left
-2. City style: cards have left city-silhouette panel + right text; slide up from bottom  
-3. AI style: central polygon + radial cards appear one by one
-4. AI style recording: cards appear properly (bug fixed via engine.restart)
-5. UI shows polygon selector for aitech style
-6. All files stay under 280 lines
+1. Chinese style: cards unchanged, appear as before
+2. City style: each card has left city-skyline icon + right text, slides up from bottom
+3. City recording: cards appear properly (no more blank canvas freeze)
+4. AI style: central polygon glows, then cards radiate outward one by one
+5. AI style: polygon shape selector appears in ContentForm when `style='aitech'`
+6. Selected polygon shape changes the central polygon in the animation
+7. All new files stay under 280 lines
