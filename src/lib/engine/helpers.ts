@@ -50,6 +50,33 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
   return lines;
 }
 
+export function drawPolygon(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, r: number, sides: number, rotation = 0,
+) {
+  ctx.beginPath();
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2 + rotation;
+    if (i === 0) ctx.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    else ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  }
+  ctx.closePath();
+}
+
+export function drawStar(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, outerR: number, innerR: number, points: number, rotation = 0,
+) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i / (points * 2)) * Math.PI * 2 + rotation;
+    if (i === 0) ctx.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    else ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  }
+  ctx.closePath();
+}
+
 export const T = {
   bgBloom: 0,
   themeEffect: 200,

@@ -1,6 +1,11 @@
 export type StyleType = 'chinese' | 'city' | 'aitech';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
+export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
+
+export interface AIOptions {
+  polyShape: PolyShape;
+}
 
 export interface ContentPoint {
   label: string;
@@ -26,6 +31,7 @@ export interface GeneratorConfig {
   coverIndex: number;
   text: string;
   chineseOptions: ChineseOptions;
+  aiOptions?: AIOptions;
 }
 
 export interface ThemeConfig {

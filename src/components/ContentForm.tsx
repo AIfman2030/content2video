@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
-import type { StyleType, ChineseOptions, ColorScheme } from '../types/video';
+import type { StyleType, ChineseOptions, ColorScheme, AIOptions, PolyShape } from '../types/video';
 import CoverPicker from './CoverPicker';
 
 interface Props {
   style: StyleType;
-  onGenerate: (text: string, coverIndex: number, chineseOptions: ChineseOptions) => Promise<void>;
+  onGenerate: (text: string, coverIndex: number, chineseOptions: ChineseOptions, aiOptions: AIOptions) => Promise<void>;
   isLoading: boolean;
   error?: string;
 }
@@ -16,6 +16,16 @@ const COLOR_SCHEME_OPTIONS: { id: ColorScheme; name: string; colors: string[] }[
   { id: 'jade', name: '玉色', colors: ['#1abc9c', '#27ae60', '#16a085'] },
   { id: 'gold', name: '鎏金', colors: ['#f0c040', '#d4a017', '#8b6914'] },
   { id: 'porcelain', name: '青花', colors: ['#2980b9', '#ecf0f1', '#2c3e50'] },
+];
+
+const POLY_SHAPE_OPTIONS: { id: PolyShape; name: string; sides: number }[] = [
+  { id: 'triangle', name: '三角形', sides: 3 },
+  { id: 'quad', name: '四边形', sides: 4 },
+  { id: 'pentagon', name: '五边形', sides: 5 },
+  { id: 'hexagon', name: '六边形', sides: 6 },
+  { id: 'octagon', name: '八边形', sides: 8 },
+  { id: 'star5', name: '五角星', sides: 5 },
+  { id: 'decagon', name: '十边形', sides: 10 },
 ];
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
@@ -45,6 +55,7 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
     lineWidth: 2,
     animMode: 'single',
   });
+  const [aiOptions, setAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
 
   const accent = ACCENT_BY_STYLE[style];
   const charCount = text.length;
@@ -52,7 +63,7 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
 
   const handleSubmit = async () => {
     if (!isValid || isLoading) return;
-    await onGenerate(text, coverIndex, chineseOptions);
+    await onGenerate(text, coverIndex, chineseOptions, aiOptions);
   };
 
   return (
@@ -93,6 +104,32 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
           onChange={setCoverIndex}
         />
       </div>
+
+      {/* AI polygon selector (AI tech only) */}
+      {style === 'aitech' && (
+        <div
+          className="rounded-xl border border-white/10 p-4 space-y-3"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+        >
+          <label className="text-xs text-white/50">AI 几何图形</label>
+          <div className="flex gap-2 flex-wrap">
+            {POLY_SHAPE_OPTIONS.map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setAiOptions({ polyShape: opt.id })}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs transition-all border"
+                style={{
+                  background: aiOptions.polyShape === opt.id ? `${accent}22` : 'rgba(255,255,255,0.05)',
+                  borderColor: aiOptions.polyShape === opt.id ? accent : 'rgba(255,255,255,0.1)',
+                  color: aiOptions.polyShape === opt.id ? accent : 'rgba(255,255,255,0.5)',
+                }}
+              >
+                {opt.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Advanced options (Chinese only) */}
       {style === 'chinese' && (

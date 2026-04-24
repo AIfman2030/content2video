@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Video, Download, RotateCcw, Loader2 } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
+import { webmToMp4 } from '../lib/mp4Converter';
 
 interface Props {
   content: GeneratedContent;
   style: StyleType;
   coverIndex: number;
   chineseOptions?: ChineseOptions;
+  aiOptions?: AIOptions;
   onClose: () => void;
 }
 
@@ -15,10 +17,10 @@ interface Props {
 const PREVIEW_W = 512;
 const PREVIEW_H = Math.round(512 * CH / CW);
 
-type RecordState = 'idle' | 'recording' | 'done';
+type RecordState = 'idle' | 'recording' | 'converting' | 'done';
 
 export default function VideoGenerator({
-  content, style, coverIndex, chineseOptions, onClose,
+  content, style, coverIndex, chineseOptions, aiOptions, onClose,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engineReady, setEngineReady] = useState(false);
@@ -33,6 +35,7 @@ export default function VideoGenerator({
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const isRecording = recordState === 'recording';
+  const isConverting = recordState === 'converting';
   const isDone = recordState === 'done';
   const aspect = CW / CH; // 16/9
 
@@ -41,7 +44,7 @@ export default function VideoGenerator({
     if (!canvasRef.current) return;
     setEngineReady(false);
     setInitError('');
-    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions)
+    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions)
       .then(engine => {
         engineRef.current = engine;
         setEngineReady(true);
@@ -62,15 +65,15 @@ export default function VideoGenerator({
   }, []);
 
   // Click "录制视频" → canvas IMMEDIATELY fills screen + recording starts
+  // Uses engine.restart() to avoid re-creating the engine (fixes city bug)
   const handleRecord = useCallback(async () => {
     const canvas = canvasRef.current;
     const engine = engineRef.current;
     if (!canvas || !engine) return;
 
-    setRecordState('recording');   // triggers fullscreen CSS instantly
+    setRecordState('recording');
     setProgress(0);
     chunksRef.current = [];
-    engine.stop();
 
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
       ? 'video/webm;codecs=vp9' : 'video/webm';
@@ -80,12 +83,23 @@ export default function VideoGenerator({
     recorderRef.current = recorder;
 
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: mimeType });
-      setDownloadUrl(URL.createObjectURL(blob));
-      setRecordState('done');
-      setProgress(100);
+    recorder.onstop = async () => {
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      setRecordState('converting');
+      setProgress(0);
+      try {
+        const webmBlob = new Blob(chunksRef.current, { type: mimeType });
+        const mp4Blob = await webmToMp4(webmBlob, (r) => setProgress(Math.round(r * 100)));
+        setDownloadUrl(URL.createObjectURL(mp4Blob));
+        setProgress(100);
+        setRecordState('done');
+      } catch {
+        // Fallback: provide WebM if conversion fails
+        const webmBlob = new Blob(chunksRef.current, { type: mimeType });
+        setDownloadUrl(URL.createObjectURL(webmBlob));
+        setProgress(100);
+        setRecordState('done');
+      }
     };
 
     recorder.start(100);
@@ -96,30 +110,31 @@ export default function VideoGenerator({
       setProgress(Math.min(99, ((performance.now() - t0) / total) * 100));
     }, 100);
 
-    createAnimEngine(canvas, content, style, coverIndex, chineseOptions, () => {
+    // Restart existing engine from t=0 (no re-loading shape images → fixes city bug)
+    engine.restart(() => {
       setTimeout(() => {
         recorder.stop();
         if (progressTimerRef.current) clearInterval(progressTimerRef.current);
       }, 500);
-    }).then(eng => { engineRef.current = eng; eng.start(); });
-  }, [content, style, coverIndex, chineseOptions]);
+    });
+  }, []);
 
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
     const a = document.createElement('a');
     a.href = downloadUrl;
-    a.download = `${content.title.slice(0, 12)}.webm`;
+    a.download = `${content.title.slice(0, 12)}.mp4`;
     a.click();
   }, [downloadUrl, content.title]);
 
   const accent = style === 'chinese' ? '#e74c3c'
     : style === 'city' ? '#f5d87a' : '#a855f7';
 
-  return (
-    /* Root overlay — always mounted; z-index elevates during recording */
-    <div className="fixed inset-0" style={{ zIndex: isRecording ? 100 : 50 }}>
+  const showControls = !isRecording && !isConverting;
 
-      {/* ── Background ── */}
+  return (
+    <div className="fixed inset-0" style={{ zIndex: isRecording || isConverting ? 100 : 50 }}>
+      {/* Background */}
       <div
         className="absolute inset-0 transition-all duration-500"
         style={{
@@ -128,22 +143,15 @@ export default function VideoGenerator({
         }}
       />
 
-      {/* ── Canvas container ──
-          STABLE position in tree so React never remounts the canvas.
-          Switches between small preview and fullscreen via CSS only. */}
-      <div
-        className="absolute inset-0 flex items-center justify-center overflow-hidden"
-        style={{ zIndex: 1 }}
-      >
+      {/* Canvas container — STABLE position in tree */}
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden" style={{ zIndex: 1 }}>
         <div
           style={isRecording ? {
-            /* COVER mode: fill entire screen, clip overflow → no black bars */
             position: 'relative',
             overflow: 'hidden',
             width: `max(100vw, calc(100vh * ${aspect}))`,
             height: `max(100vh, calc(100vw / ${aspect}))`,
           } : {
-            /* Preview: fixed small box */
             position: 'relative',
             width: PREVIEW_W,
             height: PREVIEW_H,
@@ -153,7 +161,6 @@ export default function VideoGenerator({
             border: '1px solid rgba(255,255,255,0.08)',
           }}
         >
-          {/* Loading overlay (only before engine ready) */}
           {!engineReady && !initError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-10">
               <Loader2 size={28} className="animate-spin text-white/50 mb-2" />
@@ -166,23 +173,19 @@ export default function VideoGenerator({
             </div>
           )}
 
-          {/* THE CANVAS — always at this position in the tree */}
+          {/* THE CANVAS */}
           <canvas
             ref={canvasRef}
             width={CW}
             height={CH}
             style={{
               display: 'block',
-              width: isRecording
-                ? `max(100vw, calc(100vh * ${aspect}))`
-                : PREVIEW_W,
-              height: isRecording
-                ? `max(100vh, calc(100vw / ${aspect}))`
-                : PREVIEW_H,
+              width: isRecording ? `max(100vw, calc(100vh * ${aspect}))` : PREVIEW_W,
+              height: isRecording ? `max(100vh, calc(100vw / ${aspect}))` : PREVIEW_H,
             }}
           />
 
-          {/* Recording badge + progress (shown over canvas while recording) */}
+          {/* REC badge + progress */}
           <div style={{ display: isRecording ? 'block' : 'none' }}>
             <div className="absolute top-5 right-6 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -191,21 +194,29 @@ export default function VideoGenerator({
               </span>
             </div>
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
-              <div
-                className="h-full transition-all duration-300"
-                style={{ width: `${progress}%`, background: accent }}
-              />
+              <div className="h-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Dialog controls (hidden while recording) ── */}
+      {/* Converting overlay */}
+      {isConverting && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ zIndex: 2 }}>
+          <Loader2 size={36} className="animate-spin" style={{ color: accent }} />
+          <p className="text-white/80 text-base font-medium">正在转换为 MP4…</p>
+          <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
+          </div>
+          <p className="text-xs text-white/30">首次转换需加载编码器，请稍候</p>
+        </div>
+      )}
+
+      {/* Controls (hidden while recording/converting) */}
       <div
         className="absolute inset-0 flex flex-col items-center justify-end pb-10 pointer-events-none"
-        style={{ zIndex: 2, display: isRecording ? 'none' : 'flex' }}
+        style={{ zIndex: 2, display: showControls ? 'flex' : 'none' }}
       >
-        {/* Close button */}
         <button
           onClick={onClose}
           className="absolute top-5 right-6 flex items-center justify-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors pointer-events-auto"
@@ -213,17 +224,12 @@ export default function VideoGenerator({
           <X size={18} />
         </button>
 
-        {/* Buttons row */}
         <div className="flex items-center gap-3 pointer-events-auto">
           <button
             onClick={handlePreview}
             disabled={!engineReady}
             className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-40"
-            style={{
-              background: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              color: 'rgba(255,255,255,0.75)',
-            }}
+            style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.75)' }}
           >
             <Play size={15} />
             预览
@@ -234,11 +240,7 @@ export default function VideoGenerator({
               onClick={handleRecord}
               disabled={!engineReady}
               className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
-              style={{
-                background: `linear-gradient(135deg, ${accent}, ${accent}bb)`,
-                color: '#fff',
-                boxShadow: `0 4px 24px ${accent}55`,
-              }}
+              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, color: '#fff', boxShadow: `0 4px 24px ${accent}55` }}
             >
               <Video size={15} />
               全屏录制视频
@@ -248,14 +250,10 @@ export default function VideoGenerator({
               <button
                 onClick={handleDownload}
                 className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold"
-                style={{
-                  background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-                  color: '#fff',
-                  boxShadow: '0 4px 20px #22c55e50',
-                }}
+                style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#fff', boxShadow: '0 4px 20px #22c55e50' }}
               >
                 <Download size={15} />
-                下载视频
+                下载 MP4
               </button>
               <button
                 onClick={handleRecord}
@@ -270,7 +268,7 @@ export default function VideoGenerator({
         </div>
 
         <p className="mt-3 text-xs text-white/25 pointer-events-none">
-          点击「全屏录制」画面自动全屏并开始录制 · 完成后自动返回下载
+          点击「全屏录制」画面自动全屏并开始录制 · 完成后自动转换为 MP4
         </p>
       </div>
     </div>

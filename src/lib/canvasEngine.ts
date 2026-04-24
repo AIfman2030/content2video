@@ -1,5 +1,5 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions } from '../types/video';
 import { getThemeConfig } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
@@ -17,6 +17,7 @@ export { CW, CH };
 export interface AnimEngine {
   start: () => void;
   stop: () => void;
+  restart: (onComplete?: () => void) => void;
   isRunning: () => boolean;
   getTotalMs: () => number;
 }
@@ -27,6 +28,7 @@ export async function createAnimEngine(
   style: StyleType,
   coverIndex: number,
   chineseOptions?: ChineseOptions,
+  aiOptions?: AIOptions,
   onComplete?: () => void,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
@@ -49,6 +51,7 @@ export async function createAnimEngine(
   const ctx = canvas.getContext('2d')!;
   const total = totalDuration(content.points.length);
   let rafId = 0, startTime = 0, running = false;
+  let completionCallback = onComplete;
 
   function render(elapsed: number) {
     ctx.clearRect(0, 0, CW, CH);
@@ -63,7 +66,7 @@ export async function createAnimEngine(
 
     drawShapeDecoration(ctx, elapsed, shapeImg, theme.accent, style);
     drawTitle(ctx, elapsed, content, theme.accent, theme.accent2, style);
-    drawCards(ctx, elapsed, content, theme.accent, theme.accent2, style);
+    drawCards(ctx, elapsed, content, theme.accent, theme.accent2, style, shapeImg, aiOptions?.polyShape);
 
     const outroStart = T.cardBase + content.points.length * T.cardSlot + T.cardReadDelay;
     if (elapsed > outroStart) {
@@ -82,7 +85,7 @@ export async function createAnimEngine(
     } else {
       running = false;
       render(total);
-      onComplete?.();
+      completionCallback?.();
     }
   }
 
@@ -96,6 +99,14 @@ export async function createAnimEngine(
     stop() {
       running = false;
       cancelAnimationFrame(rafId);
+    },
+    restart(cb?: () => void) {
+      running = false;
+      cancelAnimationFrame(rafId);
+      completionCallback = cb;
+      running = true;
+      startTime = performance.now();
+      rafId = requestAnimationFrame(tick);
     },
     isRunning: () => running,
     getTotalMs: () => total,

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Sparkles, Film, Settings } from 'lucide-react';
-import type { StyleType, ChineseOptions, GeneratedContent, GeneratorConfig } from '../types/video';
+import type { StyleType, ChineseOptions, AIOptions, GeneratedContent, GeneratorConfig } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import VideoGenerator from '../components/VideoGenerator';
@@ -46,6 +46,7 @@ export default function Index() {
     text: string,
     coverIndex: number,
     chineseOptions: ChineseOptions,
+    aiOptions: AIOptions,
   ) => {
     setError('');
 
@@ -59,7 +60,7 @@ export default function Index() {
     try {
       const result = await extractContent(text);
       setContent(result);
-      setConfig({ style, coverIndex, text, chineseOptions });
+      setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
       setStep('video');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
@@ -209,6 +210,7 @@ export default function Index() {
           style={config.style}
           coverIndex={config.coverIndex}
           chineseOptions={config.chineseOptions}
+          aiOptions={config.aiOptions}
           onClose={handleClose}
         />
       )}
