@@ -10,7 +10,7 @@ function parseJsonFromAI(raw: string): unknown {
 }
 
 async function callAI(text: string, type: 'general' | 'nature'): Promise<string> {
-  const { data, error } = await supabase.functions.invoke('ai-extract', {
+  const { data, error } = await supabase.functions.invoke('ai-extract-1876af', {
     body: { text, type },
   });
   if (error) throw new Error(error.message || '网络错误，请重试');

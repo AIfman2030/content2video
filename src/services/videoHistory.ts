@@ -33,7 +33,7 @@ export interface SaveVideoParams {
 }
 
 async function callFn<T>(action: string, init: RequestInit = {}): Promise<T> {
-  const path = `video-history?action=${action}${init.body ? '' : ''}`;
+  const path = `video-history-1876af?action=${action}${init.body ? '' : ''}`;
   const { data, error } = await supabase.functions.invoke<T & { error?: string }>(path, init);
   if (error) throw new Error(error.message);
   if ((data as unknown as { error?: string })?.error) throw new Error((data as unknown as { error: string }).error);
