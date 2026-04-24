@@ -3,9 +3,9 @@ import type { StyleType } from '../../types/video';
 export const COVER_W = 1080;
 export const COVER_H = 1920;
 
-// Icon anchor — moved up 120px (user request)
+// Icon anchor — up 100px more per user request
 export const ICON_CX = COVER_W / 2;
-export const ICON_CY = 1380;
+export const ICON_CY = 1280;
 export const ICON_R  = 300;
 
 export interface CoverOpts {
@@ -63,7 +63,7 @@ export function drawRoundRect(
 export function drawRainbowBorder(
   ctx: CanvasRenderingContext2D,
   W: number, H: number,
-  padH = 26, padV = 140, bw = 14, cr = 60,
+  padH = 26, padV = 200, bw = 14, cr = 60,
 ): void {
   const g = ctx.createLinearGradient(padH, padV, W - padH, H - padV);
   g.addColorStop(0,    '#ff00cc');
