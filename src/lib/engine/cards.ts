@@ -12,8 +12,9 @@ export function drawCards(
   style: StyleType,
   shapeImg: HTMLImageElement,
   polyShape?: PolyShape,
+  coverIndex = 0,
 ) {
-  if (style === 'city') { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg); return; }
+  if (style === 'city') { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex); return; }
   if (style === 'aitech') { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon'); return; }
 
   // ── Chinese style: rectangular card grid with auto-pagination ──

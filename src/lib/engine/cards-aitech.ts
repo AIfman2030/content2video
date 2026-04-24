@@ -1,13 +1,18 @@
 import type { GeneratedContent, PolyShape } from '../../types/video';
-import { CW, CH, clamp, lerp, easeOutCubic, easeOutBack, hex2rgba, roundRect, wrapText, drawPolygon, drawStar, T } from './helpers';
+import { CW, CH, clamp, easeOutBack, easeOutCubic, hex2rgba, T,
+  drawPolygon, drawStar } from './helpers';
 
 const POLY_SIDES: Record<PolyShape, number> = {
   triangle: 3, quad: 4, pentagon: 5, hexagon: 6, octagon: 8, star5: 5, decagon: 10,
 };
+const CX = CW / 2, CY = CH / 2;
+const CARD_RADIUS = 370;
 
-function polyForShape(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, shape: PolyShape, rot: number) {
-  if (shape === 'star5') drawStar(ctx, cx, cy, r, r * 0.42, 5, rot);
-  else drawPolygon(ctx, cx, cy, r, POLY_SIDES[shape], rot);
+// Per-item auto-scale based on item count
+function getScale(displayN: number) {
+  if (displayN <= 6) return 1;
+  if (displayN <= 8) return 0.78;
+  return 0.63;
 }
 
 export function drawAITechCards(
@@ -16,188 +21,113 @@ export function drawAITechCards(
   content: GeneratedContent,
   accent: string,
   accent2: string,
-  polyShape: PolyShape = 'hexagon',
-) {
-  const cx = CW / 2, cy = CH / 2;
-  const POLY_R = 130;
-  const CARD_RADIUS = 370;
-  const CARD_W = 460, CARD_H = 130;
-  const N = content.points.length;
-  const rotation = elapsed * 0.0003;
-  const pulse = 0.85 + 0.15 * Math.sin(elapsed * 0.002);
+  polyShape: PolyShape,
+): void {
+  const n = content.points.length;
+  const displayN = Math.min(n, 10);
+  const scale = getScale(displayN);
+  const CARD_W  = Math.round(280 * scale);
+  const CARD_H  = Math.round(150 * scale);
+  const POLY_R  = Math.round(145 * scale);
+  const lFsz    = Math.round(28 * scale);
+  const sFsz    = Math.round(22 * scale);
+  const cr      = Math.round(14 * scale);
+  const sides   = polyShape === 'star5' ? 5 : POLY_SIDES[polyShape] ?? 6;
 
-  // ── Central polygon (always drawn) ──
-  ctx.save();
-  // Outer glow ring
-  const glowR = POLY_R * 1.6 * pulse;
-  const glowGrad = ctx.createRadialGradient(cx, cy, POLY_R * 0.6, cx, cy, glowR);
-  glowGrad.addColorStop(0, hex2rgba(accent, 0.18));
-  glowGrad.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = glowGrad;
-  ctx.fillRect(cx - glowR, cy - glowR, glowR * 2, glowR * 2);
+  // ── Background rings ─────────────────────────────────────────────────────
+  if (elapsed > 200) {
+    const bgA = clamp((elapsed - 200) / 800, 0, 1) * 0.4;
+    for (let r = 1; r <= 3; r++) {
+      const rad = CARD_RADIUS * (0.55 + r * 0.18);
+      const pulse = 1 + 0.025 * Math.sin(elapsed * 0.0008 + r);
+      ctx.save(); ctx.globalAlpha = bgA * (0.35 - r * 0.05);
+      ctx.strokeStyle = r % 2 === 0 ? accent : accent2; ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 10]); ctx.beginPath(); ctx.arc(CX, CY, rad * pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+    }
+  }
 
-  // Polygon fill
-  polyForShape(ctx, cx, cy, POLY_R * pulse, polyShape, rotation);
-  const polyFill = ctx.createRadialGradient(cx, cy - 20, 0, cx, cy, POLY_R);
-  polyFill.addColorStop(0, hex2rgba(accent, 0.22));
-  polyFill.addColorStop(1, hex2rgba(accent, 0.06));
-  ctx.fillStyle = polyFill;
-  ctx.fill();
-
-  // Polygon stroke
-  polyForShape(ctx, cx, cy, POLY_R * pulse, polyShape, rotation);
-  ctx.strokeStyle = hex2rgba(accent, 0.85);
-  ctx.lineWidth = 2.5;
-  ctx.shadowColor = accent;
-  ctx.shadowBlur = 20;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Inner ring
-  polyForShape(ctx, cx, cy, POLY_R * 0.6 * pulse, polyShape, rotation + Math.PI / POLY_SIDES[polyShape === 'star5' ? 'pentagon' : polyShape]);
-  ctx.strokeStyle = hex2rgba(accent2, 0.35);
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  // Center dot
-  ctx.beginPath();
-  ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-  ctx.fillStyle = accent;
-  ctx.shadowColor = accent;
-  ctx.shadowBlur = 12;
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.restore();
-
-  // ── Cards (sequential) ──
-  if (elapsed < T.cardBase) return;
-  const cardElapsed = elapsed - T.cardBase;
-
-  content.points.forEach((point, i) => {
-    const te = cardElapsed - i * T.cardSlot;
-    if (te <= 0) return;
-
-    const angle = -Math.PI / 2 + (i / N) * Math.PI * 2;
-    const cardCx = cx + CARD_RADIUS * Math.cos(angle);
-    const cardCy = cy + CARD_RADIUS * Math.sin(angle);
-    const cardX = cardCx - CARD_W / 2;
-    const cardY = cardCy - CARD_H / 2;
-
-    // Line from polygon edge → card
-    const lineT = clamp(te / 400, 0, 1);
-    const lineEased = easeOutCubic(lineT);
-    const lineStartX = cx + POLY_R * Math.cos(angle);
-    const lineStartY = cy + POLY_R * Math.sin(angle);
-    const lineEndX = cx + (CARD_RADIUS - CARD_W * 0.45) * Math.cos(angle);
-    const lineEndY = cy + (CARD_RADIUS - CARD_H * 0.45) * Math.sin(angle);
-    const lineCurX = lerp(lineStartX, lineEndX, lineEased);
-    const lineCurY = lerp(lineStartY, lineEndY, lineEased);
-
-    ctx.save();
-    ctx.strokeStyle = hex2rgba(accent, 0.6 * lineEased);
-    ctx.lineWidth = 1.5;
-    ctx.setLineDash([6, 4]);
-    ctx.lineDashOffset = -(elapsed * 0.04);
-    ctx.shadowColor = accent;
-    ctx.shadowBlur = 6;
-    ctx.beginPath();
-    ctx.moveTo(lineStartX, lineStartY);
-    ctx.lineTo(lineCurX, lineCurY);
+  // ── Polygon ───────────────────────────────────────────────────────────────
+  if (elapsed > T.cardBase) {
+    const polyA = easeOutCubic(clamp((elapsed - T.cardBase) / 600, 0, 1));
+    ctx.save(); ctx.globalAlpha = polyA;
+    ctx.shadowColor = accent; ctx.shadowBlur = 30;
+    ctx.strokeStyle = accent; ctx.lineWidth = 4;
+    if (polyShape === 'star5') drawStar(ctx, CX, CY, POLY_R, POLY_R * 0.45, 5);
+    else drawPolygon(ctx, CX, CY, POLY_R, sides);
     ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    ctx.shadowBlur = 18; ctx.lineWidth = 2; ctx.strokeStyle = accent2;
+    if (polyShape === 'star5') drawStar(ctx, CX, CY, POLY_R * 0.62, POLY_R * 0.28, 5);
+    else drawPolygon(ctx, CX, CY, POLY_R * 0.62, sides);
+    ctx.stroke(); ctx.shadowBlur = 0;
+    // Center dot
+    ctx.shadowColor = accent; ctx.shadowBlur = 20;
+    ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(CX, CY, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.restore();
+  }
 
-    // Card
-    if (lineT < 0.5) return;
-    const cardT = clamp((te - 300) / 400, 0, 1);
-    const cardEased = easeOutBack(Math.min(cardT, 0.999));
-    const alpha = clamp((te - 300) / 250, 0, 1);
-    if (alpha <= 0) return;
+  // ── Cards ─────────────────────────────────────────────────────────────────
+  for (let i = 0; i < displayN; i++) {
+    const te = elapsed - T.cardBase - i * T.cardSlot;
+    if (te <= 0) continue;
 
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.translate(cardCx, cardCy);
-    ctx.scale(lerp(0.85, 1, cardEased), lerp(0.85, 1, cardEased));
-    ctx.translate(-cardCx, -cardCy);
+    const enterT = clamp(te / 500, 0, 1);
+    const eased  = easeOutBack(Math.min(enterT, 0.999));
+    const angle  = (i / displayN) * Math.PI * 2 - Math.PI / 2;
+    const cardCX = CX + Math.cos(angle) * CARD_RADIUS;
+    const cardCY = CY + Math.sin(angle) * CARD_RADIUS;
+    const slideR = (1 - eased) * 60;
+    const dcx    = cardCX + Math.cos(angle) * slideR;
+    const dcy    = cardCY + Math.sin(angle) * slideR;
+    const alpha  = clamp(te / 350, 0, 1);
+
+    // Connector line (polygon center → card)
+    if (eased > 0.3) {
+      ctx.save(); ctx.globalAlpha = alpha * 0.55;
+      const gl = ctx.createLinearGradient(CX, CY, cardCX, cardCY);
+      gl.addColorStop(0, hex2rgba(accent, 0.8)); gl.addColorStop(1, hex2rgba(accent2, 0.2));
+      ctx.strokeStyle = gl; ctx.lineWidth = 1.5; ctx.setLineDash([5, 8]);
+      ctx.beginPath(); ctx.moveTo(CX + Math.cos(angle) * POLY_R, CY + Math.sin(angle) * POLY_R);
+      ctx.lineTo(cardCX - Math.cos(angle) * CARD_W / 2, cardCY - Math.sin(angle) * CARD_H / 2);
+      ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+    }
 
     // Card background
-    roundRect(ctx, cardX, cardY, CARD_W, CARD_H, 10);
-    ctx.fillStyle = 'rgba(8,14,32,0.88)';
-    ctx.fill();
+    ctx.save(); ctx.globalAlpha = alpha;
+    ctx.save(); ctx.translate(dcx - CARD_W / 2, dcy - CARD_H / 2); ctx.scale(eased, eased); ctx.translate(-(dcx - CARD_W / 2), -(dcy - CARD_H / 2));
+    ctx.fillStyle = hex2rgba(accent, 0.12);
+    ctx.beginPath(); ctx.roundRect(dcx - CARD_W / 2, dcy - CARD_H / 2, CARD_W, CARD_H, cr); ctx.fill();
+    ctx.shadowColor = accent; ctx.shadowBlur = 16;
+    const bg = ctx.createLinearGradient(dcx - CARD_W/2, dcy, dcx + CARD_W/2, dcy);
+    bg.addColorStop(0, hex2rgba(accent, 0.4)); bg.addColorStop(1, hex2rgba(accent2, 0.2));
+    ctx.strokeStyle = bg; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(dcx - CARD_W / 2, dcy - CARD_H / 2, CARD_W, CARD_H, cr); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.restore();
 
-    // Card border gradient
-    roundRect(ctx, cardX, cardY, CARD_W, CARD_H, 10);
-    const bord = ctx.createLinearGradient(cardX, cardY, cardX + CARD_W, cardY + CARD_H);
-    bord.addColorStop(0, hex2rgba(accent, 0.7));
-    bord.addColorStop(1, hex2rgba(accent2, 0.25));
-    ctx.strokeStyle = bord;
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-
-    // Left accent bar
-    roundRect(ctx, cardX, cardY, 5, CARD_H, 10);
-    ctx.fillStyle = hex2rgba(accent, 0.8 * cardEased);
-    ctx.fill();
-
-    // Number circle
-    ctx.beginPath();
-    ctx.arc(cardX + 32, cardCy, 18, 0, Math.PI * 2);
-    const nbg = ctx.createRadialGradient(cardX + 32, cardCy - 4, 0, cardX + 32, cardCy, 18);
-    nbg.addColorStop(0, hex2rgba(accent, 0.4));
-    nbg.addColorStop(1, hex2rgba(accent, 0.1));
-    ctx.fillStyle = nbg;
-    ctx.fill();
-    ctx.strokeStyle = hex2rgba(accent, 0.8);
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.font = `700 18px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(`${i + 1}`, cardX + 32, cardCy);
-
+    const point = content.points[i];
     // Label
-    ctx.shadowColor = hex2rgba(accent, 0.7);
-    ctx.shadowBlur = 14;
-    ctx.font = `800 52px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillStyle = accent;
-    ctx.fillText(point.label, cardX + 62, cardY + 18);
+    ctx.shadowColor = hex2rgba(accent, 0.9); ctx.shadowBlur = 14;
+    ctx.font = `800 ${lFsz}px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff'; ctx.fillText(point.label, dcx, dcy - CARD_H * 0.1);
     ctx.shadowBlur = 0;
-
-    // Short text
-    ctx.font = `400 26px "Noto Sans SC", sans-serif`;
-    ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.fillText(point.short || '', cardX + 62, cardY + 80);
-
-    // Right edge decorative polygon
-    ctx.save();
-    ctx.translate(cardX + CARD_W - 30, cardCy);
-    ctx.rotate(elapsed * 0.001 + i * 0.8);
-    ctx.strokeStyle = hex2rgba(accent2, 0.4);
-    ctx.lineWidth = 1.5;
-    polyForShape(ctx, 0, 0, 14, polyShape, 0);
-    ctx.stroke();
+    // Subtitle
+    if (point.short) {
+      ctx.font = `400 ${sFsz}px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = hex2rgba(accent2, 0.9);
+      const short = point.short.length > 14 ? point.short.slice(0, 13) + '…' : point.short;
+      ctx.fillText(short, dcx, dcy + CARD_H * 0.28);
+    }
+    // Number indicator
+    ctx.font = `600 ${Math.round(16*scale)}px monospace`; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillStyle = hex2rgba(accent, 0.5);
+    ctx.fillText(`${String(i + 1).padStart(2, '0')}`, dcx + CARD_W/2 - 8, dcy - CARD_H/2 + 6);
     ctx.restore();
 
-    ctx.restore();
-  });
-
-  // Edge glow dots at polygon vertices
-  const sides = POLY_SIDES[polyShape === 'star5' ? 'pentagon' : polyShape];
-  for (let v = 0; v < sides; v++) {
-    const va = (v / sides) * Math.PI * 2 + rotation;
-    const vx = cx + POLY_R * pulse * Math.cos(va);
-    const vy = cy + POLY_R * pulse * Math.sin(va);
-    const dotAlpha = 0.4 + 0.6 * Math.abs(Math.sin(elapsed * 0.002 + v * 1.1));
-    ctx.beginPath();
-    ctx.arc(vx, vy, 4, 0, Math.PI * 2);
-    ctx.fillStyle = hex2rgba(v < N && elapsed > T.cardBase + v * T.cardSlot ? accent : accent2, dotAlpha);
-    ctx.shadowColor = accent;
-    ctx.shadowBlur = 8;
-    ctx.fill();
-    ctx.shadowBlur = 0;
+    // Glowing dot at card center
+    ctx.save(); ctx.globalAlpha = alpha * 0.6;
+    ctx.shadowColor = accent2; ctx.shadowBlur = 15;
+    ctx.fillStyle = accent2;
+    ctx.beginPath(); ctx.arc(dcx, dcy, 4 * scale, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0; ctx.restore();
   }
 }

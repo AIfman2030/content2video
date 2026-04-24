@@ -83,9 +83,9 @@ export async function createAnimEngine(
 
     drawShapeDecoration(ctx, elapsed, shapeImg!, theme.accent, style);
     drawTitle(ctx, elapsed, content, theme.accent, theme.accent2, style);
-    drawCards(ctx, elapsed, content, theme.accent, theme.accent2, style, shapeImg!, aiOptions?.polyShape);
+    drawCards(ctx, elapsed, content, theme.accent, theme.accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex);
 
-    const outroStart = T.cardBase + content.points.length * T.cardSlot + T.cardReadDelay;
+    const outroStart = totalDuration(content.points.length) - T.outroDur;
     if (elapsed > outroStart) {
       drawOutro(ctx, elapsed - outroStart, content, theme.accent, theme.accent2, style);
     }
