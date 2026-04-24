@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Sparkles, Film } from 'lucide-react';
+import { Sparkles, Film, Settings } from 'lucide-react';
 import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, GeneratorConfig } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import VideoGenerator from '../components/VideoGenerator';
-import { extractContent, extractNatureContent } from '../services/deepseek';
+import ApiKeyDialog from '../components/ApiKeyDialog';
+import { extractContent, extractNatureContent, getStoredApiKey } from '../services/deepseek';
 
 type Step = 'style' | 'form' | 'video';
 
@@ -36,9 +37,11 @@ export default function Index() {
   const [config, setConfig] = useState<GeneratorConfig | null>(null);
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [natureContent, setNatureContent] = useState<NatureContent | null>(null);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const accent = ACCENT_BY_STYLE[style];
   const bg = BG_BY_STYLE[style];
+  const hasApiKey = !!getStoredApiKey();
 
   const handleStyleNext = () => setStep('form');
 
@@ -49,6 +52,13 @@ export default function Index() {
     aiOptions: AIOptions,
   ) => {
     setError('');
+
+    // Check API key first
+    if (!getStoredApiKey()) {
+      setShowApiKey(true);
+      return;
+    }
+
     setIsLoading(true);
     try {
       if (style === 'nature') {
@@ -65,7 +75,11 @@ export default function Index() {
       setStep('video');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
-      setError(msg);
+      if (msg === 'NO_API_KEY') {
+        setShowApiKey(true);
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -94,10 +108,21 @@ export default function Index() {
             <span className="text-base font-bold text-white">小福 · 视频生成器</span>
           </div>
 
-          {/* Powered by Enter Cloud AI */}
-          <div className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/40">
-            <Sparkles size={11} style={{ color: accent }} />
-            AI 驱动
+          {/* Settings + API key status */}
+          <div className="flex items-center gap-3">
+            {!hasApiKey && (
+              <span className="hidden sm:flex items-center gap-1 text-xs text-amber-400/70">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                未设置 API Key
+              </span>
+            )}
+            <button
+              onClick={() => setShowApiKey(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/50 hover:text-white/80 hover:border-white/20 transition-colors"
+            >
+              <Settings size={13} />
+              API Key
+            </button>
           </div>
         </div>
       </header>
@@ -203,6 +228,12 @@ export default function Index() {
         />
       )}
 
+      {/* API Key dialog */}
+      <ApiKeyDialog
+        open={showApiKey}
+        onClose={() => setShowApiKey(false)}
+        accent={accent}
+      />
     </div>
   );
 }
