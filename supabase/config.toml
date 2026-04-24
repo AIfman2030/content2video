@@ -1,7 +1,1 @@
 project_id = "spb-t4ngxi6xsx650369"
-
-[functions.ai-extract-1876af]
-verify_jwt = false
-
-[functions.video-history-1876af]
-verify_jwt = false
