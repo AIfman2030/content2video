@@ -1,140 +1,160 @@
-# Plan: Differentiated Animations + MP4 Export + City Recording Fix
+# Plan: Add 山川河海 (Nature Comparison) Style
 
-## Clarified Scope
-- **中国风**: UNCHANGED
-- **城市地标**: New layout — left city-icon + right text, slide-up animation
-- **AI科技**: Radial polygon layout, configurable shape, one item per edge sequential
-- **Bug fix**: City recording shows only title (cards missing)
-- **MP4 export**: Convert recorded WebM → MP4 using FFmpeg.wasm in browser
-
----
-
-## Bug 1: City Recording (cards don't appear)
-
-**Root cause**: `handleRecord` calls a new `createAnimEngine` (async, loads SVG). No `.catch()`, so if it fails or is slow, canvas freezes on the title frame from preview.
-
-**Fix**: Add `restart(onComplete?: () => void)` to `AnimEngine`. Reuses already-loaded engine, resets from t=0, no async needed.
+## Overview
+A 4th video style with a unique two-circle comparison layout:
+- Two large circles side by side (canvas 1920×1080)
+- Each circle has a Chinese scenic spot silhouette in the center
+- Comparison words fill each circle, appearing pairwise (left[i] + right[i] simultaneously)
+- Background: ink-wash with distant mountain mist
 
 ---
 
-## Change 1: City Cards — Left Icon + Right Text
+## Content Data Model
 
-**Layout** (keeps 2-col × 3-row grid, card 915 × 268px):
-- Left panel (280px): draws `shapeImg` (city skyline SVG) centered at ~200×200px
-  - Semi-dark background: `rgba(accent, 0.1)`
-  - Neon bottom glow line at panel bottom
-- Vertical separator: 2px accent gradient line
-- Right panel (635px): number badge (top-left) + label (68px) + short (34px) + desc (26px)
-- Animation: slide up from bottom (`offsetY = (1-eased)*120`), fade in
-
-Need: pass `shapeImg: HTMLImageElement` as new param to `drawCards`.
-
----
-
-## Change 2: AI Tech — Radial Polygon Layout
-
-**Central polygon** (drawn even before cards appear):
-- Position: canvas center (960, 540), radius 130px
-- Shape: user-configurable (triangle/quad/pentagon/hexagon/octagon/star5/decagon)
-- Slowly rotates, pulses with glow
-
-**Content items** (N items at equal angles from top):
-- Radius from center: 370px
-- Card size: 460 × 130px (compact pill)
-- Line from polygon edge → card near-edge (glowing, extends over 400ms)
-- Card fades + scales in after line completes
-- Sequential: item i starts at `T.cardBase + i * T.cardSlot`
-
-**User-configurable polygon**: selector in ContentForm (aitech only), 7 options.
-
----
-
-## Change 3: MP4 Export via FFmpeg.wasm
-
-**Flow**:
-1. Record canvas → WebM blob (as before)
-2. On recording complete: enter `'converting'` state  
-3. Load FFmpeg.wasm core from CDN (cached after first load)
-4. `ffmpeg.exec(['-i', 'input.webm', '-c:v', 'copy', 'output.mp4'])` — fast re-mux, no re-encode
-5. Output MP4 blob → download as `.mp4`
-
-**State machine**: `idle → recording → converting → done`
-
-**New file**: `src/lib/mp4Converter.ts` (~55 lines) — handles FFmpeg load + conversion
-
----
-
-## Implementation Files
-
-### New dependencies to install:
-- `@ffmpeg/ffmpeg@0.12.10`
-- `@ffmpeg/util@0.12.2`
-
-### 1. `src/types/video.ts` (+12 lines)
+### New type: `NatureContent`
 ```ts
-export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
-export interface AIOptions { polyShape: PolyShape; }
-// Add to GeneratorConfig: aiOptions?: AIOptions;
+export interface NatureContent {
+  title: string;          // "穷人和富人的区别是什么"
+  leftTitle: string;      // "穷人在想"
+  rightTitle: string;     // "富人在研究什么"
+  leftItems: string[];    // up to 12 short keywords
+  rightItems: string[];   // up to 12 short keywords
+}
 ```
 
-### 2. `src/lib/engine/helpers.ts` (~82 lines, +15 lines)
-```ts
-export function drawPolygon(ctx, cx, cy, r, sides, rotation): void
-export function drawStar(ctx, cx, cy, outerR, innerR, points): void
+### New AI prompt
+`extractNatureContent(text)` in `deepseek.ts` uses a different system prompt asking for comparison format: `{ title, leftTitle, rightTitle, leftItems[≤10], rightItems[≤10] }`.
+
+---
+
+## Canvas Layout (1920×1080)
+
+```
+[                   标题文字                     ]   y=40-110
+[  "左侧标题"  ]          [  "右侧标题"  ]         y=110-185
+[                                                ]
+[    LEFT CIRCLE (r=340)  |  RIGHT CIRCLE (r=340) ]  center y=560
+[  lcx=480, lcy=560       |  rcx=1440, rcy=560   ]
+[  scenic spot + words    |  scenic spot + words  ]
 ```
 
-### 3. `src/lib/canvasEngine.ts` (~120 lines)
-- `AnimEngine` interface: add `restart(onComplete?: () => void): void`
-- `createAnimEngine` params: add `aiOptions?: AIOptions`
-- Pass `shapeImg` + `aiOptions?.polyShape` to `drawCards`
+### Animation sequence
+- t=0-600: ink-wash BG fade in, faint mist mountain silhouette at bottom
+- t=600-1200: title brushstroke reveal
+- t=1200-1800: circle outlines draw (ink stroke, simultaneous left+right)
+- t=1800-2400: header badges ("左标题" + "右标题") slide in
+- t=2400-3000: scenic spot silhouettes fade into circle centers
+- t=3000+: words appear pairwise every 500ms (left[i] + right[i] simultaneously)
+  - Word anim: scale 0→1.05→1, fade 0→1, slight upward drift
+- After all words: gentle floating on all words
+- Final hold: ~2s
 
-### 4. `src/lib/engine/cards.ts` (rewrite, ~40 lines)
-Dispatcher: Chinese → existing logic, City → `drawCityCards`, AITech → `drawAITechCards`
+**Total**: 3000 + N_pairs * 500 + 2000ms (N_pairs ≤ 10)
 
-**Signature update**:
+---
+
+## Word Placement (No Overlap)
+
+Pre-computed concentric ring positions (seeded random to shuffle):
+- Ring 1 (r=145): 5 slots at 0°, 72°, 144°, 216°, 288° 
+- Ring 2 (r=205): 7 slots at 25°, 76.4°, 127.8°, 179.2°, 230.6°, 282°, 333.4°
+- Ring 3 (r=268): 8 slots at 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
+Total: 20 slots, enough for ≤ 12 words per circle.
+
+Font size: 36-52px (larger for shorter words, smaller for longer).
+
+---
+
+## Scenic Spot Pairs (6 pairs selectable via CoverPicker)
+
+| Index | Left | Right |
+|-------|------|-------|
+| 0 | 黄山 | 西湖 |
+| 1 | 泰山 | 九寨沟 |
+| 2 | 张家界 | 桂林 |
+| 3 | 峨眉山 | 三峡 |
+| 4 | 长城 | 雪山 |
+| 5 | 武夷山 | 青海湖 |
+
+Each is drawn as simple canvas-path silhouettes (mountain peaks, karst pillars, water, pagoda outlines etc.) inside the circle center (radius ~90px). Defined in `nature-spots.ts`.
+
+---
+
+## Files to Create / Modify
+
+### 1. `src/types/video.ts` (+14 lines)
+- Add `NatureContent` interface
+- Add `'nature'` to `StyleType`
+- Add `natureContent?: NatureContent` to `GeneratorConfig`
+
+### 2. `src/services/deepseek.ts` (+38 lines, total ~127)
+Add:
 ```ts
-export function drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg, polyShape?)
+const NATURE_PROMPT = `...JSON { title, leftTitle, rightTitle, leftItems[], rightItems[] }...`;
+export async function extractNatureContent(text): Promise<NatureContent>
 ```
 
-### 5. `src/lib/engine/cards-city.ts` (NEW, ~110 lines)
-City left-icon + right-text layout. 2-col × 3-row. Uses `shapeImg` for icon panel.
+### 3. `src/lib/themes.ts` (+30 lines, total ~181)
+- Add nature theme to `getThemeConfig` (dark ink BG, mountain green accent)
+- Add `NATURE_PAIRS: ShapeItem[]` (6 entries, one per pair, label="黄山|西湖" etc.)
+- Update `getShapeList` for nature
 
-### 6. `src/lib/engine/cards-aitech.ts` (NEW, ~210 lines)
-Radial polygon layout. `drawPolygon`/`drawStar` from helpers. Sequential card appearance.
-
-### 7. `src/lib/mp4Converter.ts` (NEW, ~55 lines)
+### 4. `src/lib/engine/nature-spots.ts` (NEW, ~190 lines)
+Canvas drawing functions for 12 scenic spots:
 ```ts
-// Singleton FFmpeg instance (loaded once, cached)
-let ffmpegInstance: FFmpeg | null = null;
+export type SpotDrawFn = (ctx, cx, cy, r, color) => void;
+export const SPOT_DRAW_FNS: { left: SpotDrawFn, right: SpotDrawFn }[] = [ ...6 pairs... ]
+```
+Each function: ~12 lines of canvas paths (peaks, curves, tree outlines, water lines).
 
-export async function webmToMp4(webmBlob: Blob, onProgress?: (p:number)=>void): Promise<Blob>
-// - loads FFmpeg from CDN if not cached
-// - writes input.webm, runs -c:v copy remux, reads output.mp4
-// - returns mp4 Blob
+### 5. `src/lib/engine/nature-scene.ts` (NEW, ~250 lines)
+Main nature animation: circle drawing, word layout, scenic spot rendering, word animation.
+```ts
+export function drawNatureScene(
+  ctx, elapsed, natureContent, accent, accent2, coverIndex, rand
+): void
 ```
 
-### 8. `src/components/ContentForm.tsx` (~279 lines)
-- Add `aiOptions` state, `onGenerate` 4th param
-- Add AI shape selector section (aitech only):
-  7 buttons: 三角形/四边形/五边形/六边形/八边形/五角星/十边形
+### 6. `src/lib/canvasEngine.ts` (+15 lines, total ~129)
+- Add `natureContent?: NatureContent` to `createAnimEngine` params
+- For `style === 'nature'`: skip `drawTitle`/`drawCards`/`drawOutro`, call `drawNatureScene` instead
+- Nature total duration: `3000 + leftItems.length * 500 + 2000`
 
-### 9. `src/pages/Index.tsx` (~235 lines)
-- Thread `aiOptions` through `handleGenerate` → config → `<VideoGenerator>`
+### 7. `src/components/StyleSelector.tsx` (+9 lines, total ~91)
+Add nature style entry:
+```ts
+{ key: 'nature', name: '山川河海', desc: '天地自然 · 对比之道', tag: '6处名山胜水', 
+  bg: 'linear-gradient(135deg,#0a1a0f,#1a3020)', accent: '#4ade80' }
+```
 
-### 10. `src/components/VideoGenerator.tsx` (~285 lines)
-- Add `aiOptions?: AIOptions` prop
-- State: `'idle' | 'recording' | 'converting' | 'done'`
-- **Recording fix**: replace 2nd `createAnimEngine` with `engine.restart(() => {...})`
-- After recording: call `webmToMp4(blob)`, show "转换中…" spinner
-- Download as `.mp4`; file name: `${title}.mp4`
+### 8. `src/components/CoverPicker.tsx` (modify, ~140 lines)
+- Update `ACCENT_BY_STYLE` to include nature
+- For `style === 'nature'`: show 6 pair buttons with text ("黄山 | 西湖") instead of SVG thumbnails
+- `getShapeList('nature')` returns 6 items with labels like "黄山 | 西湖"
+
+### 9. `src/components/ContentForm.tsx` (minor, +2 lines)
+- No AI shape selector for nature (style-specific options are minimal)
+- The ContentForm already handles unknown styles gracefully
+
+### 10. `src/pages/Index.tsx` (~260 lines)
+- Add `natureContent: NatureContent | null` state
+- In `handleGenerate`: if `style === 'nature'`, call `extractNatureContent`, set both states
+- Update `BG_BY_STYLE`, `ACCENT_BY_STYLE` for nature
+- Pass `natureContent` to VideoGenerator
+- Video step condition: `step === 'video' && (content || natureContent) && config`
+
+### 11. `src/components/VideoGenerator.tsx` (+10 lines, total ~286)
+- Add `natureContent?: NatureContent` prop
+- Pass to `createAnimEngine`
+- For nature style, `content` can be a minimal `{ title: '', points: [] }`
 
 ---
 
 ## Verification
-1. Chinese: cards unchanged ✓
-2. City: left city-skyline icon + right text, slide up ✓
-3. City recording: cards appear (engine.restart fix) ✓
-4. AI: radial polygon + sequential cards ✓
-5. AI: polygon selector in ContentForm ✓
-6. Download is `.mp4` (not `.webm`) ✓
-7. All files ≤ 280 lines ✓
+1. Nature style appears in StyleSelector
+2. CoverPicker shows 6 pair options for nature
+3. Extracting content with nature style uses comparison prompt
+4. Two circles appear with scenic spots in center
+5. Words appear pairwise (left+right simultaneously, no overlap)
+6. Total animation length ~8-10s for typical content
+7. All new files ≤ 280 lines
