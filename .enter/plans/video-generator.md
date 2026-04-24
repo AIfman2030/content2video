@@ -1,119 +1,140 @@
-# Plan: Differentiated Theme Animations + City Recording Fix
+# Plan: Differentiated Animations + MP4 Export + City Recording Fix
 
 ## Clarified Scope
-- **中国风 (Chinese)**: UNCHANGED — keep existing card layout
-- **城市地标 (City)**: New layout — left city-icon panel + right text content; slide-up animation
-- **AI科技 (AITech)**: New layout — central configurable polygon + radial content items, one per edge, sequential appearance
-- **Bug fix**: City style cards don't appear during recording
+- **中国风**: UNCHANGED
+- **城市地标**: New layout — left city-icon + right text, slide-up animation
+- **AI科技**: Radial polygon layout, configurable shape, one item per edge sequential
+- **Bug fix**: City recording shows only title (cards missing)
+- **MP4 export**: Convert recorded WebM → MP4 using FFmpeg.wasm in browser
 
 ---
 
-## Problem 1: City Recording Bug
+## Bug 1: City Recording (cards don't appear)
 
-**Root cause**: `handleRecord` calls `createAnimEngine` (async, loads SVG image). If loading takes time or fails, the recording captures a frozen title frame (from where preview was stopped). There's no `.catch()`, so failures are silent.
+**Root cause**: `handleRecord` calls a new `createAnimEngine` (async, loads SVG). No `.catch()`, so if it fails or is slow, canvas freezes on the title frame from preview.
 
-**Fix**: Add `restart(onComplete?: () => void): void` to `AnimEngine` interface. Restarts the existing engine from t=0 with a new completion callback — no async image loading needed.
-
----
-
-## Problem 2: City Card Redesign (Left Icon + Right Text)
-
-**New layout** (keeps 2-col × 3-row grid):
-- Card: 915px wide × 268px tall
-- **Left panel** (300px): draws the loaded `shapeImg` (city skyline SVG) centered, themed background
-- **Vertical separator**: accent-colored gradient line
-- **Right panel** (615px): label (68px, accent), short text (34px, white/70), desc (26px, white/40)
-- **Animation**: slide up from bottom (`offsetY = (1-eased) * 120`), fade in
-- Left panel background: `rgba(accent, 0.12)` dark, with subtle neon bottom glow
-
-Need to pass `shapeImg: HTMLImageElement` into `drawCards` so city cards can render it.
+**Fix**: Add `restart(onComplete?: () => void)` to `AnimEngine`. Reuses already-loaded engine, resets from t=0, no async needed.
 
 ---
 
-## Problem 3: AI Tech Radial Layout
+## Change 1: City Cards — Left Icon + Right Text
 
-**New layout**: Completely different from grid — radial arrangement:
-- Central polygon at canvas center (960, 540), radius 130px
-- N content items placed at equal angles starting from top (-90°)  
-- Each item: compact card (460 × 130px) at radius 370px from center
-- Connecting line from polygon edge to each card (glowing, extends during animation)
-- Items appear one by one (existing `T.cardSlot` timing preserved)
+**Layout** (keeps 2-col × 3-row grid, card 915 × 268px):
+- Left panel (280px): draws `shapeImg` (city skyline SVG) centered at ~200×200px
+  - Semi-dark background: `rgba(accent, 0.1)`
+  - Neon bottom glow line at panel bottom
+- Vertical separator: 2px accent gradient line
+- Right panel (635px): number badge (top-left) + label (68px) + short (34px) + desc (26px)
+- Animation: slide up from bottom (`offsetY = (1-eased)*120`), fade in
 
-**Polygon shape** (user-configurable, defaults to hexagon):
-- triangle (3), quad (4), pentagon (5), hexagon (6), octagon (8), star5 (5-pointed star), decagon (10)
-- Shape is purely visual decoration — items always distributed by count
-- Polygon pulses/rotates gently even before cards appear
+Need: pass `shapeImg: HTMLImageElement` as new param to `drawCards`.
 
-**Card design** (compact):
-- Semi-transparent pill/rect with accent border
-- Small numbered circle (index), large label (52px), short text (26px)
-- Right-side glow effect matching polygon style
+---
+
+## Change 2: AI Tech — Radial Polygon Layout
+
+**Central polygon** (drawn even before cards appear):
+- Position: canvas center (960, 540), radius 130px
+- Shape: user-configurable (triangle/quad/pentagon/hexagon/octagon/star5/decagon)
+- Slowly rotates, pulses with glow
+
+**Content items** (N items at equal angles from top):
+- Radius from center: 370px
+- Card size: 460 × 130px (compact pill)
+- Line from polygon edge → card near-edge (glowing, extends over 400ms)
+- Card fades + scales in after line completes
+- Sequential: item i starts at `T.cardBase + i * T.cardSlot`
+
+**User-configurable polygon**: selector in ContentForm (aitech only), 7 options.
+
+---
+
+## Change 3: MP4 Export via FFmpeg.wasm
+
+**Flow**:
+1. Record canvas → WebM blob (as before)
+2. On recording complete: enter `'converting'` state  
+3. Load FFmpeg.wasm core from CDN (cached after first load)
+4. `ffmpeg.exec(['-i', 'input.webm', '-c:v', 'copy', 'output.mp4'])` — fast re-mux, no re-encode
+5. Output MP4 blob → download as `.mp4`
+
+**State machine**: `idle → recording → converting → done`
+
+**New file**: `src/lib/mp4Converter.ts` (~55 lines) — handles FFmpeg load + conversion
 
 ---
 
 ## Implementation Files
 
-### 1. `src/types/video.ts` (+10 lines)
+### New dependencies to install:
+- `@ffmpeg/ffmpeg@0.12.10`
+- `@ffmpeg/util@0.12.2`
+
+### 1. `src/types/video.ts` (+12 lines)
 ```ts
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
 export interface AIOptions { polyShape: PolyShape; }
-// Add to GeneratorConfig:
-aiOptions?: AIOptions;
+// Add to GeneratorConfig: aiOptions?: AIOptions;
 ```
 
-### 2. `src/lib/engine/helpers.ts` (~82 lines total, +15 lines)
-Add polygon drawing utilities:
+### 2. `src/lib/engine/helpers.ts` (~82 lines, +15 lines)
 ```ts
-export function drawPolygon(ctx, cx, cy, r, sides, rotation = 0): void
+export function drawPolygon(ctx, cx, cy, r, sides, rotation): void
 export function drawStar(ctx, cx, cy, outerR, innerR, points): void
 ```
 
-### 3. `src/lib/canvasEngine.ts` (~115 lines total)
-- Add `restart(onComplete?: () => void): void` to `AnimEngine` interface + implementation
-- Add `aiOptions?: AIOptions` parameter to `createAnimEngine`
-- Pass `shapeImg` and `aiOptions?.polyShape` to `drawCards`
+### 3. `src/lib/canvasEngine.ts` (~120 lines)
+- `AnimEngine` interface: add `restart(onComplete?: () => void): void`
+- `createAnimEngine` params: add `aiOptions?: AIOptions`
+- Pass `shapeImg` + `aiOptions?.polyShape` to `drawCards`
 
-### 4. `src/lib/engine/cards.ts` (rewrite as thin dispatcher, ~40 lines)
-- Keep Chinese drawing as-is (inline or import existing logic)
-- New city drawing: import `drawCityCards`
-- New AI drawing: import `drawAITechCards`
+### 4. `src/lib/engine/cards.ts` (rewrite, ~40 lines)
+Dispatcher: Chinese → existing logic, City → `drawCityCards`, AITech → `drawAITechCards`
+
+**Signature update**:
+```ts
+export function drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg, polyShape?)
+```
 
 ### 5. `src/lib/engine/cards-city.ts` (NEW, ~110 lines)
-City left-icon + right-text cards. Uses `shapeImg` for icon panel.
+City left-icon + right-text layout. 2-col × 3-row. Uses `shapeImg` for icon panel.
 
 ### 6. `src/lib/engine/cards-aitech.ts` (NEW, ~210 lines)
-AI radial polygon layout. Configurable polygon via `polyShape` param.
+Radial polygon layout. `drawPolygon`/`drawStar` from helpers. Sequential card appearance.
 
-### 7. `src/components/ContentForm.tsx` (~279 lines total)
-- Import `AIOptions, PolyShape`
-- Add `aiOptions` state (default: `{ polyShape: 'hexagon' }`)
-- Update `onGenerate` signature: add `aiOptions: AIOptions` as 4th param
-- Add **AI图形选项** section (shown only for `aitech` style):
-  - 7 shape buttons: 三角形/四边形/五边形/六边形/八边形/五角星/十边形
-  - Styled same as Chinese color scheme buttons
+### 7. `src/lib/mp4Converter.ts` (NEW, ~55 lines)
+```ts
+// Singleton FFmpeg instance (loaded once, cached)
+let ffmpegInstance: FFmpeg | null = null;
 
-### 8. `src/pages/Index.tsx` (~232 lines total)
-- Import `AIOptions`
-- `handleGenerate` accepts `aiOptions: AIOptions` 4th param
-- Store in config; pass `aiOptions={config.aiOptions}` to `<VideoGenerator>`
+export async function webmToMp4(webmBlob: Blob, onProgress?: (p:number)=>void): Promise<Blob>
+// - loads FFmpeg from CDN if not cached
+// - writes input.webm, runs -c:v copy remux, reads output.mp4
+// - returns mp4 Blob
+```
 
-### 9. `src/components/VideoGenerator.tsx` (~280 lines total)
-- Add `aiOptions?: AIOptions` to `Props`
-- **Fix recording bug**: Replace `createAnimEngine(...)` in `handleRecord` with:
-  ```ts
-  engine.restart(() => {
-    setTimeout(() => { recorder.stop(); clearInterval(timer); }, 500);
-  });
-  ```
-- Pass `aiOptions` to `createAnimEngine` (initial load in `useEffect`)
+### 8. `src/components/ContentForm.tsx` (~279 lines)
+- Add `aiOptions` state, `onGenerate` 4th param
+- Add AI shape selector section (aitech only):
+  7 buttons: 三角形/四边形/五边形/六边形/八边形/五角星/十边形
+
+### 9. `src/pages/Index.tsx` (~235 lines)
+- Thread `aiOptions` through `handleGenerate` → config → `<VideoGenerator>`
+
+### 10. `src/components/VideoGenerator.tsx` (~285 lines)
+- Add `aiOptions?: AIOptions` prop
+- State: `'idle' | 'recording' | 'converting' | 'done'`
+- **Recording fix**: replace 2nd `createAnimEngine` with `engine.restart(() => {...})`
+- After recording: call `webmToMp4(blob)`, show "转换中…" spinner
+- Download as `.mp4`; file name: `${title}.mp4`
 
 ---
 
 ## Verification
-1. Chinese style: cards unchanged, appear as before
-2. City style: each card has left city-skyline icon + right text, slides up from bottom
-3. City recording: cards appear properly (no more blank canvas freeze)
-4. AI style: central polygon glows, then cards radiate outward one by one
-5. AI style: polygon shape selector appears in ContentForm when `style='aitech'`
-6. Selected polygon shape changes the central polygon in the animation
-7. All new files stay under 280 lines
+1. Chinese: cards unchanged ✓
+2. City: left city-skyline icon + right text, slide up ✓
+3. City recording: cards appear (engine.restart fix) ✓
+4. AI: radial polygon + sequential cards ✓
+5. AI: polygon selector in ContentForm ✓
+6. Download is `.mp4` (not `.webm`) ✓
+7. All files ≤ 280 lines ✓
