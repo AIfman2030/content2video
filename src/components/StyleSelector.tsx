@@ -30,6 +30,14 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
     bg: 'linear-gradient(135deg,#080c14,#1e1b4b)',
     accent: '#a855f7',
   },
+  {
+    key: 'nature',
+    name: '山川河海',
+    desc: '天地自然 · 对比之道',
+    tag: '6处名山胜水',
+    bg: 'linear-gradient(135deg,#060e06,#1a3020)',
+    accent: '#4ade80',
+  },
 ];
 
 export default function StyleSelector({ selected, onChange }: Props) {

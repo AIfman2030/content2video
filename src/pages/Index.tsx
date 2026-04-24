@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Sparkles, Film, Settings } from 'lucide-react';
-import type { StyleType, ChineseOptions, AIOptions, GeneratedContent, GeneratorConfig } from '../types/video';
+import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, GeneratorConfig } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
-import { extractContent, getStoredApiKey } from '../services/deepseek';
+import { extractContent, extractNatureContent, getStoredApiKey } from '../services/deepseek';
 
 type Step = 'style' | 'form' | 'video';
 
@@ -19,12 +19,14 @@ const BG_BY_STYLE: Record<StyleType, string> = {
   chinese: 'linear-gradient(160deg, #0a0a14 0%, #12121f 50%, #1a1a2e 100%)',
   city: 'linear-gradient(160deg, #0d1b2a 0%, #1a2a4a 50%, #0f1c30 100%)',
   aitech: 'linear-gradient(160deg, #080c14 0%, #0f172a 50%, #1e1b4b 100%)',
+  nature: 'linear-gradient(160deg, #060e06 0%, #0d1a0e 50%, #111f12 100%)',
 };
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
   chinese: '#e74c3c',
   city: '#f5d87a',
   aitech: '#a855f7',
+  nature: '#4ade80',
 };
 
 export default function Index() {
@@ -34,6 +36,7 @@ export default function Index() {
   const [error, setError] = useState('');
   const [config, setConfig] = useState<GeneratorConfig | null>(null);
   const [content, setContent] = useState<GeneratedContent | null>(null);
+  const [natureContent, setNatureContent] = useState<NatureContent | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
 
   const accent = ACCENT_BY_STYLE[style];
@@ -58,9 +61,17 @@ export default function Index() {
 
     setIsLoading(true);
     try {
-      const result = await extractContent(text);
-      setContent(result);
-      setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
+      if (style === 'nature') {
+        const nc = await extractNatureContent(text);
+        setNatureContent(nc);
+        setContent({ title: nc.title, points: [] });
+        setConfig({ style, coverIndex, text, chineseOptions, aiOptions, natureContent: nc });
+      } else {
+        const result = await extractContent(text);
+        setContent(result);
+        setNatureContent(null);
+        setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
+      }
       setStep('video');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
@@ -77,6 +88,7 @@ export default function Index() {
   const handleClose = () => {
     setStep('form');
     setContent(null);
+    setNatureContent(null);
   };
 
   const steps: Step[] = ['style', 'form', 'video'];
@@ -211,6 +223,7 @@ export default function Index() {
           coverIndex={config.coverIndex}
           chineseOptions={config.chineseOptions}
           aiOptions={config.aiOptions}
+          natureContent={config.natureContent}
           onClose={handleClose}
         />
       )}

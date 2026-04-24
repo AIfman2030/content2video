@@ -14,6 +14,7 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   chinese: '#e74c3c',
   city: '#f5d87a',
   aitech: '#a855f7',
+  nature: '#4ade80',
 };
 
 const ShapeThumbnail = memo(function ShapeThumbnail({
@@ -43,6 +44,45 @@ export default function CoverPicker({ style, selected, onChange }: Props) {
   const handleRandom = () => {
     onChange(Math.floor(Math.random() * shapes.length));
   };
+
+  // Nature style: show text-based pair selector (no SVG thumbnails)
+  if (style === 'nature') {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-medium text-white/70">景点对</span>
+          <button
+            onClick={handleRandom}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors"
+            style={{ background: `${accent}18`, color: accent, border: `1px solid ${accent}40` }}
+          >
+            <Shuffle size={12} />
+            随机
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {shapes.map((pair, idx) => (
+            <button
+              key={pair.id}
+              onClick={() => onChange(idx)}
+              className="rounded-xl px-4 py-3 text-sm font-medium text-left transition-all"
+              style={{
+                background: idx === selected ? `${accent}22` : 'rgba(255,255,255,0.05)',
+                border: `1.5px solid ${idx === selected ? accent : 'rgba(255,255,255,0.1)'}`,
+                color: idx === selected ? accent : 'rgba(255,255,255,0.6)',
+                boxShadow: idx === selected ? `0 0 12px ${accent}50` : 'none',
+              }}
+            >
+              {pair.label}
+            </button>
+          ))}
+        </div>
+        <div className="text-xs text-white/40 text-center">
+          已选：{shapes[selected]?.label ?? '—'}
+        </div>
+      </div>
+    );
+  }
 
   // Group shapes
   const groups: Record<string, typeof shapes> = {};

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Video, Download, RotateCcw, Loader2 } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4 } from '../lib/mp4Converter';
 
@@ -10,6 +10,7 @@ interface Props {
   coverIndex: number;
   chineseOptions?: ChineseOptions;
   aiOptions?: AIOptions;
+  natureContent?: NatureContent;
   onClose: () => void;
 }
 
@@ -20,7 +21,7 @@ const PREVIEW_H = Math.round(512 * CH / CW);
 type RecordState = 'idle' | 'recording' | 'converting' | 'done';
 
 export default function VideoGenerator({
-  content, style, coverIndex, chineseOptions, aiOptions, onClose,
+  content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engineReady, setEngineReady] = useState(false);
@@ -44,7 +45,7 @@ export default function VideoGenerator({
     if (!canvasRef.current) return;
     setEngineReady(false);
     setInitError('');
-    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions)
+    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent)
       .then(engine => {
         engineRef.current = engine;
         setEngineReady(true);
@@ -128,7 +129,9 @@ export default function VideoGenerator({
   }, [downloadUrl, content.title]);
 
   const accent = style === 'chinese' ? '#e74c3c'
-    : style === 'city' ? '#f5d87a' : '#a855f7';
+    : style === 'city' ? '#f5d87a'
+    : style === 'nature' ? '#4ade80'
+    : '#a855f7';
 
   const showControls = !isRecording && !isConverting;
 

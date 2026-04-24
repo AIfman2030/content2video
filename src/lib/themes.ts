@@ -30,6 +30,15 @@ export function getThemeConfig(style: StyleType, chineseOptions?: ChineseOptions
       gridColor: '#f5d87a',
     };
   }
+  if (style === 'nature') {
+    return {
+      bg: ['#060e06', '#0d1a0e', '#111f12'],
+      accent: '#4ade80',
+      accent2: '#86efac',
+      particle: '#4ade80',
+      gridColor: '#4ade80',
+    };
+  }
   // aitech
   return {
     bg: ['#080c14', '#0f172a', '#1e1b4b'],
@@ -143,8 +152,18 @@ export const AI_SHAPES: ShapeItem[] = [
   { id: 'apple', label: 'Apple', group: '科技公司' },
 ];
 
+export const NATURE_PAIRS: ShapeItem[] = [
+  { id: 'pair0', label: '黄山 | 西湖', group: '名山胜水' },
+  { id: 'pair1', label: '泰山 | 九寨沟', group: '名山胜水' },
+  { id: 'pair2', label: '张家界 | 桂林', group: '名山胜水' },
+  { id: 'pair3', label: '峨眉山 | 三峡', group: '名山胜水' },
+  { id: 'pair4', label: '长城 | 雪山', group: '名山胜水' },
+  { id: 'pair5', label: '武夷山 | 青海湖', group: '名山胜水' },
+];
+
 export function getShapeList(style: StyleType): ShapeItem[] {
   if (style === 'chinese') return CHINESE_SHAPES;
   if (style === 'city') return CITY_SHAPES;
+  if (style === 'nature') return NATURE_PAIRS;
   return AI_SHAPES;
 }

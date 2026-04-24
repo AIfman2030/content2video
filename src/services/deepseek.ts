@@ -1,4 +1,4 @@
-import type { GeneratedContent } from '../types/video';
+import type { GeneratedContent, NatureContent } from '../types/video';
 
 const API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const LS_KEY = 'deepseek_api_key';
@@ -24,6 +24,23 @@ const SYSTEM_PROMPT = `你是一个内容提炼专家。用户会给你一段文
 - 只返回JSON，不要任何其他文字
 - 确保所有字段都有值`;
 
+const NATURE_PROMPT = `你是一个内容对比提炼专家。用户会给你一段文章或话题，你需要提炼出两组对比内容，以严格的JSON格式返回。
+
+返回格式：
+{
+  "title": "对比主题标题（≤14字，有冲击力）",
+  "leftTitle": "A方标签（3-8字，如"穷人在想"）",
+  "rightTitle": "B方标签（3-8字，如"富人在研究"）",
+  "leftItems": ["关键词1","关键词2",...],
+  "rightItems": ["关键词1","关键词2",...]
+}
+
+规则：
+- leftItems 和 rightItems 各 6-10 个关键词
+- 每个关键词 2-5 字，简洁有力
+- 两组内容形成鲜明对比（如穷人思维 vs 富人思维）
+- 只返回JSON，不要任何其他文字`;
+
 export function getStoredApiKey(): string {
   return localStorage.getItem(LS_KEY) ?? '';
 }
@@ -44,23 +61,13 @@ export async function extractContent(text: string): Promise<GeneratedContent> {
   try {
     response = await fetch(API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({
-        model: 'deepseek-chat',
-        temperature: 0.3,
-        max_tokens: 1024,
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: text },
-        ],
+        model: 'deepseek-chat', temperature: 0.3, max_tokens: 1024,
+        messages: [{ role: 'system', content: SYSTEM_PROMPT }, { role: 'user', content: text }],
       }),
     });
-  } catch {
-    throw new Error('网络错误，请重试');
-  }
+  } catch { throw new Error('网络错误，请重试'); }
 
   if (response.status === 401) throw new Error('API Key 无效，请检查后重试');
   if (!response.ok) throw new Error(`DeepSeek 接口错误 (${response.status})`);
@@ -69,21 +76,48 @@ export async function extractContent(text: string): Promise<GeneratedContent> {
   const rawContent = data?.choices?.[0]?.message?.content;
   if (!rawContent) throw new Error('AI 返回内容为空');
 
-  const jsonMatch =
-    rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) ||
-    rawContent.match(/(\{[\s\S]*\})/);
+  const jsonMatch = rawContent.match(/```(?:json)?\s*([\s\S]*?)```/) || rawContent.match(/(\{[\s\S]*\})/);
   const jsonStr = jsonMatch ? jsonMatch[1].trim() : rawContent.trim();
 
   let parsed: GeneratedContent;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch {
-    throw new Error('AI 返回格式错误，请重试');
-  }
+  try { parsed = JSON.parse(jsonStr); } catch { throw new Error('AI 返回格式错误，请重试'); }
 
   if (!parsed.title || !Array.isArray(parsed.points) || parsed.points.length === 0) {
     throw new Error('AI 返回数据不完整，请重试');
   }
+  return parsed;
+}
 
+export async function extractNatureContent(text: string): Promise<NatureContent> {
+  if (text.length < 10) throw new Error('内容太短');
+  const apiKey = getStoredApiKey();
+  if (!apiKey) throw new Error('NO_API_KEY');
+
+  let response: Response;
+  try {
+    response = await fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'deepseek-chat', temperature: 0.3, max_tokens: 512,
+        messages: [{ role: 'system', content: NATURE_PROMPT }, { role: 'user', content: text }],
+      }),
+    });
+  } catch { throw new Error('网络错误，请重试'); }
+
+  if (response.status === 401) throw new Error('API Key 无效，请检查后重试');
+  if (!response.ok) throw new Error(`DeepSeek 接口错误 (${response.status})`);
+
+  const data = await response.json();
+  const raw = data?.choices?.[0]?.message?.content ?? '';
+  const match = raw.match(/```(?:json)?\s*([\s\S]*?)```/) || raw.match(/(\{[\s\S]*\})/);
+  const jsonStr = match ? match[1].trim() : raw.trim();
+
+  let parsed: NatureContent;
+  try { parsed = JSON.parse(jsonStr); } catch { throw new Error('AI 返回格式错误，请重试'); }
+
+  if (!parsed.title || !Array.isArray(parsed.leftItems) || !Array.isArray(parsed.rightItems)) {
+    throw new Error('AI 返回数据不完整，请重试');
+  }
   return parsed;
 }

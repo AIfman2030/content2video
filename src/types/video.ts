@@ -1,4 +1,4 @@
-export type StyleType = 'chinese' | 'city' | 'aitech';
+export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
@@ -26,12 +26,21 @@ export interface ChineseOptions {
   animMode: AnimMode;
 }
 
+export interface NatureContent {
+  title: string;
+  leftTitle: string;
+  rightTitle: string;
+  leftItems: string[];
+  rightItems: string[];
+}
+
 export interface GeneratorConfig {
   style: StyleType;
   coverIndex: number;
   text: string;
   chineseOptions: ChineseOptions;
   aiOptions?: AIOptions;
+  natureContent?: NatureContent;
 }
 
 export interface ThemeConfig {
