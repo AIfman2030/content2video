@@ -132,15 +132,16 @@ export default function VideoGenerator({
           STABLE position in tree so React never remounts the canvas.
           Switches between small preview and fullscreen via CSS only. */}
       <div
-        className="absolute inset-0 flex items-center justify-center"
+        className="absolute inset-0 flex items-center justify-center overflow-hidden"
         style={{ zIndex: 1 }}
       >
         <div
           style={isRecording ? {
-            /* Fullscreen: scale canvas to fit viewport keeping 16:9 */
+            /* COVER mode: fill entire screen, clip overflow → no black bars */
             position: 'relative',
-            width: `min(100vw, calc(100vh * ${aspect}))`,
-            height: `min(100vh, calc(100vw / ${aspect}))`,
+            overflow: 'hidden',
+            width: `max(100vw, calc(100vh * ${aspect}))`,
+            height: `max(100vh, calc(100vw / ${aspect}))`,
           } : {
             /* Preview: fixed small box */
             position: 'relative',
@@ -173,10 +174,10 @@ export default function VideoGenerator({
             style={{
               display: 'block',
               width: isRecording
-                ? `min(100vw, calc(100vh * ${aspect}))`
+                ? `max(100vw, calc(100vh * ${aspect}))`
                 : PREVIEW_W,
               height: isRecording
-                ? `min(100vh, calc(100vw / ${aspect}))`
+                ? `max(100vh, calc(100vw / ${aspect}))`
                 : PREVIEW_H,
             }}
           />

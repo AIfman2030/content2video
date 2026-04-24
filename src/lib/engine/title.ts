@@ -21,7 +21,7 @@ export function drawTitle(
   const centerY = CH * 0.38;
   const headerY = 80;
   const titleY = lerp(centerY, headerY, eased);
-  const fontSize = lerp(80, 52, eased);
+  const fontSize = lerp(108, 72, eased);
 
   ctx.save();
 
@@ -117,7 +117,7 @@ export function drawTitle(
   if (eased > 0.7) {
     const tagAlpha = clamp((eased - 0.7) / 0.3, 0, 1);
     const tagY = titleY - fontSize * 0.8;
-    ctx.font = `400 24px "Noto Sans SC", sans-serif`;
+    ctx.font = `400 30px "Noto Sans SC", sans-serif`;
     ctx.fillStyle = hex2rgba(accent, tagAlpha * 0.7);
     ctx.fillText(
       style === 'chinese' ? '✦ 核心解析 ✦' : style === 'city' ? '▸ INSIGHT REPORT' : '> SYSTEM ANALYSIS',

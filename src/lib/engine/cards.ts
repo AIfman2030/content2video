@@ -15,7 +15,7 @@ export function drawCards(
   // Landscape 2-column grid: 2 cols × up to 3 rows
   const MARGIN = 30, GAP = 30, COLS = 2;
   const cardW = (CW - MARGIN * 2 - GAP) / 2; // ~915
-  const cardH = 240;
+  const cardH = 268;
   const rowGap = 26;
   const startY = 160;
 
@@ -121,7 +121,7 @@ export function drawCards(
     }
 
     const badgeX = 55, badgeY = cardH / 2;
-    const badgeR = 40;
+    const badgeR = 50;
     ctx.beginPath();
     ctx.arc(badgeX, badgeY, badgeR, 0, Math.PI * 2);
     const badgeBg = ctx.createRadialGradient(badgeX, badgeY - 10, 0, badgeX, badgeY, badgeR);
@@ -136,31 +136,31 @@ export function drawCards(
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    ctx.font = `800 40px "Noto Sans SC", sans-serif`;
+    ctx.font = `800 52px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff';
     ctx.fillText(`${i + 1}`, badgeX, badgeY);
 
-    const textX = 115;
-    const textAvailW = cardW - textX - 80;
+    const textX = 130;
+    const textAvailW = cardW - textX - 90;
 
     ctx.shadowColor = hex2rgba(accent, 0.7);
     ctx.shadowBlur = 20;
-    ctx.font = `800 52px "Noto Sans SC", sans-serif`;
+    ctx.font = `800 68px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'left';
     ctx.fillStyle = accent;
-    ctx.fillText(point.label, textX, 72);
+    ctx.fillText(point.label, textX, 82);
 
     ctx.shadowBlur = 0;
-    ctx.font = `400 28px "Noto Sans SC", sans-serif`;
+    ctx.font = `400 36px "Noto Sans SC", sans-serif`;
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
-    ctx.fillText(point.short || '', textX, 118);
+    ctx.fillText(point.short || '', textX, 136);
 
-    ctx.font = `400 24px "Noto Sans SC", sans-serif`;
+    ctx.font = `400 28px "Noto Sans SC", sans-serif`;
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
     const descLines = wrapText(ctx, point.desc || '', textAvailW);
-    descLines.slice(0, 2).forEach((line, li) => ctx.fillText(line, textX, 158 + li * 30));
+    descLines.slice(0, 2).forEach((line, li) => ctx.fillText(line, textX, 180 + li * 34));
 
     const rdX = cardW - 55, rdY = cardH / 2;
     const pulseR = 30 + 8 * Math.sin(elapsed * 0.003 + i * 1.3);
