@@ -1,160 +1,159 @@
-# Plan: Add 山川河海 (Nature Comparison) Style
-
-## Overview
-A 4th video style with a unique two-circle comparison layout:
-- Two large circles side by side (canvas 1920×1080)
-- Each circle has a Chinese scenic spot silhouette in the center
-- Comparison words fill each circle, appearing pairwise (left[i] + right[i] simultaneously)
-- Background: ink-wash with distant mountain mist
+# Plan: 4 Fixes + Cover Generation Feature
 
 ---
 
-## Content Data Model
+## Fix 1: Nature — Left/Right Color Differentiation + Center Intersection
 
-### New type: `NatureContent`
-```ts
-export interface NatureContent {
-  title: string;          // "穷人和富人的区别是什么"
-  leftTitle: string;      // "穷人在想"
-  rightTitle: string;     // "富人在研究什么"
-  leftItems: string[];    // up to 12 short keywords
-  rightItems: string[];   // up to 12 short keywords
-}
-```
+### Data change (`NatureContent`)
+Add `commonItems?: string[]` — items appearing on BOTH sides.
 
-### New AI prompt
-`extractNatureContent(text)` in `deepseek.ts` uses a different system prompt asking for comparison format: `{ title, leftTitle, rightTitle, leftItems[≤10], rightItems[≤10] }`.
+### AI prompt update
+Update `extractNatureContent` prompt: extract `leftItems` (A only), `rightItems` (B only), `commonItems` (shared concepts).
 
----
+### Canvas layout change
+Current: two separated circles, both same green accent.
+New:
+- **Left circle center**: `(430, 560)`, radius 300 — words in `accent` (#4ade80 green)
+- **Right circle center**: `(1490, 560)`, radius 300 — words in `accent2` (#86efac light-green)
+- **Center zone** (`x=730-1190`, `y=310-810`): `commonItems` words in golden/orange (#fbbf24) with its own `buildWordSlots` scaled to the center area
+- Color coding is CLEARLY different: left=green, right=light-teal, center=gold
 
-## Canvas Layout (1920×1080)
-
-```
-[                   标题文字                     ]   y=40-110
-[  "左侧标题"  ]          [  "右侧标题"  ]         y=110-185
-[                                                ]
-[    LEFT CIRCLE (r=340)  |  RIGHT CIRCLE (r=340) ]  center y=560
-[  lcx=480, lcy=560       |  rcx=1440, rcy=560   ]
-[  scenic spot + words    |  scenic spot + words  ]
-```
-
-### Animation sequence
-- t=0-600: ink-wash BG fade in, faint mist mountain silhouette at bottom
-- t=600-1200: title brushstroke reveal
-- t=1200-1800: circle outlines draw (ink stroke, simultaneous left+right)
-- t=1800-2400: header badges ("左标题" + "右标题") slide in
-- t=2400-3000: scenic spot silhouettes fade into circle centers
-- t=3000+: words appear pairwise every 500ms (left[i] + right[i] simultaneously)
-  - Word anim: scale 0→1.05→1, fade 0→1, slight upward drift
-- After all words: gentle floating on all words
-- Final hold: ~2s
-
-**Total**: 3000 + N_pairs * 500 + 2000ms (N_pairs ≤ 10)
+### Files:
+- `src/types/video.ts` — add `commonItems?: string[]` to `NatureContent`
+- `src/services/deepseek.ts` — update nature prompt
+- `src/lib/engine/nature-scene.ts` — layout changes + third color + center zone words
 
 ---
 
-## Word Placement (No Overlap)
+## Fix 2: Remove Location Names from Canvas
 
-Pre-computed concentric ring positions (seeded random to shuffle):
-- Ring 1 (r=145): 5 slots at 0°, 72°, 144°, 216°, 288° 
-- Ring 2 (r=205): 7 slots at 25°, 76.4°, 127.8°, 179.2°, 230.6°, 282°, 333.4°
-- Ring 3 (r=268): 8 slots at 0°, 45°, 90°, 135°, 180°, 225°, 270°, 315°
-Total: 20 slots, enough for ≤ 12 words per circle.
-
-Font size: 36-52px (larger for shorter words, smaller for longer).
+In `nature-scene.ts`, delete the two `ctx.fillText(pair.leftName, ...)` / `ctx.fillText(pair.rightName, ...)` lines.
 
 ---
 
-## Scenic Spot Pairs (6 pairs selectable via CoverPicker)
+## Fix 3: 24 Nature Covers
 
-| Index | Left | Right |
-|-------|------|-------|
-| 0 | 黄山 | 西湖 |
-| 1 | 泰山 | 九寨沟 |
-| 2 | 张家界 | 桂林 |
-| 3 | 峨眉山 | 三峡 |
-| 4 | 长城 | 雪山 |
-| 5 | 武夷山 | 青海湖 |
+Reuse the existing 12 spot drawing functions in 12 NEW pairings (cross-pairings) to create 24 total.
 
-Each is drawn as simple canvas-path silhouettes (mountain peaks, karst pillars, water, pagoda outlines etc.) inside the circle center (radius ~90px). Defined in `nature-spots.ts`.
+**24 pairs** = original 6 + 6 rotated + 6 cross + 6 diagonal:
+
+| Idx | Left | Right | Idx | Left | Right |
+|-----|------|-------|-----|------|-------|
+| 0 | 黄山 | 西湖 | 12 | 黄山 | 泰山 |
+| 1 | 泰山 | 九寨沟 | 13 | 西湖 | 九寨沟 |
+| 2 | 张家界 | 桂林 | 14 | 张家界 | 峨眉山 |
+| 3 | 峨眉山 | 三峡 | 15 | 桂林 | 三峡 |
+| 4 | 长城 | 雪山 | 16 | 长城 | 武夷山 |
+| 5 | 武夷山 | 青海湖 | 17 | 雪山 | 青海湖 |
+| 6 | 黄山 | 张家界 | 18 | 黄山 | 峨眉山 |
+| 7 | 西湖 | 桂林 | 19 | 西湖 | 三峡 |
+| 8 | 泰山 | 峨眉山 | 20 | 泰山 | 张家界 |
+| 9 | 九寨沟 | 三峡 | 21 | 九寨沟 | 桂林 |
+| 10 | 长城 | 青海湖 | 22 | 长城 | 三峡 |
+| 11 | 武夷山 | 雪山 | 23 | 武夷山 | 泰山 |
+
+### Files:
+- `src/lib/engine/nature-spots.ts` — expand SPOT_PAIRS from 6 to 24 entries
+- `src/lib/themes.ts` — expand NATURE_PAIRS from 6 to 24 entries
 
 ---
 
-## Files to Create / Modify
+## Fix 4: Cover Generation (9:16) — All Styles + Extensible Architecture
 
-### 1. `src/types/video.ts` (+14 lines)
-- Add `NatureContent` interface
-- Add `'nature'` to `StyleType`
-- Add `natureContent?: NatureContent` to `GeneratorConfig`
-
-### 2. `src/services/deepseek.ts` (+38 lines, total ~127)
-Add:
-```ts
-const NATURE_PROMPT = `...JSON { title, leftTitle, rightTitle, leftItems[], rightItems[] }...`;
-export async function extractNatureContent(text): Promise<NatureContent>
+### Architecture Overview
+```
+src/lib/cover/
+  registry.ts         (~30 lines) — maps StyleType → CoverDrawFn, easy to add new styles
+  chinese-cover.ts    (~80 lines) — Chinese 9:16 cover drawing
+  city-cover.ts       (~80 lines) — City 9:16 cover drawing
+  aitech-cover.ts     (~80 lines) — AI Tech 9:16 cover drawing
+  nature-cover.ts     (~80 lines) — Nature 9:16 cover drawing
+src/lib/coverEngine.ts  (~60 lines) — async setup + dispatch
+src/components/CoverPreview.tsx  (~120 lines) — canvas + action buttons
 ```
 
-### 3. `src/lib/themes.ts` (+30 lines, total ~181)
-- Add nature theme to `getThemeConfig` (dark ink BG, mountain green accent)
-- Add `NATURE_PAIRS: ShapeItem[]` (6 entries, one per pair, label="黄山|西湖" etc.)
-- Update `getShapeList` for nature
+### Cover canvas spec (1080×1920 px, 9:16 portrait)
+- Background: style-themed gradient (dark, rich)
+- Top tag pill: style name (e.g., "AI 科技", small badge)
+- Center (y=480-1440): large decorative shape/icon (the selected cover's SVG at ~600×600px) + glow
+- Title: 2-3 lines, large font (centered, white, below the icon)
+- Key points: 3 bullet lines (brief, from content.points[0..2].label)
+- Bottom strip: style accent line + "MADE WITH ..." watermark
 
-### 4. `src/lib/engine/nature-spots.ts` (NEW, ~190 lines)
-Canvas drawing functions for 12 scenic spots:
+### CoverDrawFn type (extensible)
 ```ts
-export type SpotDrawFn = (ctx, cx, cy, r, color) => void;
-export const SPOT_DRAW_FNS: { left: SpotDrawFn, right: SpotDrawFn }[] = [ ...6 pairs... ]
-```
-Each function: ~12 lines of canvas paths (peaks, curves, tree outlines, water lines).
+// src/lib/cover/registry.ts
+export type CoverDrawFn = (
+  ctx: CanvasRenderingContext2D,
+  content: GeneratedContent,
+  coverIndex: number,
+  shapeImg: HTMLImageElement | null,
+  theme: ThemeConfig,
+  natureContent?: NatureContent,
+) => void;
 
-### 5. `src/lib/engine/nature-scene.ts` (NEW, ~250 lines)
-Main nature animation: circle drawing, word layout, scenic spot rendering, word animation.
-```ts
-export function drawNatureScene(
-  ctx, elapsed, natureContent, accent, accent2, coverIndex, rand
-): void
-```
-
-### 6. `src/lib/canvasEngine.ts` (+15 lines, total ~129)
-- Add `natureContent?: NatureContent` to `createAnimEngine` params
-- For `style === 'nature'`: skip `drawTitle`/`drawCards`/`drawOutro`, call `drawNatureScene` instead
-- Nature total duration: `3000 + leftItems.length * 500 + 2000`
-
-### 7. `src/components/StyleSelector.tsx` (+9 lines, total ~91)
-Add nature style entry:
-```ts
-{ key: 'nature', name: '山川河海', desc: '天地自然 · 对比之道', tag: '6处名山胜水', 
-  bg: 'linear-gradient(135deg,#0a1a0f,#1a3020)', accent: '#4ade80' }
+export const COVER_REGISTRY: Partial<Record<StyleType, CoverDrawFn>> = {};
+// Each cover file self-registers:
+// import { COVER_REGISTRY } from './registry';
+// COVER_REGISTRY['chinese'] = drawChineseCover;
 ```
 
-### 8. `src/components/CoverPicker.tsx` (modify, ~140 lines)
-- Update `ACCENT_BY_STYLE` to include nature
-- For `style === 'nature'`: show 6 pair buttons with text ("黄山 | 西湖") instead of SVG thumbnails
-- `getShapeList('nature')` returns 6 items with labels like "黄山 | 西湖"
+### `coverEngine.ts`
+```ts
+export async function renderCover(
+  canvas: HTMLCanvasElement,
+  content: GeneratedContent,
+  style: StyleType,
+  coverIndex: number,
+  chineseOptions?: ChineseOptions,
+  aiOptions?: AIOptions,
+  natureContent?: NatureContent,
+): Promise<void>
+// Loads shape image, gets theme, calls registry[style]()
+```
 
-### 9. `src/components/ContentForm.tsx` (minor, +2 lines)
-- No AI shape selector for nature (style-specific options are minimal)
-- The ContentForm already handles unknown styles gracefully
+### CoverPreview.tsx
+- Receives same props as VideoGenerator (content, style, coverIndex, ...)
+- `useEffect` → `renderCover()` on a 1080×1920 canvas (CSS scaled to fit screen)
+- Two buttons at bottom:
+  - "下载封面 PNG" → `canvas.toDataURL('image/png')` → `<a download>`
+  - "继续生成视频 →" → calls `onContinue()` callback
+- Clean dark overlay with the canvas centered in portrait orientation
 
-### 10. `src/pages/Index.tsx` (~260 lines)
-- Add `natureContent: NatureContent | null` state
-- In `handleGenerate`: if `style === 'nature'`, call `extractNatureContent`, set both states
-- Update `BG_BY_STYLE`, `ACCENT_BY_STYLE` for nature
-- Pass `natureContent` to VideoGenerator
-- Video step condition: `step === 'video' && (content || natureContent) && config`
+### VideoGenerator.tsx changes
+- Initial state changed: `'cover' | 'idle' | 'recording' | 'converting' | 'done'`
+- When state = `'cover'`: render `<CoverPreview>` with `onContinue={() => setRecordState('idle')}`
+- When state = `'idle'|...'done'`: existing video UI (unchanged)
 
-### 11. `src/components/VideoGenerator.tsx` (+10 lines, total ~286)
-- Add `natureContent?: NatureContent` prop
-- Pass to `createAnimEngine`
-- For nature style, `content` can be a minimal `{ title: '', points: [] }`
+---
+
+## File-by-file Summary
+
+| File | Action | Est. Lines |
+|------|--------|-----------|
+| `src/types/video.ts` | + `commonItems?` | ~55 |
+| `src/services/deepseek.ts` | update nature prompt | ~130 |
+| `src/lib/engine/nature-scene.ts` | 3-zone layout, remove names | ~270 |
+| `src/lib/engine/nature-spots.ts` | expand to 24 pairs | ~265 |
+| `src/lib/themes.ts` | 24 nature pairs | ~215 |
+| `src/lib/cover/registry.ts` | NEW | ~30 |
+| `src/lib/cover/chinese-cover.ts` | NEW | ~80 |
+| `src/lib/cover/city-cover.ts` | NEW | ~80 |
+| `src/lib/cover/aitech-cover.ts` | NEW | ~80 |
+| `src/lib/cover/nature-cover.ts` | NEW | ~80 |
+| `src/lib/coverEngine.ts` | NEW | ~60 |
+| `src/components/CoverPreview.tsx` | NEW | ~120 |
+| `src/components/VideoGenerator.tsx` | add cover state | ~290 |
+
+> `nature-scene.ts` may exceed 280 lines; will split into `nature-scene-words.ts` if needed.
 
 ---
 
 ## Verification
-1. Nature style appears in StyleSelector
-2. CoverPicker shows 6 pair options for nature
-3. Extracting content with nature style uses comparison prompt
-4. Two circles appear with scenic spots in center
-5. Words appear pairwise (left+right simultaneously, no overlap)
-6. Total animation length ~8-10s for typical content
-7. All new files ≤ 280 lines
+1. Nature left=green, right=teal, center=gold; all distinct and readable
+2. No location names visible on canvas
+3. 24 cover pairs available in nature cover picker
+4. All 4 styles show cover preview (9:16 portrait) before video
+5. "下载封面 PNG" downloads correctly
+6. "继续生成视频" proceeds to existing animation
+7. Adding new styles in future: create `src/lib/cover/newstyle-cover.ts` + register in `registry.ts`
