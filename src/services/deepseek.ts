@@ -24,7 +24,7 @@ const SYSTEM_PROMPT = `你是一个内容提炼专家。用户会给你一段文
 - 只返回JSON，不要任何其他文字
 - 确保所有字段都有值`;
 
-const NATURE_PROMPT = `你是一个内容对比提炼专家。用户会给你一段文章或话题，你需要提炼出两组对比内容，以严格的JSON格式返回。
+const NATURE_PROMPT = `你是一个内容对比提炼专家。用户会给你一段文章或话题，你需要提炼出两组对比内容以及共同点，以严格的JSON格式返回。
 
 返回格式：
 {
@@ -32,13 +32,15 @@ const NATURE_PROMPT = `你是一个内容对比提炼专家。用户会给你一
   "leftTitle": "A方标签（3-8字，如"穷人在想"）",
   "rightTitle": "B方标签（3-8字，如"富人在研究"）",
   "leftItems": ["关键词1","关键词2",...],
-  "rightItems": ["关键词1","关键词2",...]
+  "rightItems": ["关键词1","关键词2",...],
+  "commonItems": ["双方都有的关键词1","关键词2",...]
 }
 
 规则：
-- leftItems 和 rightItems 各 6-10 个关键词
-- 每个关键词 2-5 字，简洁有力
-- 两组内容形成鲜明对比（如穷人思维 vs 富人思维）
+- leftItems：A方特有的关键词，4-8个，每个2-5字
+- rightItems：B方特有的关键词，4-8个，每个2-5字
+- commonItems：A和B共同拥有或都会经历的概念，2-5个，每个2-5字（如"健康","时间","家庭"等）
+- 三组内容之间不能重复
 - 只返回JSON，不要任何其他文字`;
 
 export function getStoredApiKey(): string {

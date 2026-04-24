@@ -32,6 +32,7 @@ export interface NatureContent {
   rightTitle: string;
   leftItems: string[];
   rightItems: string[];
+  commonItems?: string[];
 }
 
 export interface GeneratorConfig {

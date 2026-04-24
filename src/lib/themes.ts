@@ -153,12 +153,34 @@ export const AI_SHAPES: ShapeItem[] = [
 ];
 
 export const NATURE_PAIRS: ShapeItem[] = [
-  { id: 'pair0', label: '黄山 | 西湖', group: '名山胜水' },
-  { id: 'pair1', label: '泰山 | 九寨沟', group: '名山胜水' },
-  { id: 'pair2', label: '张家界 | 桂林', group: '名山胜水' },
-  { id: 'pair3', label: '峨眉山 | 三峡', group: '名山胜水' },
-  { id: 'pair4', label: '长城 | 雪山', group: '名山胜水' },
-  { id: 'pair5', label: '武夷山 | 青海湖', group: '名山胜水' },
+  // Group A - 名山胜水 (6)
+  { id: 'pair0',  label: '黄山 | 西湖',    group: '名山胜水' },
+  { id: 'pair1',  label: '泰山 | 九寨沟',  group: '名山胜水' },
+  { id: 'pair2',  label: '张家界 | 桂林',  group: '名山胜水' },
+  { id: 'pair3',  label: '峨眉山 | 三峡',  group: '名山胜水' },
+  { id: 'pair4',  label: '长城 | 雪山',    group: '名山胜水' },
+  { id: 'pair5',  label: '武夷山 | 青海湖',group: '名山胜水' },
+  // Group B - 山水相映 (6)
+  { id: 'pair6',  label: '黄山 | 泰山',    group: '山水相映' },
+  { id: 'pair7',  label: '西湖 | 九寨沟',  group: '山水相映' },
+  { id: 'pair8',  label: '张家界 | 峨眉山',group: '山水相映' },
+  { id: 'pair9',  label: '桂林 | 三峡',    group: '山水相映' },
+  { id: 'pair10', label: '长城 | 武夷山',  group: '山水相映' },
+  { id: 'pair11', label: '雪山 | 青海湖',  group: '山水相映' },
+  // Group C - 江山如画 (6)
+  { id: 'pair12', label: '黄山 | 张家界',  group: '江山如画' },
+  { id: 'pair13', label: '西湖 | 桂林',    group: '江山如画' },
+  { id: 'pair14', label: '泰山 | 峨眉山',  group: '江山如画' },
+  { id: 'pair15', label: '九寨沟 | 三峡',  group: '江山如画' },
+  { id: 'pair16', label: '长城 | 青海湖',  group: '江山如画' },
+  { id: 'pair17', label: '武夷山 | 雪山',  group: '江山如画' },
+  // Group D - 天地辉映 (6)
+  { id: 'pair18', label: '黄山 | 峨眉山',  group: '天地辉映' },
+  { id: 'pair19', label: '西湖 | 三峡',    group: '天地辉映' },
+  { id: 'pair20', label: '泰山 | 张家界',  group: '天地辉映' },
+  { id: 'pair21', label: '九寨沟 | 桂林',  group: '天地辉映' },
+  { id: 'pair22', label: '长城 | 三峡',    group: '天地辉映' },
+  { id: 'pair23', label: '武夷山 | 泰山',  group: '天地辉映' },
 ];
 
 export function getShapeList(style: StyleType): ShapeItem[] {

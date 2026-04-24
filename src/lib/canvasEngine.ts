@@ -55,7 +55,11 @@ export async function createAnimEngine(
 
   const ctx = canvas.getContext('2d')!;
   const total = isNature
-    ? natureTotalMs(Math.max((natureContent?.leftItems.length ?? 0), (natureContent?.rightItems.length ?? 0)))
+    ? natureTotalMs(
+        natureContent?.leftItems.length ?? 0,
+        natureContent?.rightItems.length ?? 0,
+        natureContent?.commonItems?.length ?? 0,
+      )
     : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;

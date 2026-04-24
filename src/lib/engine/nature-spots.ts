@@ -213,12 +213,34 @@ export const drawQinghaihu: SpotFn = (ctx, cx, cy, r, col) => {
   ctx.restore();
 };
 
-// ── Exported pairs (indexed by coverIndex 0-5) ───────────────────────────────
+// ── Exported pairs (24 pairs from 12 spot functions) ─────────────────────────
 export const SPOT_PAIRS: { left: SpotFn; right: SpotFn; leftName: string; rightName: string }[] = [
-  { left: drawHuangshan, right: drawXihu, leftName: '黄山', rightName: '西湖' },
-  { left: drawTaishan, right: drawJiuzhaigou, leftName: '泰山', rightName: '九寨沟' },
-  { left: drawZhangjiajie, right: drawGuilin, leftName: '张家界', rightName: '桂林' },
-  { left: drawEmei, right: drawSanxia, leftName: '峨眉山', rightName: '三峡' },
-  { left: drawChangcheng, right: drawXueshan, leftName: '长城', rightName: '雪山' },
-  { left: drawWuyi, right: drawQinghaihu, leftName: '武夷山', rightName: '青海湖' },
+  // Original 6
+  { left: drawHuangshan,   right: drawXihu,      leftName: '黄山',  rightName: '西湖'  },
+  { left: drawTaishan,     right: drawJiuzhaigou,leftName: '泰山',  rightName: '九寨沟'},
+  { left: drawZhangjiajie, right: drawGuilin,    leftName: '张家界',rightName: '桂林'  },
+  { left: drawEmei,        right: drawSanxia,    leftName: '峨眉山',rightName: '三峡'  },
+  { left: drawChangcheng,  right: drawXueshan,   leftName: '长城',  rightName: '雪山'  },
+  { left: drawWuyi,        right: drawQinghaihu, leftName: '武夷山',rightName: '青海湖'},
+  // Rotated 6
+  { left: drawHuangshan,   right: drawTaishan,   leftName: '黄山',  rightName: '泰山'  },
+  { left: drawXihu,        right: drawJiuzhaigou,leftName: '西湖',  rightName: '九寨沟'},
+  { left: drawZhangjiajie, right: drawEmei,      leftName: '张家界',rightName: '峨眉山'},
+  { left: drawGuilin,      right: drawSanxia,    leftName: '桂林',  rightName: '三峡'  },
+  { left: drawChangcheng,  right: drawWuyi,      leftName: '长城',  rightName: '武夷山'},
+  { left: drawXueshan,     right: drawQinghaihu, leftName: '雪山',  rightName: '青海湖'},
+  // Cross 6
+  { left: drawHuangshan,   right: drawZhangjiajie,leftName: '黄山', rightName: '张家界'},
+  { left: drawXihu,        right: drawGuilin,    leftName: '西湖',  rightName: '桂林'  },
+  { left: drawTaishan,     right: drawEmei,      leftName: '泰山',  rightName: '峨眉山'},
+  { left: drawJiuzhaigou,  right: drawSanxia,    leftName: '九寨沟',rightName: '三峡'  },
+  { left: drawChangcheng,  right: drawQinghaihu, leftName: '长城',  rightName: '青海湖'},
+  { left: drawWuyi,        right: drawXueshan,   leftName: '武夷山',rightName: '雪山'  },
+  // Diagonal 6
+  { left: drawHuangshan,   right: drawEmei,      leftName: '黄山',  rightName: '峨眉山'},
+  { left: drawXihu,        right: drawSanxia,    leftName: '西湖',  rightName: '三峡'  },
+  { left: drawTaishan,     right: drawZhangjiajie,leftName: '泰山', rightName: '张家界'},
+  { left: drawJiuzhaigou,  right: drawGuilin,    leftName: '九寨沟',rightName: '桂林'  },
+  { left: drawChangcheng,  right: drawSanxia,    leftName: '长城',  rightName: '三峡'  },
+  { left: drawWuyi,        right: drawTaishan,   leftName: '武夷山',rightName: '泰山'  },
 ];
