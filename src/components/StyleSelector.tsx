@@ -16,9 +16,9 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
   },
   {
     key: 'city',
-    name: '城市地标',
+    name: '十二生肖',
     desc: '夜色繁华 · 都市天际',
-    tag: '24座省会城市',
+    tag: '12生肖',
     bg: 'linear-gradient(135deg,#0d1b2a,#1a2a4a)',
     accent: '#f5d87a',
   },
