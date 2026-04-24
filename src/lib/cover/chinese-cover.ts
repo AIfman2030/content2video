@@ -1,112 +1,74 @@
-import { COVER_W, COVER_H, CoverOpts, hex2rgbaCover, drawRoundRect, registerCover } from './registry';
+import { COVER_W, COVER_H, ICON_CX, ICON_CY, ICON_R, CoverOpts,
+  hex2rgbaCover, neonGrad, drawRoundRect, drawRainbowBorder, registerCover } from './registry';
 
 const W = COVER_W, H = COVER_H;
 
-function drawBg(ctx: CanvasRenderingContext2D, accent: string) {
-  const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#0a0a14'); bg.addColorStop(0.5, '#12121f'); bg.addColorStop(1, '#0a0a14');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
-  // subtle diagonal lines pattern
-  ctx.save(); ctx.globalAlpha = 0.04; ctx.strokeStyle = accent; ctx.lineWidth = 1;
-  for (let i = -H; i < W + H; i += 48) {
-    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + H, H); ctx.stroke();
-  }
-  ctx.restore();
-  // top glow
-  const tg = ctx.createRadialGradient(W / 2, 0, 0, W / 2, 0, W * 0.9);
-  tg.addColorStop(0, hex2rgbaCover(accent, 0.18)); tg.addColorStop(1, 'transparent');
-  ctx.fillStyle = tg; ctx.fillRect(0, 0, W, H * 0.5);
+function drawBg(ctx: CanvasRenderingContext2D) {
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  // Subtle radial glow in center background
+  const g = ctx.createRadialGradient(W/2, H*0.55, 0, W/2, H*0.55, W*0.75);
+  g.addColorStop(0, 'rgba(40,10,5,0.8)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
 }
 
-function drawDragon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, col: string) {
-  // Stylized circular dragon / coin motif
+function drawChineseIcon(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, accent: string, accent2: string) {
   ctx.save();
-  ctx.strokeStyle = col; ctx.lineWidth = 4;
-  // outer ring
+  // Outer ring
+  const ringG = neonGrad(ctx, cx-r, cy, cx+r, cy, accent, accent2);
+  ctx.strokeStyle = ringG; ctx.lineWidth = 6; ctx.shadowColor = accent; ctx.shadowBlur = 25;
   ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx, cy, r * 0.88, 0, Math.PI * 2); ctx.stroke();
-  // inner circle
-  ctx.beginPath(); ctx.arc(cx, cy, r * 0.22, 0, Math.PI * 2); ctx.stroke();
-  // radial lines (8 directions like bagua)
-  ctx.lineWidth = 2.5;
+  // Inner ring
+  ctx.strokeStyle = neonGrad(ctx, cx, cy-r, cx, cy+r, accent2, accent);
+  ctx.lineWidth = 3; ctx.shadowBlur = 14;
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.78, 0, Math.PI * 2); ctx.stroke();
+  // 8 radial lines (bagua style)
+  ctx.lineWidth = 4; ctx.shadowBlur = 20;
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx + Math.cos(a) * r * 0.26, cy + Math.sin(a) * r * 0.26);
-    ctx.lineTo(cx + Math.cos(a) * r * 0.82, cy + Math.sin(a) * r * 0.82);
+    const g2 = neonGrad(ctx, cx + Math.cos(a)*r*0.3, cy + Math.sin(a)*r*0.3, cx + Math.cos(a)*r*0.72, cy + Math.sin(a)*r*0.72, accent, accent2);
+    ctx.strokeStyle = g2; ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a)*r*0.3, cy + Math.sin(a)*r*0.3);
+    ctx.lineTo(cx + Math.cos(a)*r*0.72, cy + Math.sin(a)*r*0.72);
     ctx.stroke();
   }
-  // decorative arcs between spokes
-  ctx.lineWidth = 2;
+  // Small circles between spokes
+  ctx.lineWidth = 3; ctx.shadowBlur = 14;
   for (let i = 0; i < 8; i++) {
-    const a1 = (i / 8) * Math.PI * 2, a2 = ((i + 0.5) / 8) * Math.PI * 2;
-    const mx = cx + Math.cos((a1 + a2) / 2) * r * 0.58;
-    const my = cy + Math.sin((a1 + a2) / 2) * r * 0.58;
-    ctx.beginPath(); ctx.arc(mx, my, r * 0.12, 0, Math.PI * 2); ctx.stroke();
+    const a = (i / 8 + 0.0625) * Math.PI * 2;
+    const mx = cx + Math.cos(a) * r * 0.57, my = cy + Math.sin(a) * r * 0.57;
+    ctx.strokeStyle = neonGrad(ctx, mx-r*0.06, my, mx+r*0.06, my, accent, accent2);
+    ctx.beginPath(); ctx.arc(mx, my, r * 0.08, 0, Math.PI * 2); ctx.stroke();
   }
-  ctx.fillStyle = hex2rgbaCover(col, 0.1);
-  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+  // Center yin-yang split line
+  ctx.lineWidth = 5; ctx.shadowBlur = 20;
+  ctx.strokeStyle = neonGrad(ctx, cx, cy-r*0.25, cx, cy+r*0.25, accent, accent2);
+  ctx.beginPath(); ctx.arc(cx, cy, r*0.25, -Math.PI/2, Math.PI/2); ctx.stroke();
+  ctx.strokeStyle = neonGrad(ctx, cx, cy-r*0.25, cx, cy+r*0.25, accent2, accent);
+  ctx.beginPath(); ctx.arc(cx, cy, r*0.25, Math.PI/2, -Math.PI/2); ctx.stroke();
+  // Glow fill inside outer ring
+  const gf = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  gf.addColorStop(0, hex2rgbaCover(accent, 0.12)); gf.addColorStop(1, 'transparent');
+  ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = gf; ctx.fillRect(cx-r, cy-r, r*2, r*2);
   ctx.restore();
-}
-
-function drawTopBanner(ctx: CanvasRenderingContext2D, accent: string) {
-  ctx.save(); ctx.globalAlpha = 0.7;
-  ctx.fillStyle = hex2rgbaCover(accent, 0.15);
-  ctx.fillRect(0, 0, W, 110);
-  ctx.strokeStyle = hex2rgbaCover(accent, 0.4);
-  ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(0, 110); ctx.lineTo(W, 110); ctx.stroke();
-  ctx.restore();
-  ctx.save(); ctx.font = `400 32px "Noto Sans SC", sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = hex2rgbaCover(accent, 0.9); ctx.fillText('知 识 点 总 结', W / 2, 55);
-  ctx.restore();
-}
-
-function drawItems(ctx: CanvasRenderingContext2D, items: string[], accent: string, startY: number) {
-  items.slice(0, 6).forEach((item, i) => {
-    const y = startY + i * 90;
-    ctx.save();
-    ctx.fillStyle = hex2rgbaCover(accent, 0.12);
-    drawRoundRect(ctx, 80, y - 28, W - 160, 64, 12); ctx.fill();
-    ctx.strokeStyle = hex2rgbaCover(accent, 0.35);
-    ctx.lineWidth = 1; drawRoundRect(ctx, 80, y - 28, W - 160, 64, 12); ctx.stroke();
-    // bullet
-    ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(120, y + 4, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.font = `600 38px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#f0f0f0'; ctx.fillText(item, 148, y + 4);
-    ctx.restore();
-  });
 }
 
 function drawChinese(ctx: CanvasRenderingContext2D, opts: CoverOpts) {
-  const { title, items = [], accent, accent2, coverIndex } = opts;
-  drawBg(ctx, accent);
-  drawTopBanner(ctx, accent);
-  // Large decorative icon
-  const iconY = 480;
-  drawDragon(ctx, W / 2, iconY, 200, accent);
-  // Accent circle glow behind icon
-  const glow = ctx.createRadialGradient(W / 2, iconY, 0, W / 2, iconY, 260);
-  glow.addColorStop(0, hex2rgbaCover(accent, 0.22)); glow.addColorStop(1, 'transparent');
-  ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = glow; ctx.fillRect(0, 200, W, 560); ctx.restore();
-  // Title
-  ctx.save();
-  ctx.font = `900 86px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.shadowColor = accent; ctx.shadowBlur = 28; ctx.fillStyle = '#fff'; ctx.fillText(title, W / 2, 780);
-  ctx.shadowBlur = 0; ctx.restore();
-  // Divider
-  const dg = ctx.createLinearGradient(80, 0, W - 80, 0);
-  dg.addColorStop(0, 'transparent'); dg.addColorStop(0.4, hex2rgbaCover(accent, 0.8));
-  dg.addColorStop(0.6, hex2rgbaCover(accent2, 0.8)); dg.addColorStop(1, 'transparent');
-  ctx.save(); ctx.strokeStyle = dg; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(80, 850); ctx.lineTo(W - 80, 850); ctx.stroke(); ctx.restore();
-  // Items
-  if (items.length > 0) drawItems(ctx, items, accent, 920);
-  // Bottom watermark
-  ctx.save(); ctx.globalAlpha = 0.25; ctx.font = `300 28px "Noto Sans SC", sans-serif`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillStyle = accent;
-  ctx.fillText('点击查看完整视频', W / 2, H - 60); ctx.restore();
+  const { accent, accent2, coverIndex } = opts;
+  // Assign distinct accent colors per coverIndex for variety
+  const PALETTES: [string, string][] = [
+    ['#ffd700','#ff2200'],['#ff2200','#ffd700'],['#ff00cc','#ffcc00'],
+    ['#00ffcc','#ff4488'],['#aa88ff','#ffcc00'],['#ff6600','#aaff00'],
+    ['#ff44bb','#44ffee'],['#ffee00','#ff0044'],['#00bbff','#ff8800'],
+    ['#88ff00','#ff00cc'],['#ff8844','#4488ff'],['#ee00ff','#00ffaa'],
+    ['#ffaa00','#0055ff'],['#00ff55','#ff0055'],['#4444ff','#ffff00'],
+    ['#ff5500','#00ffff'],['#cc00ff','#ffcc00'],['#00ffcc','#ff6600'],
+    ['#ff2288','#88ff22'],['#ffcc44','#4466ff'],['#22ffaa','#ff2244'],
+    ['#ff6644','#44bbff'],['#aaff00','#ff00aa'],['#00aaff','#ffaa00'],
+  ];
+  const [c1, c2] = PALETTES[coverIndex % PALETTES.length];
+  drawBg(ctx);
+  drawRainbowBorder(ctx, W, H);
+  drawChineseIcon(ctx, ICON_CX, ICON_CY, ICON_R, c1, c2);
 }
 
 registerCover('chinese', drawChinese);
