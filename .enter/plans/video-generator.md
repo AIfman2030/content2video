@@ -1,170 +1,133 @@
-# 网页生成器 · 实现计划
+# Plan: Differentiated Theme Animations + City Recording Bug Fix
 
-## 背景
-构建一个"内容转动画视频"工具：用户粘贴文章 → DeepSeek AI 提炼要点 → 在 Canvas 上播放 9:16 竖屏动画 → 可录制下载为 .webm 视频。
+## Context
+Two issues to solve:
+1. **All 3 themes use identical card layout** (rectangular box pop-in grid). The user wants:
+   - **Chinese & City**: Left-panel graphic + right-panel text (split card), each with unique animation
+   - **AI Tech**: Radial polygon layout — central configurable polygon, content items radiate outward one by one, each connected by a glowing line
+2. **City style recording bug**: Cards don't appear when recording; only title shows. Root cause: `handleRecord` calls `createAnimEngine` (async due to `loadShapeImage`), but if city SVG fails to load or is slow, the recording captures a frozen title frame. Fix: add a `restart(cb?)` method to `AnimEngine` to reuse the existing loaded engine.
 
----
-
-## 文件结构
-
-```
-src/
-├── pages/Index.tsx              ← 主页（3步流程）
-├── types/video.ts               ← 共享类型定义
-├── services/deepseek.ts         ← DeepSeek API 调用
-├── components/
-│   ├── StyleSelector.tsx        ← 步骤1：选风格
-│   ├── ContentForm.tsx          ← 步骤2：输入文本+封面选择+高级选项
-│   ├── CoverPicker.tsx          ← 24种封面选择器（按主题）
-│   ├── ApiKeyInput.tsx          ← API Key 输入（localStorage 持久化）
-│   └── VideoGenerator.tsx       ← 步骤3：Canvas 动画 + 录制引擎
-└── lib/
-    ├── themes.ts                ← 三主题配色/形状数据
-    └── canvasEngine.ts          ← Canvas 动画时间轴引擎（纯函数）
-```
+## Image References
+- **Chinese/City refs**: Cards split into LEFT graphic (shape icon) + RIGHT text content. Clean, modern cards with a decorative divider between panels.
+- **AI Tech ref**: Central polygon with radial spokes; each content item floats at the end of a spoke, appearing sequentially.
 
 ---
 
-## 关键设计决策
+## File Changes
 
-### API Key 方案
-`VITE_*` 环境变量在 Enter 平台不支持，改为：
-- 页面右上角「设置」图标 → 弹窗输入 DeepSeek API Key
-- 存储到 `localStorage`
-- 无 Key 时点击生成按钮给出明确提示
+### 1. `src/types/video.ts` (+10 lines)
+- Add `export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon'`
+- Add `export interface AIOptions { polyShape: PolyShape }`
+- Add `aiOptions?: AIOptions` to `GeneratorConfig`
 
-### Canvas 规格
-- 实际分辨率：`1080 × 1920`（9:16）
-- 预览 CSS 缩放：`340 × 604`，`transform: scale(340/1080)` + `transform-origin: top left`
-- 外层容器固定 `340px × 604px` overflow hidden
-
----
-
-## 三主题配置（`src/lib/themes.ts`）
-
-### 中国风
-- 背景渐变：`#0a0a14` → `#12121f` → `#1a1a2e`
-- 强调色：朱红 `#e74c3c`，副色金 `#f5d87a`
-- 24 种封面形状（SVG path，白色描边/无填充）分5组
-- 5种配色方案（ink / cinnabar / jade / gold / porcelain）
-- 高级选项：边框粗细 / 线条粗细（1-4px）
-- 动画方式：网格卡片 / 单卡片
-
-### 城市地标
-- 背景渐变：`#0d1b2a` → `#1a2a4a` → `#0f1c30`
-- 强调色：金黄 `#f5d87a`
-- 24个城市天际线剪影（SVG，夜景风格）
-
-### AI 科技
-- 背景渐变：`#080c14` → `#0f172a` → `#1e1b4b`
-- 强调色：紫色 `#a855f7`，副色青色 `#06b6d4`
-- 24 种 AI logo 剪影（SVG 象征图形）
-- 波浪式动感动画
-
----
-
-## Canvas 动画时间轴（`src/lib/canvasEngine.ts`）
-
-```
-Phase 0  0~600ms         背景就绪：渐变 + 粒子 + 网格 + 光晕 fadeIn
-Phase 1  600ms~titleEnd  标题打字机（每字 90ms）+ 光标闪烁
-Phase 2  titleEnd~+600ms 标题上移（center → top 100px）+ 60px→40px 缩小
-Phase 3  titleEnd+800ms  卡片依次入场（每张 400ms 动画，间隔 2400ms）
-Phase 4  contentEnd      结尾页（遮罩 + 标题重现 + 品牌水印）
-
-总时长 = 600 + titleLen×90 + 1800 + pts.length×2400 + 2500 ms
-```
-
-每帧用 `requestAnimationFrame` + `performance.now()` 驱动，`cancelAnimationFrame` 清理。
-
-### 背景层（每帧重绘）
-- `createLinearGradient` 3色渐变
-- 中心 `createRadialGradient` 光晕（主题色 20% opacity）
-- 粒子数组：30个，随机位置，带脉冲缩放（sin wave）
-- 透视网格：横线间隔 80px，alpha 随 y 递减
-
-### 标题渲染
-- 打字机：slice(0, charCount)，60px，fontWeight 900，居中
-- 光标：`|` 字符，500ms 闪烁
-- 上移：`easeOutCubic` 曲线
-
-### 卡片渲染（每张）
-- 入场：从 x=1080 滑入，opacity 0→1，400ms
-- 玻璃背景：`rgba(255,255,255,0.05)` fillRect
-- 边框：主题色 1px strokeRect（圆角用 path）
-- 左竖线：4px，主题色
-- 序号圆：radius 40，主题色填充，白色数字 36px
-- 小标题：38px bold 主题色
-- 说明文字：26px，`rgba(255,255,255,0.7)`，自动换行（每行~22字）
-- 装饰：右侧脉冲圆 + 旋转三角
-
-### 结尾页
-- `rgba(主题色, 0.15)` 遮罩 fadeIn
-- 标题 52px 居中
-- `— 小福AI自由 —` 24px，50% white
-- `@小福AI自由` 右下角，主题色 25% opacity，20px
-
----
-
-## 视频录制（VideoGenerator.tsx）
-
+### 2. `src/lib/engine/helpers.ts` (+15 lines, now ~82 lines)
+Add two drawing utilities:
 ```ts
-const stream = canvas.captureStream(30);
-const recorder = new MediaRecorder(stream, {
-  mimeType: 'video/webm;codecs=vp9'  // fallback: 'video/webm'
-});
-// 100ms 间隔收集 chunks
-// 动画结束后 recorder.stop()
-// ondataavailable → blob → URL.createObjectURL → <a> download
+drawPolygon(ctx, cx, cy, r, sides, rotation=0)  // regular N-gon
+drawStar(ctx, cx, cy, outerR, innerR, points)    // star shape
 ```
 
----
+### 3. `src/lib/canvasEngine.ts` (modify, ~115 lines)
+- Add `restart(onComplete?: () => void): void` to `AnimEngine` interface
+- Implement `restart` inside the engine (reset startTime, update completion callback, restart RAF)
+- Add `aiOptions?: AIOptions` param to `createAnimEngine`
+- Pass `shapeImg` and `aiOptions?.polyShape` to `drawCards`
 
-## UI 流程
-
-### 步骤1：StyleSelector
-- 三张卡片：中国风 / 城市地标 / AI科技
-- 预览色块 + 描述文字
-- 选中态高亮
-
-### 步骤2：ContentForm
-- Textarea（20-8000字，实时字数统计）
-- CoverPicker（4-6列网格，SVG 预览，随机按钮）
-- 高级选项折叠（仅中国风：配色方案 + 边框/线条粗细）
-- 「生成并录制视频 →」按钮（带 loading 状态）
-
-### 步骤3：VideoGenerator 全屏遮罩
-- 左侧：340×604 canvas 预览区
-- 右侧：操作按钮
-  - 「预览动画」（重新播放）
-  - 「录制视频」→ 录制中显示进度条 → 「下载视频」
-  - 「重新生成」返回步骤2
-- 右上角 ✕ 返回首页
-
----
-
-## DeepSeek 服务（`src/services/deepseek.ts`）
-
+### 4. `src/lib/engine/cards.ts` (rewrite as thin dispatcher, ~30 lines)
 ```ts
-// POST https://api.deepseek.com/v1/chat/completions
-// model: "deepseek-chat", temperature: 0.3, max_tokens: 1024
-// System prompt: 返回严格 JSON { title, points[{label,short,desc,formatted}] }
-// 错误处理：对应需求文档第六节所有场景
+import { drawCardsLeft } from './cards-left'  // chinese + city
+import { drawCardsAITech } from './cards-aitech'
+
+export function drawCards(..., shapeImg, polyShape?) {
+  if (style === 'aitech') drawCardsAITech(...)
+  else drawCardsLeft(...)  // chinese & city both use left+right split
+}
 ```
 
+### 5. `src/lib/engine/cards-left.ts` (NEW, ~120 lines)
+Handles **Chinese** and **City** styles. Same left+right layout for both; only animation direction and colors differ.
+
+**Layout** (per card, 1-column centered, 5 cards stacked):
+- Card: `CW * 0.75` wide (~1440px), `cardH = 200px`, `startX = CW * 0.125`
+- Left panel: `panelW = 320px` — draws `shapeImg` centered (at ~200×200px), semi-transparent themed background
+  - Number badge: bottom-left of left panel
+  - Vertical divider line (accent color, gradient) separating left and right
+- Right panel: remaining width
+  - Label (68px, accent), short text (34px, white/70), desc lines (26px, white/40)
+
+**Animations** (per style):
+- `chinese`: card slides in from LEFT (`offsetX = (1-eased) * 200`); left panel bg = `rgba(accent, 0.12)` ink wash
+- `city`: card slides up from BOTTOM (`offsetY = (1-eased) * 100`); left panel bg = neon-dark gradient; left panel has scanline shimmer
+
+**Layout note**: 5 rows, each `cardH + rowGap` apart:
+- Row 0: y = 140
+- Row 1: y = 366
+- Row 2: y = 592
+- Row 3: y = 818
+- Row 4: y = 1044 (bottom edge 1044+200=1244 > 1080 — OK since cards clip at canvas edge)
+- Actually with `cardH=200, rowGap=22`: last card bottom = 818+200 = 1018 ≤ 1080 ✓ (for 4 rows of 5 cards with 1 col)
+
+Wait — previous layout was 2 columns. With a single column left+right split, 6 cards in a single column at 200px each + 22px gap = 6*200 + 5*22 = 1310px → too tall.
+**Revised**: Keep 2 columns for Chinese/City too, but each card is left+right split.
+- 2 cols × 3 rows, same positions as before: card W=915px
+- Left panel: 320px, right panel: 595px
+- Rows: y=160, y=454, y=748 (last row bottom=748+268=1016 ≤ 1080 ✓)
+
+### 6. `src/lib/engine/cards-aitech.ts` (NEW, ~200 lines)
+Handles **AI Tech** style exclusively.
+
+**Layout**: Radial arrangement around canvas center (960, 540)
+- Central polygon: R=130px, drawn procedurally using `drawPolygon` / `drawStar`
+- Polygon side count: based on `polyShape` param (triangle=3, quad=4, pentagon=5, hexagon=6, octagon=8, star5=5, decagon=10)
+- Content items always placed at N_items equally-spaced angles starting from top (-90°)
+- Card center radius: 370px from canvas center
+- Card size: 460px × 130px
+
+**Sequencing**:
+- `t < T.cardBase`: only polygon is drawn (pulsing, glowing, rotating slowly)
+- At `T.cardBase + i*T.cardSlot`: item i animates in (line extends from polygon, card fades+scales in)
+
+**Per card**:
+- Background: dark semi-transparent pill shape
+- Border: accent gradient
+- Content: small number circle (30px) + label (52px) + short text (28px)
+- Connecting line: from polygon center to card near-edge, drawn with glowing dash
+
+**Polygon with `star5`**: uses `drawStar(ctx, 960, 540, 130, 60, 5)` (5-pointed star)
+
+### 7. `src/components/ContentForm.tsx` (modify, ~279 lines)
+- Import `AIOptions, PolyShape` types
+- Add `aiOptions` state: `{ polyShape: 'hexagon' as PolyShape }`
+- Add `onGenerate` 4th param: `aiOptions: AIOptions`
+- Add "几何图形" selector panel (only shown when `style === 'aitech'`), similar to Chinese advanced options:
+  - Inline (not collapsible): "AI 图形选项" label
+  - 7 buttons: 三角形, 四边形, 五边形, 六边形, 八边形, 五角星, 十边形
+  - Selected button highlighted with accent color
+
+### 8. `src/pages/Index.tsx` (modify, ~230 lines)
+- Import `AIOptions`
+- Update `handleGenerate` signature to accept `aiOptions: AIOptions`
+- Store `aiOptions` in config: `setConfig({ style, coverIndex, text, chineseOptions, aiOptions })`
+- Pass `aiOptions={config.aiOptions}` to `<VideoGenerator>`
+
+### 9. `src/components/VideoGenerator.tsx` (modify, ~280 lines)
+- Add `aiOptions?: AIOptions` to `Props`
+- Pass `aiOptions` to `createAnimEngine` calls
+- **Fix recording bug**: Replace the second `createAnimEngine` call in `handleRecord` with:
+  ```ts
+  engine.restart(() => {
+    setTimeout(() => recorder.stop(), 500);
+    if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+  });
+  ```
+  This reuses the already-loaded engine (no async shape-loading) and restarts from t=0.
+
 ---
 
-## 修改的文件
-- `src/pages/Index.tsx` — 重写为3步流程入口
-- `src/index.css` — 添加动画 keyframes（打字机光标、脉冲、滑入）
-- `src/tailwind.config.ts` — 无需改动
-- 新增：上述所有组件/服务/lib文件
-
----
-
-## 验证
-1. 输入少于20字 → 显示错误提示
-2. 无 API Key → 跳转设置提示
-3. 正常输入 → 打字机动画 → 标题上移 → 卡片依次入场 → 结尾水印
-4. 点击「录制视频」→ 动画重播 → 自动下载 .webm
-5. 三套主题各自验证配色/形状正确
+## Verification
+1. Chinese style: cards have left graphic panel + right text; slide in from left
+2. City style: cards have left city-silhouette panel + right text; slide up from bottom  
+3. AI style: central polygon + radial cards appear one by one
+4. AI style recording: cards appear properly (bug fixed via engine.restart)
+5. UI shows polygon selector for aitech style
+6. All files stay under 280 lines
