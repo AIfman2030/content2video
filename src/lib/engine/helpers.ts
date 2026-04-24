@@ -88,6 +88,15 @@ export const T = {
   outroDur: 3000,
 };
 
+// ── Chinese card layout pagination ────────────────────────────────────────────
+const _CH = CH, _CARD_H = 268, _ROW_GAP = 26, _START_Y = 160;
+export const PAGE_ROWS  = Math.floor((_CH - _START_Y - 20) / (_CARD_H + _ROW_GAP)); // 3
+export const PAGE_SIZE  = 2 * PAGE_ROWS;   // 6 cards per page (2 cols)
+export const PAGE_HOLD  = 1200;             // ms hold after all cards on page appear
+export const PAGE_TRANS = 350;              // ms for fade-out
+
 export function totalDuration(pts: number) {
-  return T.cardBase + pts * T.cardSlot + T.cardReadDelay + T.outroDur;
+  const pageSlot = PAGE_SIZE * T.cardSlot;
+  const numPages = Math.ceil(pts / PAGE_SIZE);
+  return T.cardBase + numPages * (pageSlot + PAGE_HOLD) + T.cardReadDelay + T.outroDur;
 }
