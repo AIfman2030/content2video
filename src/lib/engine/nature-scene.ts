@@ -9,8 +9,20 @@ const N_CIRCLE_END = 2100;
 const N_BADGE_END  = 2700;
 const N_SPOT_END   = 3200;
 const N_WORD_BASE  = 3200;
-const N_WORD_SLOT  = 550;
+const N_WORD_SLOT  = 1200;   // 1.2 s between each word group (user request)
 const N_HOLD       = 2500;
+
+// ── High-contrast vivid colour pairs (override dull theme colours) ─────────────
+const CONTRAST_PAIRS: [string, string][] = [
+  ['#ff2200', '#00ccff'],
+  ['#ffcc00', '#8800ff'],
+  ['#00ff88', '#ff0088'],
+  ['#ff6600', '#0055ff'],
+  ['#ff00dd', '#00ffaa'],
+  ['#ffee00', '#0044ff'],
+  ['#ff4444', '#44ffcc'],
+  ['#cc00ff', '#ffcc00'],
+];
 
 // Circle layout (separated to allow center zone)
 const LCX = 430, RCX = 1490, CCY = 560, CR = 300;
@@ -87,8 +99,10 @@ function drawWord(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
 // ── Main ──────────────────────────────────────────────────────────────────────
 export function drawNatureScene(
   ctx: CanvasRenderingContext2D, elapsed: number,
-  nc: NatureContent, accent: string, accent2: string, coverIndex: number,
+  nc: NatureContent, _accent: string, _accent2: string, coverIndex: number,
 ) {
+  // Override with high-contrast vivid colours
+  const [accent, accent2] = CONTRAST_PAIRS[coverIndex % CONTRAST_PAIRS.length];
   const rand = seededRandom(coverIndex * 37 + 11);
   const lSlots = buildSlots(rand);
   const rSlots = buildSlots(rand);

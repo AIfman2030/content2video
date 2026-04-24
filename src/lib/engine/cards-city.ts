@@ -1,23 +1,22 @@
 import type { GeneratedContent } from '../../types/video';
-import { CW, CH, clamp, lerp, easeOutCubic, hex2rgba, T } from './helpers';
-import { CITY_LANDMARKS_A } from '../cover/city-landmarks-a';
-import { CITY_LANDMARKS_B } from '../cover/city-landmarks-b';
+import { CW, CH, clamp, easeOutCubic, easeOutBack, hex2rgba, T,
+  PAGE_SIZE, PAGE_HOLD, PAGE_TRANS } from './helpers';
 
-const ALL_CITY = [...CITY_LANDMARKS_A, ...CITY_LANDMARKS_B];
+// 24 auspicious animals — matches city-cover zodiac order
+const ZODIAC = [
+  '鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪',
+  '麟','鹭','雀','虎','雁','鹮','凤','鹰','豹','熊','象','龟',
+];
 
-// Layout constants
-const LEFT_W  = 420;          // left panel width
-const ICON_CX = LEFT_W / 2;  // 210
-const ICON_CY = CH / 2;      // 540
-const ICON_R  = 170;          // landmark drawing radius
-
-// Right panel
-const RIGHT_X    = LEFT_W + 40;
-const RIGHT_W    = CW - RIGHT_X - 40;
-const ITEM_BASE_H = 108;
-const ITEM_GAP    = 18;
-const START_Y     = 140;
-const AVAIL_H     = CH - START_Y - 60;
+// Grid layout  (2 cols × 3 rows = 6 per page, matches PAGE_SIZE)
+const COLS     = 2;
+const ROWS     = 3;
+const ML = 60, MR = 60, MT = 80, MB = 50, CGAP = 24, RGAP = 24;
+const CARD_W   = Math.round((CW - ML - MR - CGAP) / COLS);          // 888
+const CARD_H   = Math.round((CH - MT - MB - (ROWS - 1) * RGAP) / ROWS); // 300
+const ICON_R   = 64;  // zodiac circle radius within card
+const ICON_CX_OFF = ICON_R + 24;  // icon center offset from card left
+const TEXT_X_OFF  = ICON_CX_OFF + ICON_R + 20; // text start offset from card left
 
 export function drawCityCards(
   ctx: CanvasRenderingContext2D,
@@ -25,114 +24,118 @@ export function drawCityCards(
   content: GeneratedContent,
   accent: string,
   accent2: string,
-  _shapeImg: HTMLImageElement,  // kept for API compat, not used
+  _shapeImg: HTMLImageElement,
   coverIndex = 0,
 ): void {
   if (elapsed < T.cardBase) return;
 
+  const n           = content.points.length;
   const cardElapsed = elapsed - T.cardBase;
-  const n = content.points.length;
+  const pageSlot    = PAGE_SIZE * T.cardSlot;
+  const numPages    = Math.ceil(n / PAGE_SIZE);
+  const curPage     = Math.min(Math.floor(cardElapsed / (pageSlot + PAGE_HOLD)), numPages - 1);
+  const withinPage  = cardElapsed - curPage * (pageSlot + PAGE_HOLD);
+  const startCard   = curPage * PAGE_SIZE;
+  const endCard     = Math.min(startCard + PAGE_SIZE, n);
 
-  // Auto-scale: fit all items in available height
-  const rawTotalH = n * ITEM_BASE_H + (n - 1) * ITEM_GAP;
-  const scale = rawTotalH > AVAIL_H ? AVAIL_H / rawTotalH : 1;
-  const itemH   = ITEM_BASE_H * scale;
-  const itemGap = ITEM_GAP * scale;
-  const fsMain  = Math.round(38 * scale);
-  const fsDesc  = Math.round(26 * scale);
-  const barW    = Math.round(6 * scale);
+  // Fade-out for page transition
+  const outA = (curPage < numPages - 1)
+    ? clamp(1 - (withinPage - pageSlot) / PAGE_TRANS, 0, 1)
+    : 1;
 
-  // ── Left panel ──────────────────────────────────────────────────────────────
-  const panelA = clamp(cardElapsed / 600, 0, 1);
   ctx.save();
-  ctx.globalAlpha = easeOutCubic(panelA);
+  if (outA < 1) ctx.globalAlpha = outA;
 
-  // Panel bg gradient
-  const pbg = ctx.createLinearGradient(0, 0, LEFT_W, CH);
-  pbg.addColorStop(0, hex2rgba(accent, 0.18));
-  pbg.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = pbg; ctx.fillRect(0, 0, LEFT_W, CH);
+  for (let i = startCard; i < endCard; i++) {
+    const posInPage = i - startCard;
+    const col = posInPage % COLS;
+    const row = Math.floor(posInPage / COLS);
+    const cardX = ML + col * (CARD_W + CGAP);
+    const cardY = MT + row * (CARD_H + RGAP);
 
-  // Vertical divider
-  const vg = ctx.createLinearGradient(0, 0, 0, CH);
-  vg.addColorStop(0, 'transparent');
-  vg.addColorStop(0.3, accent);
-  vg.addColorStop(0.7, accent2);
-  vg.addColorStop(1, 'transparent');
-  ctx.strokeStyle = vg; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(LEFT_W, 0); ctx.lineTo(LEFT_W, CH); ctx.stroke();
-
-  // Bottom neon glow
-  const bg = ctx.createRadialGradient(ICON_CX, CH, 0, ICON_CX, CH, LEFT_W * 1.2);
-  bg.addColorStop(0, hex2rgba(accent, 0.35)); bg.addColorStop(1, 'transparent');
-  ctx.fillStyle = bg; ctx.fillRect(0, CH * 0.5, LEFT_W, CH * 0.5);
-
-  // City landmark icon
-  const landmarkFn = ALL_CITY[coverIndex % ALL_CITY.length];
-  if (landmarkFn) {
-    ctx.save(); landmarkFn(ctx, ICON_CX, ICON_CY, ICON_R); ctx.restore();
-  }
-
-  ctx.restore();
-
-  // ── Right panel items ────────────────────────────────────────────────────────
-  for (let i = 0; i < n; i++) {
-    const te = cardElapsed - i * T.cardSlot;
+    const te = withinPage - posInPage * T.cardSlot;
     if (te <= 0) continue;
 
-    const prog    = clamp(te / 600, 0, 1);
-    const enterP  = easeOutCubic(prog);
-    const slideY  = lerp(40, 0, enterP);
-    const itemY   = START_Y + i * (itemH + itemGap) + slideY;
+    const enterT  = clamp(te / 500, 0, 1);
+    const eased   = easeOutBack(Math.min(enterT, 0.999));
+    const slideX  = (1 - easeOutCubic(enterT)) * 60 * (col === 0 ? -1 : 1);
+    const alpha   = clamp(te / 300, 0, 1);
+    const point   = content.points[i];
+    const animal  = ZODIAC[(coverIndex + i) % ZODIAC.length];
+    const ac      = col === 0 ? accent : accent2;
 
     ctx.save();
-    ctx.globalAlpha = clamp(te / 300, 0, 1);
+    ctx.globalAlpha *= alpha;
+    ctx.translate(slideX, 0);
 
-    const point = content.points[i];
+    // ── Card background ────────────────────────────────────────────────────
+    ctx.save();
+    ctx.translate(cardX + CARD_W / 2, cardY + CARD_H / 2);
+    ctx.scale(0.4 + 0.6 * eased, 0.4 + 0.6 * eased);
+    ctx.translate(-(cardX + CARD_W / 2), -(cardY + CARD_H / 2));
+    const cbg = ctx.createLinearGradient(cardX, cardY, cardX, cardY + CARD_H);
+    cbg.addColorStop(0, hex2rgba(ac, 0.15));
+    cbg.addColorStop(1, hex2rgba(ac, 0.04));
+    ctx.fillStyle = cbg;
+    ctx.beginPath(); ctx.roundRect(cardX, cardY, CARD_W, CARD_H, 20); ctx.fill();
+    ctx.shadowColor = ac; ctx.shadowBlur = 18;
+    ctx.strokeStyle = hex2rgba(ac, 0.55); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(cardX, cardY, CARD_W, CARD_H, 20); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.restore();
 
-    // Left accent bar
-    ctx.fillStyle = accent;
-    ctx.fillRect(RIGHT_X, itemY + itemH * 0.1, barW, itemH * 0.8);
-
-    // Number circle
-    const nR = Math.round(26 * scale);
-    const nX = RIGHT_X + barW + 16 + nR;
-    const nY = itemY + itemH / 2;
-    ctx.beginPath(); ctx.arc(nX, nY, nR, 0, Math.PI * 2);
-    ctx.fillStyle = hex2rgba(accent, 0.25); ctx.fill();
-    ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.font = `700 ${Math.round(22 * scale)}px "Noto Sans SC", sans-serif`;
+    // ── Zodiac icon circle ─────────────────────────────────────────────────
+    const iconX = cardX + ICON_CX_OFF;
+    const iconY = cardY + CARD_H / 2;
+    const ig = ctx.createRadialGradient(iconX, iconY, 0, iconX, iconY, ICON_R);
+    ig.addColorStop(0, hex2rgba(ac, 0.35)); ig.addColorStop(1, hex2rgba(ac, 0.06));
+    ctx.fillStyle = ig; ctx.beginPath(); ctx.arc(iconX, iconY, ICON_R, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowColor = ac; ctx.shadowBlur = 20;
+    ctx.strokeStyle = ac; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(iconX, iconY, ICON_R, 0, Math.PI * 2); ctx.stroke();
+    ctx.shadowBlur = 0;
+    // Animal character
+    ctx.font = `900 ${Math.round(ICON_R * 1.05)}px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = accent; ctx.fillText(`${i + 1}`, nX, nY);
-
-    // Label
-    const txtX = nX + nR + 16;
-    ctx.shadowColor = hex2rgba(accent, 0.7); ctx.shadowBlur = 14;
-    ctx.font = `700 ${fsMain}px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(point.label, txtX, itemY + itemH * 0.32);
+    ctx.shadowColor = hex2rgba(ac, 0.9); ctx.shadowBlur = 12;
+    ctx.fillStyle = '#fff'; ctx.fillText(animal, iconX, iconY);
     ctx.shadowBlur = 0;
 
+    // ── Text ──────────────────────────────────────────────────────────────
+    const textX  = cardX + TEXT_X_OFF;
+    const maxTW  = CARD_W - TEXT_X_OFF - 20;
+    // Sequence number badge
+    ctx.font = `700 22px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = hex2rgba(ac, 0.65);
+    ctx.fillText(`${String(i + 1).padStart(2, '0')}`, textX, cardY + 18);
+    // Label
+    ctx.shadowColor = hex2rgba(ac, 0.8); ctx.shadowBlur = 16;
+    ctx.font = `800 44px "Noto Sans SC", sans-serif`;
+    ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+    const labelY = cardY + CARD_H * 0.38;
+    ctx.fillText(point.label, textX, labelY);
+    ctx.shadowBlur = 0;
     // Description
     if (point.short) {
-      ctx.font = `400 ${fsDesc}px "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.55)';
-      const maxW = RIGHT_W - (txtX - RIGHT_X) - 30;
-      const short = point.short.length > 24 ? point.short.slice(0, 24) + '…' : point.short;
-      ctx.fillText(short, txtX, itemY + itemH * 0.68);
+      const desc = point.short.length > 26 ? point.short.slice(0, 26) + '…' : point.short;
+      ctx.font = `400 28px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      const truncated = ctx.measureText(desc).width > maxTW ? desc.slice(0, 22) + '…' : desc;
+      ctx.fillText(truncated, textX, cardY + CARD_H * 0.66);
     }
 
-    // Separator line
-    const sepA = clamp((te - 400) / 300, 0, 1);
-    if (sepA > 0 && i < n - 1) {
-      ctx.globalAlpha *= sepA * 0.3;
-      ctx.strokeStyle = hex2rgba(accent2, 0.5); ctx.lineWidth = 1;
-      ctx.setLineDash([6, 8]);
-      ctx.beginPath(); ctx.moveTo(RIGHT_X, itemY + itemH + itemGap * 0.5); ctx.lineTo(CW - 40, itemY + itemH + itemGap * 0.5); ctx.stroke();
-      ctx.setLineDash([]);
-    }
+    ctx.restore(); // translate + globalAlpha
+  }
 
-    ctx.restore();
+  ctx.restore(); // outA
+
+  // ── Page indicator dots ─────────────────────────────────────────────────
+  if (numPages > 1) {
+    const dotY = CH - 22;
+    for (let p = 0; p < numPages; p++) {
+      const dotX = CW / 2 + (p - (numPages - 1) / 2) * 22;
+      ctx.beginPath(); ctx.arc(dotX, dotY, p === curPage ? 7 : 4, 0, Math.PI * 2);
+      ctx.fillStyle = p === curPage ? accent : hex2rgba(accent, 0.3); ctx.fill();
+    }
   }
 }
