@@ -1,6 +1,7 @@
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 const SYSTEM_PROMPT = `你是一个内容提炼专家。用户会给你一段文章或文字，你需要提炼核心要点，以严格的JSON格式返回，不要有任何多余文字。
@@ -51,39 +52,51 @@ Deno.serve(async (req) => {
   try {
     const AI_API_TOKEN = Deno.env.get("ENTER_AI_API_TOKEN");
     if (!AI_API_TOKEN) {
-      return new Response(JSON.stringify({ error: "AI 服务未配置，请联系管理员" }), {
-        status: 503,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "AI 服务未配置，请联系管理员" }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const { text, type } = await req.json();
     if (!text || text.length < 10) {
-      return new Response(JSON.stringify({ error: "内容太短，请输入更多文字" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "内容太短，请输入更多文字" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const systemPrompt = type === "nature" ? NATURE_PROMPT : SYSTEM_PROMPT;
     const maxTokens = type === "nature" ? 600 : 1200;
 
-    const response = await fetch("https://enter.pro/code/api/v1/ai/messages", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${AI_API_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "z-ai/glm-5",
-        messages: [
-          { role: "user", content: `${systemPrompt}\n\n以下是用户输入内容：\n${text}` },
-        ],
-        stream: false,
-        max_tokens: maxTokens,
-        temperature: 0.3,
-      }),
-    });
+    const response = await fetch(
+      "https://enter.pro/code/api/v1/ai/messages",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${AI_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "z-ai/glm-5",
+          messages: [
+            {
+              role: "user",
+              content: `${systemPrompt}\n\n以下是用户输入内容：\n${text}`,
+            },
+          ],
+          stream: false,
+          max_tokens: maxTokens,
+          temperature: 0.3,
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
@@ -91,7 +104,9 @@ Deno.serve(async (req) => {
       try {
         const errJson = JSON.parse(errText);
         if (errJson.error?.message) errMsg = errJson.error.message;
-      } catch { /* use default */ }
+      } catch {
+        /* use default */
+      }
       return new Response(JSON.stringify({ error: errMsg }), {
         status: response.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -101,19 +116,25 @@ Deno.serve(async (req) => {
     const data = await response.json();
     const rawContent: string = data.content?.[0]?.text ?? "";
     if (!rawContent) {
-      return new Response(JSON.stringify({ error: "AI 返回内容为空，请重试" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "AI 返回内容为空，请重试" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     return new Response(JSON.stringify({ content: rawContent }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: (err as Error).message ?? "未知错误" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: (err as Error).message ?? "未知错误" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
 });
