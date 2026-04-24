@@ -9,8 +9,8 @@ interface HexCell { x: number; y: number; phase: number; }
 interface DataStream { x: number; y: number; speed: number; chars: string; alpha: number; }
 
 export function initAIEffects(rand: () => number) {
-  const matrixCols: MatrixCol[] = Array.from({ length: 32 }, (_, i) => ({
-    x: (i / 32) * CW + rand() * (CW / 32),
+  const matrixCols: MatrixCol[] = Array.from({ length: 48 }, (_, i) => ({
+    x: (i / 48) * CW + rand() * (CW / 48),
     y: rand() * CH,
     speed: 2 + rand() * 5,
     len: 8 + rand() * 20,
@@ -20,11 +20,11 @@ export function initAIEffects(rand: () => number) {
 
   const hexCells: HexCell[] = [];
   const hexSize = 55;
-  for (let row = 0; row < 14; row++) {
-    for (let col = 0; col < 10; col++) {
+  for (let row = 0; row < 12; row++) {
+    for (let col = 0; col < 22; col++) {
       hexCells.push({
         x: col * hexSize * 1.8 + (row % 2) * hexSize * 0.9 + 40,
-        y: row * hexSize * 1.55 + 200,
+        y: row * hexSize * 1.55 + 80,
         phase: rand() * Math.PI * 2,
       });
     }

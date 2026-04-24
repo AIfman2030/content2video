@@ -13,10 +13,10 @@ export function initCityEffects(rand: () => number) {
     len: 30 + rand() * 60, speed: 12 + rand() * 10,
     alpha: 0.1 + rand() * 0.3,
   }));
-  const numBuildings = 18;
+  const numBuildings = 24;
   const buildings: Building[] = Array.from({ length: numBuildings }, (_, i) => {
     const w = 40 + rand() * 70;
-    const h = 200 + rand() * 600;
+    const h = 120 + rand() * 420;
     const x = (i / numBuildings) * CW + rand() * 20;
     const y = CH - h;
     const winCols = Math.max(1, Math.floor(w / 20));

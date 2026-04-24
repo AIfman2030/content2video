@@ -208,31 +208,34 @@ export function drawShapeDecoration(
   ctx.save();
 
   if (style === 'city') {
-    const sz = 800;
+    // Large skyline centered in canvas — behind cards
+    const sz = 700;
     const x = (CW - sz) / 2;
-    const y = CH * 0.58;
-    ctx.globalAlpha = bloom * 0.55;
+    const y = (CH - sz) / 2 + 60;
+    ctx.globalAlpha = bloom * 0.45;
     ctx.drawImage(img, x, y, sz, sz);
   } else if (style === 'aitech') {
-    const wave = Math.sin(elapsed * 0.001) * 15;
-    const sz = 480;
+    // Pulsing AI icon centered
+    const wave = Math.sin(elapsed * 0.001) * 12;
+    const sz = 380;
     const x = (CW - sz) / 2;
-    const y = CH * 0.56 + wave;
-    ctx.globalAlpha = bloom * 0.22;
+    const y = (CH - sz) / 2 + wave;
+    ctx.globalAlpha = bloom * 0.18;
     ctx.drawImage(img, x, y, sz, sz);
-    ctx.globalAlpha = bloom * 0.08;
+    ctx.globalAlpha = bloom * 0.06;
     ctx.drawImage(img, x - 20, y + 10, sz + 40, sz + 40);
   } else {
+    // Chinese motif — centered, gentle float + faint reflection
     const wave = Math.sin(elapsed * 0.0008) * 8;
-    const sz = 500;
+    const sz = 420;
     const x = (CW - sz) / 2;
-    const y = CH * 0.57 + wave;
-    ctx.globalAlpha = bloom * 0.28;
+    const y = (CH - sz) / 2 + wave;
+    ctx.globalAlpha = bloom * 0.22;
     ctx.drawImage(img, x, y, sz, sz);
     ctx.save();
     ctx.translate(CW / 2, y + sz / 2);
-    ctx.scale(1, -0.3);
-    ctx.globalAlpha = bloom * 0.06;
+    ctx.scale(1, -0.25);
+    ctx.globalAlpha = bloom * 0.05;
     ctx.drawImage(img, -sz / 2, -sz / 2, sz, sz);
     ctx.restore();
   }

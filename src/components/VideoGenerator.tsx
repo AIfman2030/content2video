@@ -11,10 +11,9 @@ interface Props {
   onClose: () => void;
 }
 
-// Preview scale: 340 wide × 604 tall
-const PREVIEW_W = 340;
-const PREVIEW_H = 604;
-const SCALE = PREVIEW_W / CW;
+// Landscape 16:9 preview
+const PREVIEW_W = 512;
+const PREVIEW_H = Math.round(512 * CH / CW);
 
 type RecordState = 'idle' | 'recording' | 'done';
 
@@ -23,7 +22,6 @@ export default function VideoGenerator({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [engineReady, setEngineReady] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [recordState, setRecordState] = useState<RecordState>('idle');
   const [progress, setProgress] = useState(0);
   const [downloadUrl, setDownloadUrl] = useState<string>('');
@@ -34,31 +32,23 @@ export default function VideoGenerator({
   const chunksRef = useRef<Blob[]>([]);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Init engine
+  const isRecording = recordState === 'recording';
+  const isDone = recordState === 'done';
+  const aspect = CW / CH; // 16/9
+
+  // Init engine & auto-start preview
   useEffect(() => {
     if (!canvasRef.current) return;
     setEngineReady(false);
     setInitError('');
-
-    createAnimEngine(
-      canvasRef.current,
-      content,
-      style,
-      coverIndex,
-      chineseOptions,
-    ).then(engine => {
-      engineRef.current = engine;
-      setEngineReady(true);
-      // Auto-start preview
-      engine.start();
-      setIsPlaying(true);
-    }).catch(err => {
-      setInitError(String(err));
-    });
-
-    return () => {
-      engineRef.current?.stop();
-    };
+    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions)
+      .then(engine => {
+        engineRef.current = engine;
+        setEngineReady(true);
+        engine.start();
+      })
+      .catch(err => setInitError(String(err)));
+    return () => { engineRef.current?.stop(); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -67,80 +57,58 @@ export default function VideoGenerator({
     if (!engine) return;
     engine.stop();
     engine.start();
-    setIsPlaying(true);
     setRecordState('idle');
     setProgress(0);
   }, []);
 
+  // Click "录制视频" → canvas IMMEDIATELY fills screen + recording starts
   const handleRecord = useCallback(async () => {
     const canvas = canvasRef.current;
     const engine = engineRef.current;
     if (!canvas || !engine) return;
 
-    setRecordState('recording');
+    setRecordState('recording');   // triggers fullscreen CSS instantly
     setProgress(0);
     chunksRef.current = [];
-
-    // Stop any ongoing animation
     engine.stop();
 
-    // Setup MediaRecorder
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
-      : 'video/webm';
+      ? 'video/webm;codecs=vp9' : 'video/webm';
 
     const stream = canvas.captureStream(30);
     const recorder = new MediaRecorder(stream, { mimeType });
     recorderRef.current = recorder;
 
-    recorder.ondataavailable = e => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
-
+    recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeType });
-      const url = URL.createObjectURL(blob);
-      setDownloadUrl(url);
+      setDownloadUrl(URL.createObjectURL(blob));
       setRecordState('done');
       setProgress(100);
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
     };
 
-    recorder.start(100); // collect every 100ms
+    recorder.start(100);
 
-    // Progress tracking
     const total = engine.getTotalMs();
-    const startTime = performance.now();
+    const t0 = performance.now();
     progressTimerRef.current = setInterval(() => {
-      const elapsed = performance.now() - startTime;
-      setProgress(Math.min(99, (elapsed / total) * 100));
+      setProgress(Math.min(99, ((performance.now() - t0) / total) * 100));
     }, 100);
 
-    // Re-start animation
-    createAnimEngine(
-      canvas,
-      content,
-      style,
-      coverIndex,
-      chineseOptions,
-      () => {
-        // Animation complete → stop recording
-        setTimeout(() => {
-          recorder.stop();
-          if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-        }, 500);
-      },
-    ).then(newEngine => {
-      engineRef.current = newEngine;
-      newEngine.start();
-    });
+    createAnimEngine(canvas, content, style, coverIndex, chineseOptions, () => {
+      setTimeout(() => {
+        recorder.stop();
+        if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      }, 500);
+    }).then(eng => { engineRef.current = eng; eng.start(); });
   }, [content, style, coverIndex, chineseOptions]);
 
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
     const a = document.createElement('a');
     a.href = downloadUrl;
-    a.download = `${content.title.slice(0, 10)}.webm`;
+    a.download = `${content.title.slice(0, 12)}.webm`;
     a.click();
   }, [downloadUrl, content.title]);
 
@@ -148,25 +116,46 @@ export default function VideoGenerator({
     : style === 'city' ? '#f5d87a' : '#a855f7';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm">
-      <div className="relative flex flex-col lg:flex-row items-center gap-8 w-full max-w-4xl px-6">
+    /* Root overlay — always mounted; z-index elevates during recording */
+    <div className="fixed inset-0" style={{ zIndex: isRecording ? 100 : 50 }}>
 
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute top-0 right-6 flex items-center justify-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors z-10"
-        >
-          <X size={18} />
-        </button>
+      {/* ── Background ── */}
+      <div
+        className="absolute inset-0 transition-all duration-500"
+        style={{
+          background: isRecording ? '#000' : 'rgba(0,0,0,0.88)',
+          backdropFilter: isRecording ? 'none' : 'blur(6px)',
+        }}
+      />
 
-        {/* Canvas preview */}
+      {/* ── Canvas container ──
+          STABLE position in tree so React never remounts the canvas.
+          Switches between small preview and fullscreen via CSS only. */}
+      <div
+        className="absolute inset-0 flex items-center justify-center"
+        style={{ zIndex: 1 }}
+      >
         <div
-          className="flex-shrink-0 rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-          style={{ width: PREVIEW_W, height: PREVIEW_H, position: 'relative' }}
+          style={isRecording ? {
+            /* Fullscreen: scale canvas to fit viewport keeping 16:9 */
+            position: 'relative',
+            width: `min(100vw, calc(100vh * ${aspect}))`,
+            height: `min(100vh, calc(100vw / ${aspect}))`,
+          } : {
+            /* Preview: fixed small box */
+            position: 'relative',
+            width: PREVIEW_W,
+            height: PREVIEW_H,
+            borderRadius: '1rem',
+            overflow: 'hidden',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+            border: '1px solid rgba(255,255,255,0.08)',
+          }}
         >
+          {/* Loading overlay (only before engine ready) */}
           {!engineReady && !initError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-10">
-              <Loader2 size={32} className="animate-spin text-white/50 mb-2" />
+              <Loader2 size={28} className="animate-spin text-white/50 mb-2" />
               <span className="text-sm text-white/40">加载中…</span>
             </div>
           )}
@@ -175,129 +164,113 @@ export default function VideoGenerator({
               <span className="text-sm text-red-400 text-center">{initError}</span>
             </div>
           )}
+
+          {/* THE CANVAS — always at this position in the tree */}
           <canvas
             ref={canvasRef}
             width={CW}
             height={CH}
             style={{
-              width: PREVIEW_W,
-              height: PREVIEW_H,
               display: 'block',
+              width: isRecording
+                ? `min(100vw, calc(100vh * ${aspect}))`
+                : PREVIEW_W,
+              height: isRecording
+                ? `min(100vh, calc(100vw / ${aspect}))`
+                : PREVIEW_H,
             }}
           />
-        </div>
 
-        {/* Controls */}
-        <div className="flex flex-col gap-4 w-full max-w-xs">
-          {/* Content info */}
-          <div
-            className="rounded-xl p-4 border border-white/10"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
-          >
-            <div className="text-base font-bold text-white mb-2">{content.title}</div>
-            <div className="space-y-1">
-              {content.points.map((p, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm text-white/50">
-                  <span
-                    className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full text-xs font-bold"
-                    style={{ background: `${accent}30`, color: accent }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span>{p.label}</span>
-                  <span className="text-white/30 text-xs truncate">{p.short}</span>
-                </div>
-              ))}
+          {/* Recording badge + progress (shown over canvas while recording) */}
+          <div style={{ display: isRecording ? 'block' : 'none' }}>
+            <div className="absolute top-5 right-6 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+              <span className="text-white/80 text-sm font-medium tabular-nums">
+                REC {Math.round(progress)}%
+              </span>
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+              <div
+                className="h-full transition-all duration-300"
+                style={{ width: `${progress}%`, background: accent }}
+              />
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Progress bar (recording) */}
-          {recordState === 'recording' && (
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs text-white/50">
-                <span>录制中…</span>
-                <span>{Math.round(progress)}%</span>
-              </div>
-              <div className="h-1.5 w-full rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full transition-all duration-300"
-                  style={{ width: `${progress}%`, background: accent }}
-                />
-              </div>
-            </div>
-          )}
+      {/* ── Dialog controls (hidden while recording) ── */}
+      <div
+        className="absolute inset-0 flex flex-col items-center justify-end pb-10 pointer-events-none"
+        style={{ zIndex: 2, display: isRecording ? 'none' : 'flex' }}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-5 right-6 flex items-center justify-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors pointer-events-auto"
+        >
+          <X size={18} />
+        </button>
 
-          {/* Action buttons */}
-          <div className="space-y-2.5">
+        {/* Buttons row */}
+        <div className="flex items-center gap-3 pointer-events-auto">
+          <button
+            onClick={handlePreview}
+            disabled={!engineReady}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-40"
+            style={{
+              background: 'rgba(255,255,255,0.08)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: 'rgba(255,255,255,0.75)',
+            }}
+          >
+            <Play size={15} />
+            预览
+          </button>
+
+          {!isDone ? (
             <button
-              onClick={handlePreview}
-              disabled={!engineReady || recordState === 'recording'}
-              className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition-all disabled:opacity-40"
+              onClick={handleRecord}
+              disabled={!engineReady}
+              className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
               style={{
-                background: 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.15)',
-                color: 'rgba(255,255,255,0.8)',
+                background: `linear-gradient(135deg, ${accent}, ${accent}bb)`,
+                color: '#fff',
+                boxShadow: `0 4px 24px ${accent}55`,
               }}
             >
-              <Play size={16} />
-              预览动画
+              <Video size={15} />
+              全屏录制视频
             </button>
-
-            {recordState !== 'done' ? (
-              <button
-                onClick={handleRecord}
-                disabled={!engineReady || recordState === 'recording'}
-                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all disabled:opacity-40"
-                style={{
-                  background: recordState === 'recording'
-                    ? 'rgba(255,255,255,0.1)'
-                    : `linear-gradient(135deg, ${accent}, ${accent}cc)`,
-                  color: '#fff',
-                  boxShadow: recordState !== 'recording' ? `0 4px 20px ${accent}50` : 'none',
-                }}
-              >
-                {recordState === 'recording' ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" />
-                    录制中…
-                  </>
-                ) : (
-                  <>
-                    <Video size={16} />
-                    录制视频
-                  </>
-                )}
-              </button>
-            ) : (
+          ) : (
+            <>
               <button
                 onClick={handleDownload}
-                className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-all"
+                className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold"
                 style={{
-                  background: `linear-gradient(135deg, #22c55e, #16a34a)`,
+                  background: 'linear-gradient(135deg, #22c55e, #16a34a)',
                   color: '#fff',
                   boxShadow: '0 4px 20px #22c55e50',
                 }}
               >
-                <Download size={16} />
+                <Download size={15} />
                 下载视频
               </button>
-            )}
-
-            {recordState === 'done' && (
               <button
-                onClick={handlePreview}
-                className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm text-white/50 hover:text-white/70 transition-colors border border-white/10"
+                onClick={handleRecord}
+                disabled={!engineReady}
+                className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm text-white/50 hover:text-white/70 transition-colors border border-white/10 disabled:opacity-40"
               >
                 <RotateCcw size={14} />
-                重新录制
+                重录
               </button>
-            )}
-          </div>
-
-          <p className="text-xs text-white/25 text-center">
-            录制完成后自动下载 .webm 格式视频
-          </p>
+            </>
+          )}
         </div>
+
+        <p className="mt-3 text-xs text-white/25 pointer-events-none">
+          点击「全屏录制」画面自动全屏并开始录制 · 完成后自动返回下载
+        </p>
       </div>
     </div>
   );

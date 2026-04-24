@@ -12,10 +12,12 @@ export function drawCards(
   if (elapsed < T.cardBase) return;
   const cardElapsed = elapsed - T.cardBase;
 
-  const cardW = CW - 100;
-  const cardH = 230;
-  const startY = 320;
-  const gap = 252;
+  // Landscape 2-column grid: 2 cols × up to 3 rows
+  const MARGIN = 30, GAP = 30, COLS = 2;
+  const cardW = (CW - MARGIN * 2 - GAP) / 2; // ~915
+  const cardH = 240;
+  const rowGap = 26;
+  const startY = 160;
 
   content.points.forEach((point, i) => {
     const cardStart = i * T.cardSlot;
@@ -24,8 +26,11 @@ export function drawCards(
 
     const enterT = clamp(te / 500, 0, 1);
     const eased = easeOutBack(Math.min(enterT, 0.999));
-    const cardY = startY + i * gap;
-    const cardX = 50;
+
+    const colIdx = i % COLS;
+    const rowIdx = Math.floor(i / COLS);
+    const cardX = MARGIN + colIdx * (cardW + GAP);
+    const cardY = startY + rowIdx * (cardH + rowGap);
 
     ctx.save();
     ctx.globalAlpha = clamp(te / 300, 0, 1);

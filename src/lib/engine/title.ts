@@ -19,9 +19,9 @@ export function drawTitle(
   const settleT = clamp((te - typeEnd - 200) / 600, 0, 1);
   const eased = easeOutCubic(settleT);
   const centerY = CH * 0.38;
-  const headerY = 200;
+  const headerY = 80;
   const titleY = lerp(centerY, headerY, eased);
-  const fontSize = lerp(86, 60, eased);
+  const fontSize = lerp(80, 52, eased);
 
   ctx.save();
 

@@ -1,5 +1,5 @@
-export const CW = 1080;
-export const CH = 1920;
+export const CW = 1920;
+export const CH = 1080;
 
 export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
