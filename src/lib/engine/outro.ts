@@ -187,7 +187,7 @@ export function drawOverlays(
   ctx.textAlign = 'right';
   ctx.textBaseline = 'bottom';
   ctx.fillStyle = hex2rgba(accent, 0.28);
-  ctx.fillText('@小福AI自由', CW - 40, CH - 50);
+  ctx.fillText('@小福分享舍', CW - 40, CH - 50);
   ctx.restore();
 
   const prog = Math.min(elapsed / 3000, 1);
