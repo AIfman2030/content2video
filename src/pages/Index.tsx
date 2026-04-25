@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Sparkles, Film } from 'lucide-react';
+import { Sparkles, Film, Key } from 'lucide-react';
 import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, GeneratorConfig } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import VideoGenerator from '../components/VideoGenerator';
-import { extractContent, extractNatureContent } from '../services/deepseek';
+import ApiKeyDialog from '../components/ApiKeyDialog';
+import { extractContent, extractNatureContent, getStoredApiKey } from '../services/deepseek';
 
 type Step = 'style' | 'form' | 'video';
 
@@ -36,6 +37,7 @@ export default function Index() {
   const [config, setConfig] = useState<GeneratorConfig | null>(null);
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [natureContent, setNatureContent] = useState<NatureContent | null>(null);
+  const [apiKeyOpen, setApiKeyOpen] = useState(false);
 
   const accent = ACCENT_BY_STYLE[style];
   const bg = BG_BY_STYLE[style];
@@ -65,7 +67,11 @@ export default function Index() {
       setStep('video');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
-      setError(msg);
+      if (msg === 'NO_API_KEY') {
+        setApiKeyOpen(true);
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -94,11 +100,15 @@ export default function Index() {
             <span className="text-base font-bold text-white">小福 · 视频生成器</span>
           </div>
 
-          {/* Powered by Enter Cloud AI */}
-          <div className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-white/40">
-            <Sparkles size={11} style={{ color: accent }} />
-            AI 驱动
-          </div>
+          {/* API Key button */}
+          <button
+            onClick={() => setApiKeyOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs transition-colors hover:border-white/20"
+            style={{ color: getStoredApiKey() ? accent : 'rgba(255,255,255,0.4)' }}
+          >
+            <Key size={11} />
+            {getStoredApiKey() ? 'API Key ✓' : '设置 API Key'}
+          </button>
         </div>
       </header>
 
@@ -202,6 +212,13 @@ export default function Index() {
           onClose={handleClose}
         />
       )}
+
+      {/* API Key Dialog */}
+      <ApiKeyDialog
+        open={apiKeyOpen}
+        onClose={() => setApiKeyOpen(false)}
+        accent={accent}
+      />
 
     </div>
   );
