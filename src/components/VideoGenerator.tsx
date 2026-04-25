@@ -80,7 +80,9 @@ export default function VideoGenerator({
         const mp4 = await webmToMp4(new Blob(chunksRef.current, { type: mimeType }), r => setProgress(Math.round(r * 100)));
         setDownloadUrl(URL.createObjectURL(mp4)); setProgress(100); setRecordState('done');
       } catch {
-        setDownloadUrl(URL.createObjectURL(new Blob(chunksRef.current, { type: mimeType })));
+        // FFmpeg failed — fall back to raw WebM with correct extension
+        const webmBlob = new Blob(chunksRef.current, { type: 'video/webm' });
+        setDownloadUrl(URL.createObjectURL(webmBlob) + '#webm');
         setProgress(100); setRecordState('done');
       }
     };
@@ -92,7 +94,10 @@ export default function VideoGenerator({
 
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
-    const a = document.createElement('a'); a.href = downloadUrl; a.download = `${content.title.slice(0, 12)}.mp4`; a.click();
+    const isWebmFallback = downloadUrl.endsWith('#webm');
+    const url = isWebmFallback ? downloadUrl.slice(0, -5) : downloadUrl;
+    const ext = isWebmFallback ? '.webm' : '.mp4';
+    const a = document.createElement('a'); a.href = url; a.download = `${content.title.slice(0, 12)}${ext}`; a.click();
   }, [downloadUrl, content.title]);
 
   const showControls = !isRecording && !isConverting;

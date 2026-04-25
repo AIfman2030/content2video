@@ -36,8 +36,18 @@ export async function webmToMp4(
   const inputData = await fetchFile(webmBlob);
   await ff.writeFile('input.webm', inputData);
 
-  // Re-mux: copy video stream into MP4 container (no re-encoding → fast)
-  await ff.exec(['-i', 'input.webm', '-c', 'copy', 'output.mp4']);
+  // Re-encode to H.264 + movflags faststart for maximum platform compatibility
+  // (VP9-in-MP4 is not accepted by most social media platforms; H.264 is universal)
+  await ff.exec([
+    '-i', 'input.webm',
+    '-c:v', 'libx264',
+    '-preset', 'ultrafast',
+    '-crf', '18',
+    '-pix_fmt', 'yuv420p',   // required for iOS / most platforms
+    '-movflags', '+faststart', // moov atom at front → streaming & upload compatible
+    '-an',                    // no audio track (canvas has no audio)
+    'output.mp4',
+  ]);
 
   const data = await ff.readFile('output.mp4');
   await ff.deleteFile('input.webm');
