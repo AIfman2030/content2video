@@ -130,7 +130,7 @@ export function drawOutro(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fillText('— 小福AI自由 —', CW / 2, CH / 2 + 100);
+    ctx.fillText('— 小福分享舍 —', CW / 2, CH / 2 + 100);
     ctx.restore();
   }
 
