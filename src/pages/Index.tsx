@@ -25,8 +25,24 @@ function parseSubtitleContent(text: string): GeneratedContent {
   }
   if (current.length > 0) groups.push(current);
 
-  // Fallback: no numbered items → treat every line as its own group
-  const points = (groups.length > 0 ? groups : rawLines.map(l => [l])).map((lines, i) => ({
+  // Fallback: no numbered items → split by sentence-ending punctuation (。！？)
+  // so each sentence becomes its own slide group
+  if (groups.length === 0) {
+    const sentences: string[] = [];
+    for (const line of rawLines) {
+      // Split on sentence terminators, keeping the terminator attached
+      const parts = line.split(/((?:[。！？!?]+))/);
+      for (let j = 0; j < parts.length; j += 2) {
+        const sentence = (parts[j] + (parts[j + 1] ?? '')).trim();
+        if (sentence) sentences.push(sentence);
+      }
+    }
+    // If still no splits (no punctuation), treat each line as a group
+    const items = sentences.length > 0 ? sentences : rawLines;
+    for (const item of items) groups.push([item]);
+  }
+
+  const points = groups.map((lines, i) => ({
     label:     `${i + 1}`,
     short:     '',
     desc:      lines.join('\n'),

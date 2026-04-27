@@ -6,7 +6,7 @@ import { CW, CH, clamp, easeOutCubic, seededRandom, wrapText } from './helpers';
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
 const PRE_ROLL      = 800;
-const LINE_STAGGER  = 1500; // ms between each line — comfortable reading pace
+const LINE_STAGGER  = 2500; // ms between each line — slow enough to read comfortably
 const LINE_ENTER    = 500;  // ms for each line's slide-up animation
 const LINE_YOFF     = 70;   // px each line starts below final position
 const MIN_HOLD      = 1500; // ms hold after ALL lines are visible
@@ -26,8 +26,9 @@ function slideDur(nLines: number): number {
 export function subtitleTotalMs(content: GeneratedContent): number {
   let total = PRE_ROLL;
   for (const pt of content.points) {
-    const nLines = pt.desc.split('\n').filter(l => l.trim().length > 0).length;
-    total += slideDur(Math.max(nLines, 1));
+    const nRaw = pt.desc.split('\n').filter(l => l.trim().length > 0).length;
+    // ×2 overestimate: wrapping can double visual-line count; extra = harmless black frames
+    total += slideDur(Math.max(nRaw * 2, 1));
   }
   return total + POST_ROLL;
 }
@@ -314,8 +315,8 @@ export function drawSubtitle(
 
     // Compute layout (font size + visual lines) for this slide
     const layout = computeLayout(ctx, rawLines);
-    // ⚠ Use rawLines.length for timing — consistent with subtitleTotalMs
-    const dur    = slideDur(rawLines.length);
+    // Use VISUAL line count for accurate timing — subtitleTotalMs overestimates, so no early cutoff
+    const dur    = slideDur(layout.lines.length);
     const te     = elapsed - slideStart;
 
     // Only draw if within visible window (small buffer each side)
