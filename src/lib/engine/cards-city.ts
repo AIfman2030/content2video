@@ -1,28 +1,100 @@
 /**
- * City (十二生肖) style — one card at a time, alternating left/right layout.
- * Odd  cards (0,2,4…): text on LEFT,  nested squares on RIGHT
- * Even cards (1,3,5…): nested squares on LEFT, text on RIGHT
+ * City (十二生肖) — one card at a time, alternating layout.
+ * 10 geometric patterns cycle through cards (idx % 10).
  */
 import type { GeneratedContent } from '../../types/video';
-import {
-  CW, CH, clamp, easeOutCubic, easeOutBack, hex2rgba, wrapText, T,
-} from './helpers';
+import { CH, clamp, easeOutCubic, easeOutBack, hex2rgba, wrapText, T } from './helpers';
 
-// ── Per-card timing ──────────────────────────────────────────────────────────
-const CITY_CARD_DUR  = 4400;   // total ms per card slot
-const CITY_ENTER_DUR = 700;    // fade-in
-const CITY_EXIT_DUR  = 650;    // fade-out
+// ── Timing ───────────────────────────────────────────────────────────────────
+const CITY_CARD_DUR  = 4400;
+const CITY_ENTER_DUR = 700;
+const CITY_EXIT_DUR  = 650;
 
-// ── Square sizes / timings (outside → inside) ────────────────────────────────
-const SQ_SIZES  = [440, 296, 166, 84] as const;
-const SQ_WIDTHS = [4,   3.5, 2.5, 2 ] as const;
-const SQ_DELAYS = [0,   300, 600, 900] as const;  // ms stagger
-const SQ_ENTER  = 520;                             // ms each square takes to enter
+// ── Pattern layer config ─────────────────────────────────────────────────────
+const LAYER_SIZES  = [440, 296, 166, 84] as const;
+const LAYER_WIDTHS = [4,   3.5, 2.5, 2 ] as const;
+const LAYER_DELAYS = [0,   300, 600, 900] as const;
+const LAYER_ENTER  = 520;
 
 export function cityTotalMs(n: number): number {
   return T.cardBase + n * CITY_CARD_DUR + T.outroDur;
 }
 
+// ── 10 pattern renderers (called with ctx already translated to center) ──────
+type DrawFn = (ctx: CanvasRenderingContext2D, sz: number, li: number, rot: number) => void;
+
+function polygon(ctx: CanvasRenderingContext2D, r: number, sides: number, start = -Math.PI / 2) {
+  ctx.beginPath();
+  for (let s = 0; s < sides; s++) {
+    const a = start + (s * Math.PI * 2) / sides;
+    if (s === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else         ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath(); ctx.stroke();
+}
+
+function star(ctx: CanvasRenderingContext2D, outer: number, inner: number, pts: number, start = -Math.PI / 2) {
+  ctx.beginPath();
+  for (let i = 0; i < pts * 2; i++) {
+    const a = start + (i * Math.PI) / pts;
+    const r = i % 2 === 0 ? outer : inner;
+    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else         ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  ctx.closePath(); ctx.stroke();
+}
+
+const PATTERNS: DrawFn[] = [
+  // 0 — nested squares
+  (ctx, sz) => ctx.strokeRect(-sz / 2, -sz / 2, sz, sz),
+
+  // 1 — concentric circles
+  (ctx, sz) => { ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI * 2); ctx.stroke(); },
+
+  // 2 — concentric hexagons
+  (ctx, sz, li) => polygon(ctx, sz / 2, 6, (Math.PI / 6) * li),
+
+  // 3 — nested equilateral triangles (alternating up/down)
+  (ctx, sz, li) => polygon(ctx, sz / 2, 3, -Math.PI / 2 + li * (Math.PI / 3)),
+
+  // 4 — nested 5-pointed stars
+  (ctx, sz) => star(ctx, sz / 2, sz * 0.21, 5),
+
+  // 5 — rotated diamonds (each layer rotates a bit more)
+  (ctx, sz, li) => {
+    ctx.save(); ctx.rotate(Math.PI / 4 + li * (Math.PI / 8));
+    ctx.strokeRect(-sz / 2, -sz / 2, sz, sz); ctx.restore();
+  },
+
+  // 6 — dashed concentric rings (alternating dash patterns)
+  (ctx, sz, li) => {
+    ctx.save();
+    ctx.setLineDash(li % 2 === 0 ? [10, 7] : [4, 11]);
+    ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]); ctx.restore();
+  },
+
+  // 7 — nested cross / plus shapes
+  (ctx, sz) => {
+    const arm = sz * 0.28;
+    ctx.strokeRect(-sz / 2, -arm / 2, sz, arm); // horizontal bar
+    ctx.strokeRect(-arm / 2, -sz / 2, arm, sz); // vertical bar
+  },
+
+  // 8 — concentric octagons
+  (ctx, sz, li) => polygon(ctx, sz / 2, 8, (Math.PI / 8) * li),
+
+  // 9 — nested pentagons (each slightly rotated)
+  (ctx, sz, li) => polygon(ctx, sz / 2, 5, -Math.PI / 2 + li * (Math.PI / 5)),
+];
+
+// ── Pattern name labels (shown as small badge on decoration) ─────────────────
+const PATTERN_LABELS = [
+  '方形', '圆环', '六边', '三角', '星形',
+  '菱形', '虚环', '十字', '八边', '五边',
+];
+
+// ── Main exports ─────────────────────────────────────────────────────────────
 export function drawCityCards(
   ctx: CanvasRenderingContext2D,
   elapsed: number,
@@ -33,7 +105,6 @@ export function drawCityCards(
   _coverIndex = 0,
 ): void {
   if (elapsed < T.cardBase) return;
-
   const n           = content.points.length;
   const cardElapsed = elapsed - T.cardBase;
 
@@ -47,12 +118,11 @@ export function drawCityCards(
     );
     const alpha = inA * outA;
     if (alpha < 0.01) continue;
-
     drawCard(ctx, te, alpha, i, content, accent, accent2, elapsed);
   }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// ── Single card renderer ──────────────────────────────────────────────────────
 function drawCard(
   ctx: CanvasRenderingContext2D,
   te: number,
@@ -64,100 +134,104 @@ function drawCard(
   elapsed: number,
 ): void {
   const point     = content.points[idx];
-  const isFlipped = idx % 2 === 1;   // alternate layout each card
-
-  // Layout zones
-  const TEXT_X  = isFlipped ? 1050 : 108;
-  const MAX_TW  = 810;
-  const SQ_CX   = isFlipped ? 480  : 1440;
-  const SQ_CY   = CH / 2;
+  const isFlipped = idx % 2 === 1;
+  const TEXT_X    = isFlipped ? 1050 : 108;
+  const MAX_TW    = 810;
+  const SQ_CX     = isFlipped ? 480 : 1440;
+  const SQ_CY     = CH / 2;
+  const pattern   = PATTERNS[idx % 10];
+  const patLabel  = PATTERN_LABELS[idx % 10];
+  const cardRot   = idx * 0.16;
 
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  // ── Vertical divider ───────────────────────────────────────────────────────
+  // ── Divider ────────────────────────────────────────────────────────────────
   {
     const dg = ctx.createLinearGradient(960, 70, 960, CH - 70);
-    dg.addColorStop(0,   'rgba(0,0,0,0)');
+    dg.addColorStop(0,    'rgba(0,0,0,0)');
     dg.addColorStop(0.25, hex2rgba(accent, 0.28));
     dg.addColorStop(0.75, hex2rgba(accent, 0.28));
-    dg.addColorStop(1,   'rgba(0,0,0,0)');
-    ctx.strokeStyle = dg; ctx.lineWidth = 1;
-    ctx.setLineDash([4, 10]);
+    dg.addColorStop(1,    'rgba(0,0,0,0)');
+    ctx.strokeStyle = dg; ctx.lineWidth = 1; ctx.setLineDash([4, 10]);
     ctx.beginPath(); ctx.moveTo(960, 70); ctx.lineTo(960, CH - 70); ctx.stroke();
     ctx.setLineDash([]);
   }
 
-  // ── Nested squares (outside → inside, staggered) ──────────────────────────
-  const SQ_COLORS: string[] = [
+  // ── Geometric pattern layers (outside → inside) ───────────────────────────
+  const COLORS: string[] = [
     accent,
     accent2,
     'rgba(255,255,255,0.88)',
-    hex2rgba(accent2, 0.55),
+    hex2rgba(accent2, 0.60),
   ];
-  const cardRot = idx * 0.16; // per-card rotation offset for variety
 
-  SQ_SIZES.forEach((sz, si) => {
-    const sqTe = te - SQ_DELAYS[si];
+  LAYER_SIZES.forEach((sz, li) => {
+    const sqTe = te - LAYER_DELAYS[li];
     if (sqTe <= 0) return;
-
-    const sqT     = clamp(sqTe / SQ_ENTER, 0, 1);
-    const sqAlpha = easeOutCubic(sqT);
-    const sqScale = easeOutBack(Math.min(sqT, 0.999));
-    // Breathe once fully visible
-    const scale   = sqT >= 1
-      ? 1 + 0.013 * Math.sin(elapsed * 0.0014 + si * 1.5)
-      : sqScale;
+    const sqT   = clamp(sqTe / LAYER_ENTER, 0, 1);
+    const sqA   = easeOutCubic(sqT);
+    const scale = sqT >= 1
+      ? 1 + 0.013 * Math.sin(elapsed * 0.0014 + li * 1.5)
+      : easeOutBack(Math.min(sqT, 0.999));
 
     ctx.save();
-    ctx.globalAlpha *= sqAlpha;
+    ctx.globalAlpha *= sqA;
     ctx.translate(SQ_CX, SQ_CY);
-    ctx.rotate(si % 2 === 0 ? cardRot * 0.4 : -cardRot * 0.28);
+    ctx.rotate(li % 2 === 0 ? cardRot * 0.4 : -cardRot * 0.28);
     ctx.scale(scale, scale);
-    ctx.shadowColor = SQ_COLORS[si];
-    ctx.shadowBlur  = si === 0 ? 22 : si === 1 ? 30 : 18;
-    ctx.strokeStyle = SQ_COLORS[si];
-    ctx.lineWidth   = SQ_WIDTHS[si];
-    ctx.strokeRect(-sz / 2, -sz / 2, sz, sz);
-    ctx.shadowBlur  = 0;
+    ctx.shadowColor = COLORS[li]; ctx.shadowBlur = li === 1 ? 28 : 20;
+    ctx.strokeStyle = COLORS[li]; ctx.lineWidth = LAYER_WIDTHS[li];
+    pattern(ctx, sz, li, cardRot);
+    ctx.shadowBlur = 0;
     ctx.restore();
   });
 
-  // ── Text ──────────────────────────────────────────────────────────────────
+  // Pattern name badge (small, bottom of decoration zone)
+  {
+    const badgeT = clamp((te - LAYER_DELAYS[3] - LAYER_ENTER) / 400, 0, 1);
+    if (badgeT > 0) {
+      ctx.save(); ctx.globalAlpha *= badgeT;
+      ctx.font = `600 22px "Noto Sans SC", sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = hex2rgba(accent, 0.60);
+      ctx.fillText(patLabel, SQ_CX, SQ_CY + 268);
+      ctx.restore();
+    }
+  }
+
+  // ── Text ───────────────────────────────────────────────────────────────────
   const fullLabel = `${idx + 1}. ${point.label}`;
   const CHAR_MS   = 48;
   const typeStart = CITY_ENTER_DUR;
-  const typingTe  = Math.max(0, te - typeStart);
-  const visChars  = Math.min(Math.floor(typingTe / CHAR_MS), fullLabel.length);
+  const visChars  = Math.min(Math.floor(Math.max(0, te - typeStart) / CHAR_MS), fullLabel.length);
   const visText   = fullLabel.slice(0, visChars);
   const typeDone  = visChars >= fullLabel.length;
 
-  const labelY = CH * 0.40;   // large label center y
-  const shortY = CH * 0.545;  // short text
-  const descY  = CH * 0.675;  // desc lines start center
+  const labelY = CH * 0.40;
+  const shortY = CH * 0.545;
+  const descY  = CH * 0.675;
 
-  // Label — large, accent color, typewriter
+  // Label — typewriter, large, accent
   ctx.font = `900 88px "Noto Sans SC", "PingFang SC", sans-serif`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.shadowColor = hex2rgba(accent, 0.85); ctx.shadowBlur = 28;
-  ctx.fillStyle   = accent;
+  ctx.fillStyle = accent;
   ctx.fillText(visText, TEXT_X, labelY);
 
   // Cursor
   if (!typeDone && Math.floor(elapsed / 500) % 2 === 0) {
     const tw = ctx.measureText(visText).width;
-    ctx.shadowBlur = 0;
-    ctx.font = `300 88px monospace`;
+    ctx.shadowBlur = 0; ctx.font = `300 88px monospace`;
     ctx.fillText('|', TEXT_X + tw + 6, labelY);
   }
   ctx.shadowBlur = 0;
 
-  // Underline under label (draws progressively)
+  // Progressive underline
   if (visChars > 2) {
-    ctx.font = `900 88px "Noto Sans SC", "PingFang SC", sans-serif`; // re-set for measure
     const fullW = Math.min(ctx.measureText(fullLabel).width, MAX_TW);
-    const lineA = clamp((visChars - 2) / (fullLabel.length - 2), 0, 1);
-    const lg    = ctx.createLinearGradient(TEXT_X, 0, TEXT_X + fullW * lineA, 0);
+    const lineA = clamp((visChars - 2) / Math.max(1, fullLabel.length - 2), 0, 1);
+    const lg    = ctx.createLinearGradient(TEXT_X, 0, TEXT_X + fullW, 0);
     lg.addColorStop(0, hex2rgba(accent, 0.9));
     lg.addColorStop(0.75, hex2rgba(accent, 0.55));
     lg.addColorStop(1, 'rgba(0,0,0,0)');
@@ -167,24 +241,24 @@ function drawCard(
     ctx.stroke();
   }
 
-  // Short — fades in after label is typed
+  // Short
   const shortDelay = typeStart + fullLabel.length * CHAR_MS + 200;
   const shortAlpha = clamp((te - shortDelay) / 480, 0, 1);
   if (shortAlpha > 0 && point.short) {
     ctx.save(); ctx.globalAlpha *= shortAlpha;
     ctx.font = `500 52px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle   = 'rgba(255,255,255,0.96)';
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
     ctx.shadowColor = 'rgba(255,255,255,0.2)'; ctx.shadowBlur = 6;
-    // Fit to max width
     let short = point.short;
-    while (short.length > 4 && ctx.measureText(short).width > MAX_TW) short = short.slice(0, -1);
+    while (short.length > 4 && ctx.measureText(short).width > MAX_TW)
+      short = short.slice(0, -1);
     if (short.length < point.short.length) short += '…';
     ctx.fillText(short, TEXT_X, shortY);
     ctx.shadowBlur = 0; ctx.restore();
   }
 
-  // Desc — fades in 500ms after short
+  // Desc
   const descDelay  = shortDelay + 500;
   const descAlpha  = clamp((te - descDelay) / 480, 0, 1);
   if (descAlpha > 0 && point.desc) {
