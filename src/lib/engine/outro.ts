@@ -126,10 +126,10 @@ export function drawOutro(
     const tagT = clamp((elapsed - 600) / 600, 0, 1);
     ctx.save();
     ctx.globalAlpha = easeOutCubic(tagT);
-    ctx.font = `300 30px "Noto Sans SC", sans-serif`;
+    ctx.font = `600 32px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(255,255,255,0.45)';
+    ctx.fillStyle = 'rgba(255,255,255,0.78)';
     ctx.fillText('— 小福分享舍 —', CW / 2, CH / 2 + 100);
     ctx.restore();
   }

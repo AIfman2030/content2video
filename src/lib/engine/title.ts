@@ -117,8 +117,8 @@ export function drawTitle(
   if (eased > 0.7) {
     const tagAlpha = clamp((eased - 0.7) / 0.3, 0, 1);
     const tagY = titleY - fontSize * 0.8;
-    ctx.font = `400 30px "Noto Sans SC", sans-serif`;
-    ctx.fillStyle = hex2rgba(accent, tagAlpha * 0.7);
+    ctx.font = `600 30px "Noto Sans SC", sans-serif`;
+    ctx.fillStyle = hex2rgba(accent, tagAlpha * 0.88);
     ctx.fillText(
       style === 'chinese' ? '✦ 核心解析 ✦' : style === 'city' ? '▸ INSIGHT REPORT' : '> SYSTEM ANALYSIS',
       CW / 2, tagY,

@@ -27,7 +27,7 @@ export function drawAITechCards(
   const displayN = Math.min(n, 10);
   const scale = getScale(displayN);
   const CARD_W  = Math.round(280 * scale);
-  const CARD_H  = Math.round(150 * scale);
+  const CARD_H  = Math.round(190 * scale);   // increased from 150 to fit desc line
   const POLY_R  = Math.round(145 * scale);
   const lFsz    = Math.round(28 * scale);
   const sFsz    = Math.round(22 * scale);
@@ -105,21 +105,29 @@ export function drawAITechCards(
     ctx.shadowBlur = 0; ctx.restore();
 
     const point = content.points[i];
-    // Label
+    // Label (大标题)
     ctx.shadowColor = hex2rgba(accent, 0.9); ctx.shadowBlur = 14;
     ctx.font = `800 ${lFsz}px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#fff'; ctx.fillText(point.label, dcx, dcy - CARD_H * 0.1);
+    ctx.fillStyle = '#fff'; ctx.fillText(point.label, dcx, dcy - CARD_H * 0.22);
     ctx.shadowBlur = 0;
-    // Subtitle
+    // Short (小标题)
     if (point.short) {
-      ctx.font = `400 ${sFsz}px "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = hex2rgba(accent2, 0.9);
+      ctx.font = `500 ${sFsz}px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
       const short = point.short.length > 14 ? point.short.slice(0, 13) + '…' : point.short;
-      ctx.fillText(short, dcx, dcy + CARD_H * 0.28);
+      ctx.fillText(short, dcx, dcy + CARD_H * 0.05);
+    }
+    // Desc (辅助解释，≤25字)
+    if (point.desc) {
+      const dFsz = Math.round(sFsz * 0.82);
+      ctx.font = `400 ${dFsz}px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = hex2rgba(accent2, 0.80);
+      const descText = point.desc.length > 18 ? point.desc.slice(0, 17) + '…' : point.desc;
+      ctx.fillText(descText, dcx, dcy + CARD_H * 0.38);
     }
     // Number indicator
     ctx.font = `600 ${Math.round(16*scale)}px monospace`; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
-    ctx.fillStyle = hex2rgba(accent, 0.5);
+    ctx.fillStyle = hex2rgba(accent, 0.55);
     ctx.fillText(`${String(i + 1).padStart(2, '0')}`, dcx + CARD_W/2 - 8, dcy - CARD_H/2 + 6);
     ctx.restore();
 

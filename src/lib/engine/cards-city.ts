@@ -106,22 +106,29 @@ export function drawCityCards(
     // Sequence number badge
     ctx.font = `700 22px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillStyle = hex2rgba(ac, 0.65);
+    ctx.fillStyle = hex2rgba(ac, 0.90);
     ctx.fillText(`${String(i + 1).padStart(2, '0')}`, textX, cardY + 18);
-    // Label
+    // Label (大标题)
     ctx.shadowColor = hex2rgba(ac, 0.8); ctx.shadowBlur = 16;
-    ctx.font = `800 44px "Noto Sans SC", sans-serif`;
+    ctx.font = `800 46px "Noto Sans SC", sans-serif`;
     ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
-    const labelY = cardY + CARD_H * 0.38;
+    const labelY = cardY + CARD_H * 0.36;
     ctx.fillText(point.label, textX, labelY);
     ctx.shadowBlur = 0;
-    // Description
+    // Short (小标题)
     if (point.short) {
       const desc = point.short.length > 26 ? point.short.slice(0, 26) + '…' : point.short;
-      ctx.font = `400 28px "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.font = `500 28px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
       const truncated = ctx.measureText(desc).width > maxTW ? desc.slice(0, 22) + '…' : desc;
-      ctx.fillText(truncated, textX, cardY + CARD_H * 0.66);
+      ctx.fillText(truncated, textX, cardY + CARD_H * 0.60);
+    }
+    // Desc (辅助解释)
+    if (point.desc) {
+      const descText = point.desc.length > 25 ? point.desc.slice(0, 24) + '…' : point.desc;
+      ctx.font = `400 22px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = hex2rgba(ac, 0.70);
+      ctx.fillText(descText, textX, cardY + CARD_H * 0.82);
     }
 
     ctx.restore(); // translate + globalAlpha
