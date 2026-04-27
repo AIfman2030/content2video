@@ -1,22 +1,27 @@
+/**
+ * City (十二生肖) style — one card at a time, alternating left/right layout.
+ * Odd  cards (0,2,4…): text on LEFT,  nested squares on RIGHT
+ * Even cards (1,3,5…): nested squares on LEFT, text on RIGHT
+ */
 import type { GeneratedContent } from '../../types/video';
-import { CW, CH, clamp, easeOutCubic, easeOutBack, hex2rgba, T,
-  PAGE_SIZE, PAGE_HOLD, PAGE_TRANS } from './helpers';
+import {
+  CW, CH, clamp, easeOutCubic, easeOutBack, hex2rgba, wrapText, T,
+} from './helpers';
 
-// 24 auspicious animals — matches city-cover zodiac order
-const ZODIAC = [
-  '鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪',
-  '麟','鹭','雀','虎','雁','鹮','凤','鹰','豹','熊','象','龟',
-];
+// ── Per-card timing ──────────────────────────────────────────────────────────
+const CITY_CARD_DUR  = 4400;   // total ms per card slot
+const CITY_ENTER_DUR = 700;    // fade-in
+const CITY_EXIT_DUR  = 650;    // fade-out
 
-// Grid layout  (2 cols × 3 rows = 6 per page, matches PAGE_SIZE)
-const COLS     = 2;
-const ROWS     = 3;
-const ML = 60, MR = 60, MT = 80, MB = 50, CGAP = 24, RGAP = 24;
-const CARD_W   = Math.round((CW - ML - MR - CGAP) / COLS);          // 888
-const CARD_H   = Math.round((CH - MT - MB - (ROWS - 1) * RGAP) / ROWS); // 300
-const ICON_R   = 64;  // zodiac circle radius within card
-const ICON_CX_OFF = ICON_R + 24;  // icon center offset from card left
-const TEXT_X_OFF  = ICON_CX_OFF + ICON_R + 20; // text start offset from card left
+// ── Square sizes / timings (outside → inside) ────────────────────────────────
+const SQ_SIZES  = [440, 296, 166, 84] as const;
+const SQ_WIDTHS = [4,   3.5, 2.5, 2 ] as const;
+const SQ_DELAYS = [0,   300, 600, 900] as const;  // ms stagger
+const SQ_ENTER  = 520;                             // ms each square takes to enter
+
+export function cityTotalMs(n: number): number {
+  return T.cardBase + n * CITY_CARD_DUR + T.outroDur;
+}
 
 export function drawCityCards(
   ctx: CanvasRenderingContext2D,
@@ -25,124 +30,172 @@ export function drawCityCards(
   accent: string,
   accent2: string,
   _shapeImg: HTMLImageElement,
-  coverIndex = 0,
+  _coverIndex = 0,
 ): void {
   if (elapsed < T.cardBase) return;
 
   const n           = content.points.length;
   const cardElapsed = elapsed - T.cardBase;
-  const pageSlot    = PAGE_SIZE * T.cardSlot;
-  const numPages    = Math.ceil(n / PAGE_SIZE);
-  const curPage     = Math.min(Math.floor(cardElapsed / (pageSlot + PAGE_HOLD)), numPages - 1);
-  const withinPage  = cardElapsed - curPage * (pageSlot + PAGE_HOLD);
-  const startCard   = curPage * PAGE_SIZE;
-  const endCard     = Math.min(startCard + PAGE_SIZE, n);
 
-  // Fade-out for page transition
-  const outA = (curPage < numPages - 1)
-    ? clamp(1 - (withinPage - pageSlot) / PAGE_TRANS, 0, 1)
-    : 1;
+  for (let i = 0; i < n; i++) {
+    const te = cardElapsed - i * CITY_CARD_DUR;
+    if (te < 0 || te > CITY_CARD_DUR + CITY_ENTER_DUR) continue;
+
+    const inA  = easeOutCubic(clamp(te / CITY_ENTER_DUR, 0, 1));
+    const outA = 1 - easeOutCubic(
+      clamp((te - (CITY_CARD_DUR - CITY_EXIT_DUR)) / CITY_EXIT_DUR, 0, 1),
+    );
+    const alpha = inA * outA;
+    if (alpha < 0.01) continue;
+
+    drawCard(ctx, te, alpha, i, content, accent, accent2, elapsed);
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+function drawCard(
+  ctx: CanvasRenderingContext2D,
+  te: number,
+  alpha: number,
+  idx: number,
+  content: GeneratedContent,
+  accent: string,
+  accent2: string,
+  elapsed: number,
+): void {
+  const point     = content.points[idx];
+  const isFlipped = idx % 2 === 1;   // alternate layout each card
+
+  // Layout zones
+  const TEXT_X  = isFlipped ? 1050 : 108;
+  const MAX_TW  = 810;
+  const SQ_CX   = isFlipped ? 480  : 1440;
+  const SQ_CY   = CH / 2;
 
   ctx.save();
-  if (outA < 1) ctx.globalAlpha = outA;
+  ctx.globalAlpha = alpha;
 
-  for (let i = startCard; i < endCard; i++) {
-    const posInPage = i - startCard;
-    const col = posInPage % COLS;
-    const row = Math.floor(posInPage / COLS);
-    const cardX = ML + col * (CARD_W + CGAP);
-    const cardY = MT + row * (CARD_H + RGAP);
+  // ── Vertical divider ───────────────────────────────────────────────────────
+  {
+    const dg = ctx.createLinearGradient(960, 70, 960, CH - 70);
+    dg.addColorStop(0,   'rgba(0,0,0,0)');
+    dg.addColorStop(0.25, hex2rgba(accent, 0.28));
+    dg.addColorStop(0.75, hex2rgba(accent, 0.28));
+    dg.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.strokeStyle = dg; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 10]);
+    ctx.beginPath(); ctx.moveTo(960, 70); ctx.lineTo(960, CH - 70); ctx.stroke();
+    ctx.setLineDash([]);
+  }
 
-    const te = withinPage - posInPage * T.cardSlot;
-    if (te <= 0) continue;
+  // ── Nested squares (outside → inside, staggered) ──────────────────────────
+  const SQ_COLORS: string[] = [
+    accent,
+    accent2,
+    'rgba(255,255,255,0.88)',
+    hex2rgba(accent2, 0.55),
+  ];
+  const cardRot = idx * 0.16; // per-card rotation offset for variety
 
-    const enterT  = clamp(te / 500, 0, 1);
-    const eased   = easeOutBack(Math.min(enterT, 0.999));
-    const slideX  = (1 - easeOutCubic(enterT)) * 60 * (col === 0 ? -1 : 1);
-    const alpha   = clamp(te / 300, 0, 1);
-    const point   = content.points[i];
-    const animal  = ZODIAC[(coverIndex + i) % ZODIAC.length];
-    const ac      = col === 0 ? accent : accent2;
+  SQ_SIZES.forEach((sz, si) => {
+    const sqTe = te - SQ_DELAYS[si];
+    if (sqTe <= 0) return;
+
+    const sqT     = clamp(sqTe / SQ_ENTER, 0, 1);
+    const sqAlpha = easeOutCubic(sqT);
+    const sqScale = easeOutBack(Math.min(sqT, 0.999));
+    // Breathe once fully visible
+    const scale   = sqT >= 1
+      ? 1 + 0.013 * Math.sin(elapsed * 0.0014 + si * 1.5)
+      : sqScale;
 
     ctx.save();
-    ctx.globalAlpha *= alpha;
-    ctx.translate(slideX, 0);
+    ctx.globalAlpha *= sqAlpha;
+    ctx.translate(SQ_CX, SQ_CY);
+    ctx.rotate(si % 2 === 0 ? cardRot * 0.4 : -cardRot * 0.28);
+    ctx.scale(scale, scale);
+    ctx.shadowColor = SQ_COLORS[si];
+    ctx.shadowBlur  = si === 0 ? 22 : si === 1 ? 30 : 18;
+    ctx.strokeStyle = SQ_COLORS[si];
+    ctx.lineWidth   = SQ_WIDTHS[si];
+    ctx.strokeRect(-sz / 2, -sz / 2, sz, sz);
+    ctx.shadowBlur  = 0;
+    ctx.restore();
+  });
 
-    // ── Card background ────────────────────────────────────────────────────
-    ctx.save();
-    ctx.translate(cardX + CARD_W / 2, cardY + CARD_H / 2);
-    ctx.scale(0.4 + 0.6 * eased, 0.4 + 0.6 * eased);
-    ctx.translate(-(cardX + CARD_W / 2), -(cardY + CARD_H / 2));
-    const cbg = ctx.createLinearGradient(cardX, cardY, cardX, cardY + CARD_H);
-    cbg.addColorStop(0, hex2rgba(ac, 0.15));
-    cbg.addColorStop(1, hex2rgba(ac, 0.04));
-    ctx.fillStyle = cbg;
-    ctx.beginPath(); ctx.roundRect(cardX, cardY, CARD_W, CARD_H, 20); ctx.fill();
-    ctx.shadowColor = ac; ctx.shadowBlur = 18;
-    ctx.strokeStyle = hex2rgba(ac, 0.55); ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.roundRect(cardX, cardY, CARD_W, CARD_H, 20); ctx.stroke();
+  // ── Text ──────────────────────────────────────────────────────────────────
+  const fullLabel = `${idx + 1}. ${point.label}`;
+  const CHAR_MS   = 48;
+  const typeStart = CITY_ENTER_DUR;
+  const typingTe  = Math.max(0, te - typeStart);
+  const visChars  = Math.min(Math.floor(typingTe / CHAR_MS), fullLabel.length);
+  const visText   = fullLabel.slice(0, visChars);
+  const typeDone  = visChars >= fullLabel.length;
+
+  const labelY = CH * 0.40;   // large label center y
+  const shortY = CH * 0.545;  // short text
+  const descY  = CH * 0.675;  // desc lines start center
+
+  // Label — large, accent color, typewriter
+  ctx.font = `900 88px "Noto Sans SC", "PingFang SC", sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = hex2rgba(accent, 0.85); ctx.shadowBlur = 28;
+  ctx.fillStyle   = accent;
+  ctx.fillText(visText, TEXT_X, labelY);
+
+  // Cursor
+  if (!typeDone && Math.floor(elapsed / 500) % 2 === 0) {
+    const tw = ctx.measureText(visText).width;
+    ctx.shadowBlur = 0;
+    ctx.font = `300 88px monospace`;
+    ctx.fillText('|', TEXT_X + tw + 6, labelY);
+  }
+  ctx.shadowBlur = 0;
+
+  // Underline under label (draws progressively)
+  if (visChars > 2) {
+    ctx.font = `900 88px "Noto Sans SC", "PingFang SC", sans-serif`; // re-set for measure
+    const fullW = Math.min(ctx.measureText(fullLabel).width, MAX_TW);
+    const lineA = clamp((visChars - 2) / (fullLabel.length - 2), 0, 1);
+    const lg    = ctx.createLinearGradient(TEXT_X, 0, TEXT_X + fullW * lineA, 0);
+    lg.addColorStop(0, hex2rgba(accent, 0.9));
+    lg.addColorStop(0.75, hex2rgba(accent, 0.55));
+    lg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.strokeStyle = lg; ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(TEXT_X, labelY + 56); ctx.lineTo(TEXT_X + fullW * lineA, labelY + 56);
+    ctx.stroke();
+  }
+
+  // Short — fades in after label is typed
+  const shortDelay = typeStart + fullLabel.length * CHAR_MS + 200;
+  const shortAlpha = clamp((te - shortDelay) / 480, 0, 1);
+  if (shortAlpha > 0 && point.short) {
+    ctx.save(); ctx.globalAlpha *= shortAlpha;
+    ctx.font = `500 52px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle   = 'rgba(255,255,255,0.96)';
+    ctx.shadowColor = 'rgba(255,255,255,0.2)'; ctx.shadowBlur = 6;
+    // Fit to max width
+    let short = point.short;
+    while (short.length > 4 && ctx.measureText(short).width > MAX_TW) short = short.slice(0, -1);
+    if (short.length < point.short.length) short += '…';
+    ctx.fillText(short, TEXT_X, shortY);
     ctx.shadowBlur = 0; ctx.restore();
-
-    // ── Zodiac icon circle ─────────────────────────────────────────────────
-    const iconX = cardX + ICON_CX_OFF;
-    const iconY = cardY + CARD_H / 2;
-    const ig = ctx.createRadialGradient(iconX, iconY, 0, iconX, iconY, ICON_R);
-    ig.addColorStop(0, hex2rgba(ac, 0.35)); ig.addColorStop(1, hex2rgba(ac, 0.06));
-    ctx.fillStyle = ig; ctx.beginPath(); ctx.arc(iconX, iconY, ICON_R, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowColor = ac; ctx.shadowBlur = 20;
-    ctx.strokeStyle = ac; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(iconX, iconY, ICON_R, 0, Math.PI * 2); ctx.stroke();
-    ctx.shadowBlur = 0;
-    // Animal character
-    ctx.font = `900 ${Math.round(ICON_R * 1.05)}px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = hex2rgba(ac, 0.9); ctx.shadowBlur = 12;
-    ctx.fillStyle = '#fff'; ctx.fillText(animal, iconX, iconY);
-    ctx.shadowBlur = 0;
-
-    // ── Text ──────────────────────────────────────────────────────────────
-    const textX  = cardX + TEXT_X_OFF;
-    const maxTW  = CARD_W - TEXT_X_OFF - 20;
-    // Sequence number badge
-    ctx.font = `700 22px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillStyle = hex2rgba(ac, 0.90);
-    ctx.fillText(`${String(i + 1).padStart(2, '0')}`, textX, cardY + 18);
-    // Label (大标题)
-    ctx.shadowColor = hex2rgba(ac, 0.8); ctx.shadowBlur = 16;
-    ctx.font = `800 46px "Noto Sans SC", sans-serif`;
-    ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
-    const labelY = cardY + CARD_H * 0.36;
-    ctx.fillText(point.label, textX, labelY);
-    ctx.shadowBlur = 0;
-    // Short (小标题)
-    if (point.short) {
-      const desc = point.short.length > 26 ? point.short.slice(0, 26) + '…' : point.short;
-      ctx.font = `500 28px "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.88)';
-      const truncated = ctx.measureText(desc).width > maxTW ? desc.slice(0, 22) + '…' : desc;
-      ctx.fillText(truncated, textX, cardY + CARD_H * 0.60);
-    }
-    // Desc (辅助解释)
-    if (point.desc) {
-      const descText = point.desc.length > 25 ? point.desc.slice(0, 24) + '…' : point.desc;
-      ctx.font = `400 22px "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = hex2rgba(ac, 0.70);
-      ctx.fillText(descText, textX, cardY + CARD_H * 0.82);
-    }
-
-    ctx.restore(); // translate + globalAlpha
   }
 
-  ctx.restore(); // outA
-
-  // ── Page indicator dots ─────────────────────────────────────────────────
-  if (numPages > 1) {
-    const dotY = CH - 22;
-    for (let p = 0; p < numPages; p++) {
-      const dotX = CW / 2 + (p - (numPages - 1) / 2) * 22;
-      ctx.beginPath(); ctx.arc(dotX, dotY, p === curPage ? 7 : 4, 0, Math.PI * 2);
-      ctx.fillStyle = p === curPage ? accent : hex2rgba(accent, 0.3); ctx.fill();
-    }
+  // Desc — fades in 500ms after short
+  const descDelay  = shortDelay + 500;
+  const descAlpha  = clamp((te - descDelay) / 480, 0, 1);
+  if (descAlpha > 0 && point.desc) {
+    ctx.save(); ctx.globalAlpha *= descAlpha;
+    ctx.font = `400 32px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(255,255,255,0.80)';
+    const descLines = wrapText(ctx, point.desc, MAX_TW).slice(0, 2);
+    descLines.forEach((line, li) => ctx.fillText(line, TEXT_X, descY + li * 44));
+    ctx.restore();
   }
+
+  ctx.restore();
 }

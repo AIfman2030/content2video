@@ -12,6 +12,7 @@ import { drawTitle } from './engine/title';
 import { drawCards } from './engine/cards';
 import { drawOutro, drawOverlays, drawShapeDecoration } from './engine/outro';
 import { drawNatureScene, natureTotalMs } from './engine/nature-scene';
+import { cityTotalMs } from './engine/cards-city';
 
 export { CW, CH };
 
@@ -60,7 +61,9 @@ export async function createAnimEngine(
         natureContent?.rightItems.length ?? 0,
         natureContent?.commonItems?.length ?? 0,
       )
-    : totalDuration(content.points.length);
+    : style === 'city'
+      ? cityTotalMs(content.points.length)
+      : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
   let completionCallback = onComplete;
@@ -85,7 +88,9 @@ export async function createAnimEngine(
     drawTitle(ctx, elapsed, content, theme.accent, theme.accent2, style);
     drawCards(ctx, elapsed, content, theme.accent, theme.accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex);
 
-    const outroStart = totalDuration(content.points.length) - T.outroDur;
+    const outroStart = (style === 'city'
+      ? cityTotalMs(content.points.length)
+      : totalDuration(content.points.length)) - T.outroDur;
     if (elapsed > outroStart) {
       drawOutro(ctx, elapsed - outroStart, content, theme.accent, theme.accent2, style);
     }
