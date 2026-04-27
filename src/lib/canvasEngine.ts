@@ -69,7 +69,7 @@ export async function createAnimEngine(
         natureContent?.commonItems?.length ?? 0,
       )
     : isSubtitle
-      ? subtitleTotalMs(content.points.length)
+      ? subtitleTotalMs(content)
       : style === 'city'
         ? cityTotalMs(content.points.length)
         : totalDuration(content.points.length);

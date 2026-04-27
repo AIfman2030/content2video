@@ -1,25 +1,42 @@
-// subtitle.ts – Movie-caption style: lines appear one-by-one, uniform font size,
-//              particle sparkle background, "小福分享舍" top-left account tag.
+// subtitle.ts – Movie-caption style: lines appear one-by-one with reading pacing,
+//              adaptive font size (no truncation), 2-colour scheme per slide.
 
 import type { GeneratedContent } from '../../types/video';
 import { CW, CH, clamp, easeOutCubic, seededRandom, wrapText } from './helpers';
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
-const PRE_ROLL         = 800;
-const LINE_STAGGER     = 380;  // ms between each successive line entering
-const LINE_ENTER       = 440;  // ms for each line to slide up
-const LINE_YOFF        = 72;   // px: starting offset below final position
-export const SLIDE_DUR = 5200; // fixed per-slide (ms)
-const SLIDE_EXIT_START = SLIDE_DUR - 540;
-const SLIDE_EXIT       = 540;
-const POST_ROLL        = 1600;
+const PRE_ROLL      = 800;
+const LINE_STAGGER  = 1500; // ms between each line — comfortable reading pace
+const LINE_ENTER    = 500;  // ms for each line's slide-up animation
+const LINE_YOFF     = 70;   // px each line starts below final position
+const MIN_HOLD      = 1500; // ms hold after ALL lines are visible
+const SLIDE_EXIT    = 600;  // ms fade-out
+const POST_ROLL     = 1600;
 
-export function subtitleTotalMs(n: number): number {
-  return PRE_ROLL + n * SLIDE_DUR + POST_ROLL;
+/** Duration for one slide given its visual line count. */
+function slideDur(nLines: number): number {
+  const n = Math.max(nLines, 1);
+  return (n - 1) * LINE_STAGGER + LINE_ENTER + MIN_HOLD + SLIDE_EXIT;
 }
 
-// ─── Colours (one per line, cycling) ─────────────────────────────────────────
-const LINE_COLORS = ['#ffd700', '#ff4d4d', '#00ff88', '#00d4ff', '#ff88ff', '#ff9944', '#a78bfa', '#4ade80'];
+/**
+ * Total animation length — depends on per-slide line counts.
+ * Pass full GeneratedContent so we can count actual lines.
+ */
+export function subtitleTotalMs(content: GeneratedContent): number {
+  let total = PRE_ROLL;
+  for (const pt of content.points) {
+    const nLines = pt.desc.split('\n').filter(l => l.trim().length > 0).length;
+    total += slideDur(Math.max(nLines, 1));
+  }
+  return total + POST_ROLL;
+}
+
+// ─── Two-colour scheme ────────────────────────────────────────────────────────
+// Each slide gets one accent colour (from a small rotating palette).
+// Even-indexed visual lines → accent  |  Odd-indexed → white
+const ACCENT_PALETTE = ['#ffd700', '#00ff88', '#00d4ff'];
+const NORMAL_COLOR   = 'rgba(255,255,255,0.92)';
 
 // ─── Particles ────────────────────────────────────────────────────────────────
 export interface SubParticle {
@@ -29,19 +46,19 @@ export interface SubParticle {
 }
 
 const P_COLORS = [
-  '#ffd70070', '#ff4d4d70', '#00ff8870', '#00d4ff70',
-  '#ff88ff70', '#ffffff90', '#ffffff70', '#ffffffa0',
+  '#ffd70070', '#00ff8870', '#00d4ff70',
+  '#ffffff90', '#ffffff70', '#ffffffa0',
 ];
 
 export function initSubtitleParticles(rand: () => number): SubParticle[] {
-  return Array.from({ length: 95 }, () => ({
+  return Array.from({ length: 80 }, () => ({
     x0:    rand() * CW,
     y0:    rand() * CH,
-    vx:    (rand() - 0.5) * 22,
-    vy:    (rand() - 0.5) * 22,
-    r:     1.2 + rand() * 3.2,
+    vx:    (rand() - 0.5) * 18,
+    vy:    (rand() - 0.5) * 18,
+    r:     1.2 + rand() * 3,
     phase: rand() * Math.PI * 2,
-    freq:  0.4 + rand() * 1.8,
+    freq:  0.4 + rand() * 1.6,
     color: P_COLORS[Math.floor(rand() * P_COLORS.length)],
   }));
 }
@@ -60,11 +77,11 @@ function drawParticles(ctx: CanvasRenderingContext2D, ps: SubParticle[], elapsed
   for (const p of ps) {
     const x = ((p.x0 + p.vx * t) % CW + CW) % CW;
     const y = ((p.y0 + p.vy * t) % CH + CH) % CH;
-    const a = 0.08 + 0.5 * (0.5 + 0.5 * Math.sin(t * p.freq + p.phase));
+    const a = 0.07 + 0.45 * (0.5 + 0.5 * Math.sin(t * p.freq + p.phase));
     ctx.save();
     ctx.globalAlpha = a;
     ctx.shadowColor = p.color;
-    ctx.shadowBlur  = p.r * 6;
+    ctx.shadowBlur  = p.r * 5;
     ctx.fillStyle   = p.color;
     ctx.beginPath();
     ctx.arc(x, y, p.r, 0, Math.PI * 2);
@@ -75,7 +92,7 @@ function drawParticles(ctx: CanvasRenderingContext2D, ps: SubParticle[], elapsed
 
 function drawScanlines(ctx: CanvasRenderingContext2D) {
   ctx.save();
-  ctx.globalAlpha = 0.025;
+  ctx.globalAlpha = 0.022;
   ctx.fillStyle   = '#ffffff';
   for (let y = 0; y < CH; y += 6) ctx.fillRect(0, y, CW, 1);
   ctx.restore();
@@ -115,57 +132,76 @@ function rrPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, 
   ctx.closePath();
 }
 
-// ─── One slide: accepts array of plain text lines ────────────────────────────
+// ─── Adaptive font + layout computation ──────────────────────────────────────
+interface SlideLayout {
+  fsz: number;
+  lines: string[];
+  blockH: number;
+}
+
+function computeLayout(ctx: CanvasRenderingContext2D, rawLines: string[]): SlideLayout {
+  const MAX_FSZ  = 88;
+  const MIN_FSZ  = 32;
+  const GAP      = 40;
+  const MAX_W    = 1100;
+  // Account name takes ~130px at top; leave padding at bottom too
+  const AVAIL_H  = CH - 260;
+
+  for (let fsz = MAX_FSZ; fsz >= MIN_FSZ; fsz -= 4) {
+    ctx.font = `600 ${fsz}px "Noto Sans SC", sans-serif`;
+    const lines: string[] = [];
+    for (const raw of rawLines) {
+      lines.push(...wrapText(ctx, raw, MAX_W));
+    }
+    const blockH = lines.length * fsz + (lines.length - 1) * GAP;
+    if (blockH <= AVAIL_H) {
+      return { fsz, lines, blockH };
+    }
+  }
+  // MIN_FSZ fallback — still show everything, may slightly overflow
+  ctx.font = `600 ${MIN_FSZ}px "Noto Sans SC", sans-serif`;
+  const lines: string[] = [];
+  for (const raw of rawLines) lines.push(...wrapText(ctx, raw, MAX_W));
+  const blockH = lines.length * MIN_FSZ + (lines.length - 1) * GAP;
+  return { fsz: MIN_FSZ, lines, blockH };
+}
+
+// ─── One subtitle slide ───────────────────────────────────────────────────────
 function drawSlide(
   ctx: CanvasRenderingContext2D,
   te: number,
-  rawLines: string[],   // content lines for this slide
-  idx: number,          // slide index (for accent colour)
+  layout: SlideLayout,
+  idx: number,
+  dur: number,       // pre-computed slide duration (based on raw line count)
 ) {
-  if (te <= 0 || te >= SLIDE_DUR) return;
-
-  // ── Uniform font for ALL lines ──────────────────────────────────────────
-  const FSZ = 72;       // same size every line
-  const GAP = 40;       // gap between lines
-  const MAX_LINE_W = 1100;
-
-  // Wrap each raw line independently, keep ≤ 6 visual lines total
-  ctx.font = `600 ${FSZ}px "Noto Sans SC", sans-serif`;
-  const lines: string[] = [];
-  for (const raw of rawLines) {
-    const wrapped = wrapText(ctx, raw, MAX_LINE_W);
-    for (const wl of wrapped) {
-      lines.push(wl);
-      if (lines.length >= 6) break;
-    }
-    if (lines.length >= 6) break;
-  }
-
+  const { fsz, lines, blockH } = layout;
   const nLines = lines.length;
-  if (nLines === 0) return;
+  const GAP    = 40;
 
-  const blockH   = nLines * FSZ + (nLines - 1) * GAP;
-  // ── Vertically centred at CH / 2 ────────────────────────────────────────
-  const blockTopY = CH / 2 - blockH / 2;
+  if (te <= 0 || te >= dur) return;
 
-  // Pre-compute final Y for each line
-  const lineY: number[] = [];
-  for (let i = 0; i < nLines; i++) lineY.push(blockTopY + i * (FSZ + GAP));
+  const accentC  = ACCENT_PALETTE[idx % ACCENT_PALETTE.length];
+  const exitStart = dur - SLIDE_EXIT;
 
-  // ── Exit: all lines fade together ───────────────────────────────────────
-  const exitAlpha = te >= SLIDE_EXIT_START
-    ? clamp(1 - (te - SLIDE_EXIT_START) / SLIDE_EXIT, 0, 1) : 1;
+  // Exit alpha
+  const exitAlpha = te >= exitStart
+    ? clamp(1 - (te - exitStart) / SLIDE_EXIT, 0, 1) : 1;
   if (exitAlpha <= 0) return;
 
-  // ── Backdrop ─────────────────────────────────────────────────────────────
-  const bPadX = 80, bPadY = 44;
-  const bW    = 1280;
+  // Block centred vertically
+  const blockTopY = CH / 2 - blockH / 2;
+
+  // Pre-compute each line's final Y
+  const lineY: number[] = [];
+  for (let i = 0; i < nLines; i++) lineY.push(blockTopY + i * (fsz + GAP));
+
+  // Backdrop (fades in quickly, exits with all lines)
+  const bPadY = 44, bW = 1280;
   const bH    = blockH + bPadY * 2;
   const bX    = CW / 2 - bW / 2;
   const bY    = blockTopY - bPadY;
-  const accentC = LINE_COLORS[idx % LINE_COLORS.length];
 
-  const bgAlpha = clamp(te / 300, 0, 1) * exitAlpha;
+  const bgAlpha = clamp(te / 280, 0, 1) * exitAlpha;
   ctx.save();
   ctx.globalAlpha = bgAlpha;
 
@@ -173,14 +209,14 @@ function drawSlide(
   ctx.fillStyle = 'rgba(2, 2, 10, 0.82)';
   ctx.fill();
 
-  // Left accent bar (accent colour = slide's first-line colour)
+  // Left accent bar
   ctx.fillStyle   = accentC;
   ctx.shadowColor = accentC;
-  ctx.shadowBlur  = 14;
+  ctx.shadowBlur  = 12;
   ctx.fillRect(bX + 24, bY + 18, 5, bH - 36);
   ctx.shadowBlur  = 0;
 
-  // Top highlight
+  // Top subtle line
   ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth   = 1;
   ctx.beginPath();
@@ -189,25 +225,25 @@ function drawSlide(
   ctx.stroke();
 
   // Bottom accent line
-  ctx.strokeStyle = `${accentC}55`;
+  ctx.strokeStyle = `${accentC}50`;
   ctx.lineWidth   = 1.5;
   ctx.beginPath();
   ctx.moveTo(bX + 55, bY + bH - 18);
   ctx.lineTo(bX + bW - 55, bY + bH - 18);
   ctx.stroke();
 
-  // Slide index badge (bottom-right)
-  const bdR = 28;
+  // Slide badge (bottom-right)
+  const bdR = 26;
   const bdX = bX + bW - bdR - 24;
-  const bdY = bY + bH - bdR - 16;
+  const bdY = bY + bH - bdR - 14;
   ctx.beginPath();
   ctx.arc(bdX, bdY, bdR, 0, Math.PI * 2);
-  ctx.fillStyle   = `${accentC}28`;
+  ctx.fillStyle   = `${accentC}25`;
   ctx.fill();
-  ctx.strokeStyle = `${accentC}88`;
+  ctx.strokeStyle = `${accentC}80`;
   ctx.lineWidth   = 2;
   ctx.stroke();
-  ctx.font         = `700 26px "Noto Sans SC", sans-serif`;
+  ctx.font         = `700 24px "Noto Sans SC", sans-serif`;
   ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle    = accentC;
@@ -224,8 +260,8 @@ function drawSlide(
     let yOff: number;
 
     if (lineTe <= LINE_ENTER) {
-      const t  = easeOutCubic(lineTe / LINE_ENTER);
-      lineAlpha = clamp(lineTe / 220, 0, 1);
+      const t   = easeOutCubic(lineTe / LINE_ENTER);
+      lineAlpha = clamp(lineTe / 200, 0, 1);
       yOff      = (1 - t) * LINE_YOFF;
     } else {
       lineAlpha = 1;
@@ -235,19 +271,22 @@ function drawSlide(
     const finalAlpha = lineAlpha * exitAlpha;
     if (finalAlpha <= 0) continue;
 
-    // Each line gets its own cycling bright colour
-    const lc = LINE_COLORS[(idx + i) % LINE_COLORS.length];
+    // 2 colours: even = accent, odd = white
+    const lc  = i % 2 === 0 ? accentC : NORMAL_COLOR;
+    const glow = i % 2 === 0; // glow only on accent lines
 
     ctx.save();
     ctx.globalAlpha  = finalAlpha;
-    ctx.font         = `600 ${FSZ}px "Noto Sans SC", sans-serif`;
+    ctx.font         = `600 ${fsz}px "Noto Sans SC", sans-serif`;
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'top';
     ctx.fillStyle    = lc;
-    ctx.shadowColor  = lc;
-    ctx.shadowBlur   = 22;
+    if (glow) {
+      ctx.shadowColor = lc;
+      ctx.shadowBlur  = 20;
+    }
     ctx.fillText(lines[i], CW / 2, lineY[i] + yOff);
-    ctx.shadowBlur   = 0;
+    ctx.shadowBlur = 0;
     ctx.restore();
   }
 }
@@ -265,15 +304,30 @@ export function drawSubtitle(
   drawAccountName(ctx, elapsed);
 
   const n = content.points.length;
+  let slideStart = PRE_ROLL;
+
   for (let i = 0; i < n; i++) {
-    const te   = elapsed - (PRE_ROLL + i * SLIDE_DUR);
-    const pt   = content.points[i];
-    // desc holds newline-separated lines (set by parseSubtitleContent)
-    const lines = pt.desc.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    drawSlide(ctx, te, lines, i);
+    const rawLines = content.points[i].desc
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l.length > 0);
+
+    // Compute layout (font size + visual lines) for this slide
+    const layout = computeLayout(ctx, rawLines);
+    // ⚠ Use rawLines.length for timing — consistent with subtitleTotalMs
+    const dur    = slideDur(rawLines.length);
+    const te     = elapsed - slideStart;
+
+    // Only draw if within visible window (small buffer each side)
+    if (te > -100 && te < dur + 100) {
+      drawSlide(ctx, te, layout, i, dur);
+    }
+
+    slideStart += dur;
   }
 
-  const fadeStart = PRE_ROLL + n * SLIDE_DUR;
+  // Post-roll: fade to black
+  const fadeStart = slideStart; // = PRE_ROLL + sum of all slideDurs
   if (elapsed > fadeStart) {
     const a = clamp((elapsed - fadeStart) / POST_ROLL, 0, 1);
     ctx.fillStyle = `rgba(0,0,0,${a * 0.96})`;
