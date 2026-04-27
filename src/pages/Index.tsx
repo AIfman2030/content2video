@@ -16,17 +16,19 @@ const STEP_LABELS: Record<Step, string> = {
 };
 
 const BG_BY_STYLE: Record<StyleType, string> = {
-  chinese: 'linear-gradient(160deg, #0a0a14 0%, #12121f 50%, #1a1a2e 100%)',
-  city: 'linear-gradient(160deg, #0d1b2a 0%, #1a2a4a 50%, #0f1c30 100%)',
-  aitech: 'linear-gradient(160deg, #080c14 0%, #0f172a 50%, #1e1b4b 100%)',
-  nature: 'linear-gradient(160deg, #060e06 0%, #0d1a0e 50%, #111f12 100%)',
+  chinese:  'linear-gradient(160deg, #0a0a14 0%, #12121f 50%, #1a1a2e 100%)',
+  city:     'linear-gradient(160deg, #0d1b2a 0%, #1a2a4a 50%, #0f1c30 100%)',
+  aitech:   'linear-gradient(160deg, #080c14 0%, #0f172a 50%, #1e1b4b 100%)',
+  nature:   'linear-gradient(160deg, #060e06 0%, #0d1a0e 50%, #111f12 100%)',
+  subtitle: 'linear-gradient(160deg, #020204 0%, #07070f 50%, #0a0a12 100%)',
 };
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
-  chinese: '#e74c3c',
-  city: '#f5d87a',
-  aitech: '#a855f7',
-  nature: '#4ade80',
+  chinese:  '#e74c3c',
+  city:     '#f5d87a',
+  aitech:   '#a855f7',
+  nature:   '#4ade80',
+  subtitle: '#ffd700',
 };
 
 export default function Index() {

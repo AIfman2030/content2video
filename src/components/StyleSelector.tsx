@@ -38,6 +38,14 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
     bg: 'linear-gradient(135deg,#060e06,#1a3020)',
     accent: '#4ade80',
   },
+  {
+    key: 'subtitle',
+    name: '电影字幕',
+    desc: '光影流动 · 影视字幕',
+    tag: '荧光多彩字幕',
+    bg: 'linear-gradient(135deg,#020204,#0a0a14)',
+    accent: '#ffd700',
+  },
 ];
 
 export default function StyleSelector({ selected, onChange }: Props) {

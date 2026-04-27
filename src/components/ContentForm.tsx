@@ -29,9 +29,11 @@ const POLY_SHAPE_OPTIONS: { id: PolyShape; name: string; sides: number }[] = [
 ];
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
-  chinese: '#e74c3c',
-  city: '#f5d87a',
-  aitech: '#a855f7',
+  chinese:  '#e74c3c',
+  city:     '#f5d87a',
+  aitech:   '#a855f7',
+  nature:   '#4ade80',
+  subtitle: '#ffd700',
 };
 
 const PLACEHOLDER = `粘贴你的文章内容，或者直接输入任何文字…
@@ -93,17 +95,19 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
         )}
       </div>
 
-      {/* Cover picker */}
-      <div
-        className="rounded-xl border border-white/10 p-4"
-        style={{ background: 'rgba(255,255,255,0.03)' }}
-      >
-        <CoverPicker
-          style={style}
-          selected={coverIndex}
-          onChange={setCoverIndex}
-        />
-      </div>
+      {/* Cover picker — not used for subtitle style */}
+      {style !== 'subtitle' && (
+        <div
+          className="rounded-xl border border-white/10 p-4"
+          style={{ background: 'rgba(255,255,255,0.03)' }}
+        >
+          <CoverPicker
+            style={style}
+            selected={coverIndex}
+            onChange={setCoverIndex}
+          />
+        </div>
+      )}
 
       {/* AI polygon selector (AI tech only) */}
       {style === 'aitech' && (

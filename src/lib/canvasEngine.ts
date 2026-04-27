@@ -13,6 +13,10 @@ import { drawCards } from './engine/cards';
 import { drawOutro, drawOverlays, drawShapeDecoration } from './engine/outro';
 import { drawNatureScene, natureTotalMs } from './engine/nature-scene';
 import { cityTotalMs } from './engine/cards-city';
+import {
+  drawSubtitle, subtitleTotalMs,
+  initSubtitleParticles, type SubParticle,
+} from './engine/subtitle';
 
 export { CW, CH };
 
@@ -35,13 +39,14 @@ export async function createAnimEngine(
   onComplete?: () => void,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
-  const isNature = style === 'nature';
+  const isNature   = style === 'nature';
+  const isSubtitle = style === 'subtitle';
 
   const rand = seededRandom(coverIndex * 31 + content.points.length * 17 + 7);
 
-  // Shape image not needed for nature style
+  // Shape image not needed for nature or subtitle styles
   let shapeImg: HTMLImageElement | null = null;
-  if (!isNature) {
+  if (!isNature && !isSubtitle) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     const shapeId = shapeList[coverIndex % shapeList.length]?.id ?? shapeList[0].id;
@@ -50,9 +55,11 @@ export async function createAnimEngine(
     shapeImg = await loadShapeImage(style, shapeId, shapeColor, lineWidth);
   }
 
-  const chineseEffects = style === 'chinese' ? initChineseEffects(rand) : null;
-  const cityEffects    = style === 'city'    ? initCityEffects(rand)    : null;
-  const aiEffects      = style === 'aitech'  ? initAIEffects(rand)      : null;
+  const chineseEffects = style === 'chinese'  ? initChineseEffects(rand) : null;
+  const cityEffects    = style === 'city'      ? initCityEffects(rand)    : null;
+  const aiEffects      = style === 'aitech'    ? initAIEffects(rand)      : null;
+  const subtitlePs: SubParticle[] | null = isSubtitle
+    ? initSubtitleParticles(rand) : null;
 
   const ctx = canvas.getContext('2d')!;
   const total = isNature
@@ -61,15 +68,23 @@ export async function createAnimEngine(
         natureContent?.rightItems.length ?? 0,
         natureContent?.commonItems?.length ?? 0,
       )
-    : style === 'city'
-      ? cityTotalMs(content.points.length)
-      : totalDuration(content.points.length);
+    : isSubtitle
+      ? subtitleTotalMs(content.points.length)
+      : style === 'city'
+        ? cityTotalMs(content.points.length)
+        : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
   let completionCallback = onComplete;
 
   function render(elapsed: number) {
     ctx.clearRect(0, 0, CW, CH);
+
+    // ── Subtitle: fully self-contained pipeline ──
+    if (isSubtitle && subtitlePs) {
+      drawSubtitle(ctx, elapsed, content, subtitlePs);
+      return;
+    }
 
     if (isNature && natureContent) {
       drawNatureScene(ctx, elapsed, natureContent, theme.accent, theme.accent2, coverIndex);

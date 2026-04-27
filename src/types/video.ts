@@ -1,4 +1,4 @@
-export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature';
+export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
