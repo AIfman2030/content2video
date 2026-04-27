@@ -47,6 +47,17 @@ const PLACEHOLDER = `粘贴你的文章内容，或者直接输入任何文字�
 5. 变现逻辑——把流量变成收入
 6. 持续更新——保持创作节奏`;
 
+const SUBTITLE_PLACEHOLDER = `直接输入字幕内容，每个序号是一组字幕：
+
+1. 自媒体创作，首先要找准定位
+持续输出，积累忠实粉丝
+2. 选题是核心，要抓住用户痛点
+深挖细节，才能脱颖而出
+3. 好内容不够，还要会推广
+标题封面，决定点击率的关键
+4. 数据驱动创作
+分析每条视频，找出爆款规律`;
+
 export default function ContentForm({ style, onGenerate, isLoading, error }: Props) {
   const [text, setText] = useState('');
   const [coverIndex, setCoverIndex] = useState(0);
@@ -72,12 +83,14 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
     <div className="space-y-5">
       {/* Text area */}
       <div className="space-y-2">
-        <label className="text-sm font-medium text-white/70">粘贴文章内容</label>
+        <label className="text-sm font-medium text-white/70">
+          {style === 'subtitle' ? '输入字幕内容（按序号分组）' : '粘贴文章内容'}
+        </label>
         <div className="relative">
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
-            placeholder={PLACEHOLDER}
+            placeholder={style === 'subtitle' ? SUBTITLE_PLACEHOLDER : PLACEHOLDER}
             rows={8}
             className="w-full resize-none rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/90 placeholder-white/25 outline-none transition-colors focus:border-white/30 focus:bg-white/8"
             style={{ fontFamily: '"Noto Sans SC", "PingFang SC", sans-serif', lineHeight: 1.7 }}
@@ -266,12 +279,12 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
         {isLoading ? (
           <>
             <Loader2 size={18} className="animate-spin" />
-            AI 提炼中…
+            {style === 'subtitle' ? '生成中…' : 'AI 提炼中…'}
           </>
         ) : (
           <>
             <Sparkles size={18} />
-            生成并录制视频
+            {style === 'subtitle' ? '生成字幕视频' : '生成并录制视频'}
           </>
         )}
       </button>

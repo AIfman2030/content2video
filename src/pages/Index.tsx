@@ -7,6 +7,35 @@ import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
 import { extractContent, extractNatureContent, getStoredApiKey } from '../services/deepseek';
 
+// ─── Subtitle: parse numbered items from raw text (no AI) ─────────────────────
+function parseSubtitleContent(text: string): GeneratedContent {
+  const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const groups: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of rawLines) {
+    // Match leading number: "1." "1、" "1）" "1)" etc.
+    if (/^\d{1,2}[.、）)]\s*/.test(line)) {
+      if (current.length > 0) groups.push(current);
+      const content = line.replace(/^\d{1,2}[.、）)]\s*/, '').trim();
+      current = content ? [content] : [];
+    } else {
+      current.push(line);
+    }
+  }
+  if (current.length > 0) groups.push(current);
+
+  // Fallback: no numbered items → treat every line as its own group
+  const points = (groups.length > 0 ? groups : rawLines.map(l => [l])).map((lines, i) => ({
+    label:     `${i + 1}`,
+    short:     '',
+    desc:      lines.join('\n'),
+    formatted: lines.join(' '),
+  }));
+
+  return { title: '字幕视频', points };
+}
+
 type Step = 'style' | 'form' | 'video';
 
 const STEP_LABELS: Record<Step, string> = {
@@ -55,7 +84,13 @@ export default function Index() {
     setError('');
     setIsLoading(true);
     try {
-      if (style === 'nature') {
+      if (style === 'subtitle') {
+        // Direct parse — no AI extraction
+        const result = parseSubtitleContent(text);
+        setContent(result);
+        setNatureContent(null);
+        setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
+      } else if (style === 'nature') {
         const nc = await extractNatureContent(text);
         setNatureContent(nc);
         setContent({ title: nc.title, points: [] });
