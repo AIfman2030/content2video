@@ -1,38 +1,40 @@
-// subtitle.ts – Movie-caption style: text slides up from bottom, per-slide bright colours,
+// subtitle.ts – Movie-caption style: lines appear one-by-one from below, block centred,
 //              particle sparkle background, "小福分享舍" top-left account tag.
 
 import type { GeneratedContent } from '../../types/video';
 import { CW, CH, clamp, easeOutCubic, seededRandom, wrapText } from './helpers';
 
 // ─── Timing constants ─────────────────────────────────────────────────────────
-const PRE_ROLL    = 800;   // account name fades in
-const SLIDE_ENTER = 600;   // text slides up from +80 px
-const SLIDE_HOLD  = 3000;  // hold visible
-const SLIDE_EXIT  = 450;   // fade out
-export const SLIDE_DUR = SLIDE_ENTER + SLIDE_HOLD + SLIDE_EXIT; // 4050 ms
+const PRE_ROLL      = 800;   // account name fades in before slides
+const LINE_STAGGER  = 380;   // ms between each successive line appearing
+const LINE_ENTER    = 440;   // ms each line takes to slide up into place
+const LINE_YOFF     = 72;    // px each line starts below its final position
+export const SLIDE_DUR = 5200; // fixed per-slide duration (ms)
+const SLIDE_EXIT_START = SLIDE_DUR - 540; // when all lines fade out together
+const SLIDE_EXIT    = 540;
+const POST_ROLL     = 1600;
 
 /** Total animation duration for n slides (ms). */
 export function subtitleTotalMs(n: number): number {
-  return PRE_ROLL + n * SLIDE_DUR + 1600; // 1600 ms post-roll
+  return PRE_ROLL + n * SLIDE_DUR + POST_ROLL;
 }
 
 // ─── Colour palettes ──────────────────────────────────────────────────────────
-// Label colour → complementary short colour
 const LABEL_COLORS = ['#ffd700', '#ff4d4d', '#00ff88', '#00d4ff', '#ff88ff', '#ff9944'];
 const SHORT_COLORS = ['#00d4ff', '#ffd700', '#ff9944', '#00ff88', '#ff4d4d', '#a78bfa'];
 
 // ─── Particle system ──────────────────────────────────────────────────────────
 export interface SubParticle {
   x0: number; y0: number;
-  vx: number; vy: number;   // px/s
+  vx: number; vy: number; // px/s
   r: number;
   phase: number; freq: number;
   color: string;
 }
 
 const P_COLORS = [
-  '#ffd70080', '#ff4d4d80', '#00ff8880', '#00d4ff80',
-  '#ff88ff80', '#ffffff99', '#ffffff80', '#ffffffaa',
+  '#ffd70070', '#ff4d4d70', '#00ff8870', '#00d4ff70',
+  '#ff88ff70', '#ffffff90', '#ffffff70', '#ffffffa0',
 ];
 
 export function initSubtitleParticles(rand: () => number): SubParticle[] {
@@ -48,7 +50,7 @@ export function initSubtitleParticles(rand: () => number): SubParticle[] {
   }));
 }
 
-// ─── Internal helpers ─────────────────────────────────────────────────────────
+// ─── Background & overlays ────────────────────────────────────────────────────
 function drawBg(ctx: CanvasRenderingContext2D) {
   const grad = ctx.createRadialGradient(CW / 2, CH / 2, 0, CW / 2, CH / 2, CH * 0.75);
   grad.addColorStop(0, '#0a0a12');
@@ -57,11 +59,7 @@ function drawBg(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, CW, CH);
 }
 
-function drawParticles(
-  ctx: CanvasRenderingContext2D,
-  ps: SubParticle[],
-  elapsed: number,
-) {
+function drawParticles(ctx: CanvasRenderingContext2D, ps: SubParticle[], elapsed: number) {
   const t = elapsed / 1000;
   for (const p of ps) {
     const x = ((p.x0 + p.vx * t) % CW + CW) % CW;
@@ -79,7 +77,6 @@ function drawParticles(
   }
 }
 
-/** Subtle scan-line / horizontal grid overlay for atmosphere. */
 function drawScanlines(ctx: CanvasRenderingContext2D) {
   ctx.save();
   ctx.globalAlpha = 0.025;
@@ -96,14 +93,12 @@ function drawAccountName(ctx: CanvasRenderingContext2D, elapsed: number) {
   ctx.save();
   ctx.globalAlpha = a;
 
-  // Gold accent bar
   ctx.fillStyle   = '#ffd700';
   ctx.shadowColor = '#ffd70090';
   ctx.shadowBlur  = 10;
   ctx.fillRect(52, 46, 5, 58);
   ctx.shadowBlur  = 0;
 
-  // Account text
   ctx.font         = `700 42px "Noto Sans SC", sans-serif`;
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'middle';
@@ -111,17 +106,15 @@ function drawAccountName(ctx: CanvasRenderingContext2D, elapsed: number) {
   ctx.shadowColor  = '#ffd70060';
   ctx.shadowBlur   = 16;
   ctx.fillText('小福分享舍', 68, 75);
-  ctx.shadowBlur  = 0;
+  ctx.shadowBlur   = 0;
 
-  // Tiny subtitle below
-  ctx.font         = `400 24px "Noto Sans SC", sans-serif`;
-  ctx.fillStyle    = 'rgba(255,255,255,0.45)';
+  ctx.font      = `400 24px "Noto Sans SC", sans-serif`;
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.fillText('知识分享 · 每日更新', 68, 106);
-
   ctx.restore();
 }
 
-// Rounded rect helper (draws path only – caller fills/strokes)
+// Rounded-rect path (no fill/stroke – caller does that)
 function rrPath(
   ctx: CanvasRenderingContext2D,
   x: number, y: number, w: number, h: number, r: number,
@@ -135,10 +128,10 @@ function rrPath(
   ctx.closePath();
 }
 
-// ─── Draw one subtitle slide ──────────────────────────────────────────────────
+// ─── One subtitle slide ───────────────────────────────────────────────────────
 function drawSlide(
   ctx: CanvasRenderingContext2D,
-  te: number,        // elapsed time within this slide
+  te: number,      // elapsed ms within this slide
   label: string,
   short: string,
   desc: string,
@@ -146,126 +139,142 @@ function drawSlide(
 ) {
   if (te <= 0 || te >= SLIDE_DUR) return;
 
-  // Compute alpha + y-offset
-  let alpha: number;
-  let yOff: number;
-
-  if (te <= SLIDE_ENTER) {
-    const t = easeOutCubic(te / SLIDE_ENTER);
-    alpha = clamp(te / 280, 0, 1);
-    yOff  = (1 - t) * 80;
-  } else if (te <= SLIDE_ENTER + SLIDE_HOLD) {
-    alpha = 1;
-    yOff  = 0;
-  } else {
-    alpha = clamp(1 - (te - SLIDE_ENTER - SLIDE_HOLD) / SLIDE_EXIT, 0, 1);
-    yOff  = 0;
-  }
-  if (alpha <= 0) return;
-
   const lColor = LABEL_COLORS[idx % LABEL_COLORS.length];
   const sColor = SHORT_COLORS[idx % SHORT_COLORS.length];
 
-  const lFsz  = 92;
-  const sFsz  = 68;
-  const dFsz  = 52;
-  const lgap  = 16;
+  const lFsz = 92;
+  const sFsz = 68;
+  const dFsz = 52;
+  const GAP  = 20;   // gap between every consecutive line
 
-  // Wrap desc to ≤ 3 lines at a comfortable width
+  // Wrap desc → ≤ 3 lines
   ctx.font = `400 ${dFsz}px "Noto Sans SC", sans-serif`;
   const dLines = wrapText(ctx, desc, 1080).slice(0, 3);
 
-  // Block total height
-  const blockH = lFsz + lgap + sFsz + lgap + dLines.length * (dFsz + 10);
+  // Build ordered line list  [{ text, fsz, color, weight }]
+  interface LI { text: string; fsz: number; color: string; weight: string }
+  const lines: LI[] = [
+    { text: label, fsz: lFsz, color: lColor,                    weight: '700' },
+    { text: short, fsz: sFsz, color: sColor,                    weight: '600' },
+    ...dLines.map(l => ({ text: l, fsz: dFsz, color: 'rgba(255,255,255,0.92)', weight: '400' })),
+  ];
+  const nLines = lines.length;
 
-  // Block centre Y = lower third
-  const centerY  = CH * 0.70;
-  const blockTopY = centerY - blockH / 2 + yOff;
+  // Total block height (lines stacked with GAP between them)
+  const blockH = lines.reduce((s, l) => s + l.fsz, 0) + GAP * (nLines - 1);
 
-  // Backdrop
-  const bPadX = 80, bPadY = 36;
+  // ── VERTICAL CENTRE at exactly CH/2 ──────────────────────────────────────
+  const blockTopY = CH / 2 - blockH / 2;
+
+  // Pre-compute each line's final Y (top of baseline box)
+  const lineY: number[] = [];
+  let cy = blockTopY;
+  for (const l of lines) {
+    lineY.push(cy);
+    cy += l.fsz + GAP;
+  }
+
+  // ── Exit phase: all lines fade together ───────────────────────────────────
+  const exitAlpha = te >= SLIDE_EXIT_START
+    ? clamp(1 - (te - SLIDE_EXIT_START) / SLIDE_EXIT, 0, 1)
+    : 1;
+  if (exitAlpha <= 0) return;
+
+  // ── Backdrop (fades in over first 300 ms, exits with exitAlpha) ──────────
+  const backdropAlpha = clamp(te / 300, 0, 1) * exitAlpha;
+  const bPadX = 80; const bPadY = 42;
   const bW    = 1280;
   const bH    = blockH + bPadY * 2;
   const bX    = CW / 2 - bW / 2;
   const bY    = blockTopY - bPadY;
 
   ctx.save();
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha = backdropAlpha;
 
-  // Dark glass backdrop
   rrPath(ctx, bX, bY, bW, bH, 24);
-  ctx.fillStyle = 'rgba(2, 2, 10, 0.80)';
+  ctx.fillStyle = 'rgba(2, 2, 10, 0.82)';
   ctx.fill();
 
-  // Coloured left accent bar
+  // Left accent bar
   ctx.fillStyle   = lColor;
   ctx.shadowColor = lColor;
   ctx.shadowBlur  = 14;
   ctx.fillRect(bX + 24, bY + 18, 5, bH - 36);
   ctx.shadowBlur  = 0;
 
-  // Subtle top highlight line
-  ctx.strokeStyle = `rgba(255,255,255,0.06)`;
+  // Top highlight line
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)';
   ctx.lineWidth   = 1;
   ctx.beginPath();
-  ctx.moveTo(bX + 50, bY + 1);
-  ctx.lineTo(bX + bW - 50, bY + 1);
+  ctx.moveTo(bX + 55, bY + 1);
+  ctx.lineTo(bX + bW - 55, bY + 1);
   ctx.stroke();
 
-  // Bottom separator line
-  ctx.strokeStyle = `${lColor}50`;
+  // Bottom accent line
+  ctx.strokeStyle = `${lColor}55`;
   ctx.lineWidth   = 1.5;
   ctx.beginPath();
   ctx.moveTo(bX + 55, bY + bH - 18);
   ctx.lineTo(bX + bW - 55, bY + bH - 18);
   ctx.stroke();
 
-  // ── label ──────────────────────────────────────────────────────────────
-  let y = blockTopY;
-  ctx.font         = `700 ${lFsz}px "Noto Sans SC", sans-serif`;
-  ctx.textAlign    = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillStyle    = lColor;
-  ctx.shadowColor  = lColor;
-  ctx.shadowBlur   = 28;
-  ctx.fillText(label, CW / 2, y);
-  ctx.shadowBlur   = 0;
-  y += lFsz + lgap;
-
-  // ── short ──────────────────────────────────────────────────────────────
-  ctx.font         = `600 ${sFsz}px "Noto Sans SC", sans-serif`;
-  ctx.fillStyle    = sColor;
-  ctx.shadowColor  = sColor;
-  ctx.shadowBlur   = 18;
-  ctx.fillText(short, CW / 2, y);
-  ctx.shadowBlur   = 0;
-  y += sFsz + lgap;
-
-  // ── desc lines ─────────────────────────────────────────────────────────
-  ctx.font      = `400 ${dFsz}px "Noto Sans SC", sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.91)';
-  for (const line of dLines) {
-    ctx.fillText(line, CW / 2, y);
-    y += dFsz + 10;
-  }
-
-  // Slide index badge (bottom-right of backdrop)
-  const badgeR = 28;
-  const bdX = bX + bW - badgeR - 24;
-  const bdY = bY + bH - badgeR - 18;
+  // Badge (bottom-right)
+  const bdR = 28;
+  const bdX = bX + bW - bdR - 24;
+  const bdY = bY + bH - bdR - 16;
   ctx.beginPath();
-  ctx.arc(bdX, bdY, badgeR, 0, Math.PI * 2);
-  ctx.fillStyle = `${lColor}30`;
+  ctx.arc(bdX, bdY, bdR, 0, Math.PI * 2);
+  ctx.fillStyle = `${lColor}28`;
   ctx.fill();
-  ctx.strokeStyle = `${lColor}90`;
+  ctx.strokeStyle = `${lColor}88`;
   ctx.lineWidth   = 2;
   ctx.stroke();
   ctx.font         = `700 26px "Noto Sans SC", sans-serif`;
+  ctx.textAlign    = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle    = lColor;
   ctx.fillText(`${idx + 1}`, bdX, bdY);
 
   ctx.restore();
+
+  // ── Draw each line with individual stagger slide-up ───────────────────────
+  for (let i = 0; i < nLines; i++) {
+    const lineTe = te - i * LINE_STAGGER;   // time since THIS line started entering
+    if (lineTe <= 0) continue;             // not yet
+
+    let lineAlpha: number;
+    let yOff: number;
+
+    if (lineTe <= LINE_ENTER) {
+      const t  = easeOutCubic(lineTe / LINE_ENTER);
+      lineAlpha = clamp(lineTe / 220, 0, 1);
+      yOff      = (1 - t) * LINE_YOFF;
+    } else {
+      lineAlpha = 1;
+      yOff      = 0;
+    }
+
+    const finalAlpha = lineAlpha * exitAlpha;
+    if (finalAlpha <= 0) continue;
+
+    const li = lines[i];
+    ctx.save();
+    ctx.globalAlpha  = finalAlpha;
+    ctx.font         = `${li.weight} ${li.fsz}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle    = li.color;
+
+    // Glow on first two lines only
+    if (i < 2) {
+      ctx.shadowColor = li.color;
+      ctx.shadowBlur  = i === 0 ? 28 : 18;
+    }
+
+    ctx.fillText(li.text, CW / 2, lineY[i] + yOff);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
 }
 
 // ─── Main draw entry ──────────────────────────────────────────────────────────
@@ -290,7 +299,7 @@ export function drawSubtitle(
   // Post-roll: fade to black
   const fadeStart = PRE_ROLL + n * SLIDE_DUR;
   if (elapsed > fadeStart) {
-    const a = clamp((elapsed - fadeStart) / 1600, 0, 1);
+    const a = clamp((elapsed - fadeStart) / POST_ROLL, 0, 1);
     ctx.fillStyle = `rgba(0,0,0,${a * 0.96})`;
     ctx.fillRect(0, 0, CW, CH);
   }
