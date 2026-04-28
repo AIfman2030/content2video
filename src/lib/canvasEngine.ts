@@ -28,6 +28,8 @@ export interface AnimEngine {
   start: () => void;
   stop: () => void;
   restart: (onComplete?: () => void) => void;
+  seekTo: (ms: number) => void;
+  getElapsed: () => number;
   isRunning: () => boolean;
   getTotalMs: () => number;
 }
@@ -84,6 +86,7 @@ export async function createAnimEngine(
           : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
+  let lastElapsed = 0;
   let completionCallback = onComplete;
 
   function render(elapsed: number) {
@@ -131,11 +134,13 @@ export async function createAnimEngine(
   function tick(now: number) {
     if (!running) return;
     const elapsed = now - startTime;
+    lastElapsed = elapsed;
     render(elapsed);
     if (elapsed < total) {
       rafId = requestAnimationFrame(tick);
     } else {
       running = false;
+      lastElapsed = total;
       render(total);
       completionCallback?.();
     }
@@ -145,7 +150,7 @@ export async function createAnimEngine(
     start() {
       if (running) return;
       running = true;
-      startTime = performance.now();
+      startTime = performance.now() - lastElapsed;
       rafId = requestAnimationFrame(tick);
     },
     stop() {
@@ -156,10 +161,19 @@ export async function createAnimEngine(
       running = false;
       cancelAnimationFrame(rafId);
       completionCallback = cb;
+      lastElapsed = 0;
       running = true;
       startTime = performance.now();
       rafId = requestAnimationFrame(tick);
     },
+    seekTo(ms: number) {
+      running = false;
+      cancelAnimationFrame(rafId);
+      const clamped = Math.max(0, Math.min(ms, total));
+      lastElapsed = clamped;
+      render(clamped);
+    },
+    getElapsed: () => lastElapsed,
     isRunning: () => running,
     getTotalMs: () => total,
   };

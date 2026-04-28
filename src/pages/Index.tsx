@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Sparkles, Film, Key } from 'lucide-react';
+import { Film, Key, Video } from 'lucide-react';
 import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, GeneratorConfig } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
+import StudioCanvas from '../components/StudioCanvas';
 import { extractContent, extractNatureContent, translateSentence, getStoredApiKey } from '../services/deepseek';
 
 // ─── Subtitle: parse numbered items from raw text (no AI) ─────────────────────
@@ -14,7 +15,6 @@ function parseSubtitleContent(text: string): GeneratedContent {
   let current: string[] = [];
 
   for (const line of rawLines) {
-    // Match leading number: "1." "1、" "1）" "1)" etc.
     if (/^\d{1,2}[.、）)]\s*/.test(line)) {
       if (current.length > 0) groups.push(current);
       const content = line.replace(/^\d{1,2}[.、）)]\s*/, '').trim();
@@ -25,19 +25,15 @@ function parseSubtitleContent(text: string): GeneratedContent {
   }
   if (current.length > 0) groups.push(current);
 
-  // Fallback: no numbered items → split by sentence-ending punctuation (。！？)
-  // so each sentence becomes its own slide group
   if (groups.length === 0) {
     const sentences: string[] = [];
     for (const line of rawLines) {
-      // Split on sentence terminators, keeping the terminator attached
       const parts = line.split(/((?:[。！？!?]+))/);
       for (let j = 0; j < parts.length; j += 2) {
         const sentence = (parts[j] + (parts[j + 1] ?? '')).trim();
         if (sentence) sentences.push(sentence);
       }
     }
-    // If still no splits (no punctuation), treat each line as a group
     const items = sentences.length > 0 ? sentences : rawLines;
     for (const item of items) groups.push([item]);
   }
@@ -51,14 +47,6 @@ function parseSubtitleContent(text: string): GeneratedContent {
 
   return { title: '字幕视频', points };
 }
-
-type Step = 'style' | 'form' | 'video';
-
-const STEP_LABELS: Record<Step, string> = {
-  style: '选择风格',
-  form: '配置内容',
-  video: '生成视频',
-};
 
 const BG_BY_STYLE: Record<StyleType, string> = {
   chinese:     'linear-gradient(160deg, #0a0a14 0%, #12121f 50%, #1a1a2e 100%)',
@@ -79,19 +67,23 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
 };
 
 export default function Index() {
-  const [step, setStep] = useState<Step>('style');
   const [style, setStyle] = useState<StyleType>('chinese');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [config, setConfig] = useState<GeneratorConfig | null>(null);
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [natureContent, setNatureContent] = useState<NatureContent | null>(null);
+  const [showRecorder, setShowRecorder] = useState(false);
   const [apiKeyOpen, setApiKeyOpen] = useState(false);
+  // Forwarded from ContentForm so StudioCanvas gets the latest options even before generate
+  const [liveChineseOptions, setLiveChineseOptions] = useState<ChineseOptions>({
+    colorScheme: 'cinnabar', borderWidth: 2, lineWidth: 2, animMode: 'single',
+  });
+  const [liveCoverIndex, setLiveCoverIndex] = useState(0);
+  const [liveAiOptions, setLiveAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
 
   const accent = ACCENT_BY_STYLE[style];
   const bg = BG_BY_STYLE[style];
-
-  const handleStyleNext = () => setStep('form');
 
   const handleGenerate = async (
     text: string,
@@ -101,15 +93,16 @@ export default function Index() {
   ) => {
     setError('');
     setIsLoading(true);
+    setLiveCoverIndex(coverIndex);
+    setLiveChineseOptions(chineseOptions);
+    setLiveAiOptions(aiOptions);
     try {
       if (style === 'subtitle') {
-        // Direct parse — no AI extraction
         const result = parseSubtitleContent(text);
         setContent(result);
         setNatureContent(null);
         setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
       } else if (style === 'translation') {
-        // AI translation: Chinese sentence → English
         const englishText = await translateSentence(text.trim());
         const result: GeneratedContent = {
           title: text.trim(),
@@ -129,7 +122,6 @@ export default function Index() {
         setNatureContent(null);
         setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
       }
-      setStep('video');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
       if (msg === 'NO_API_KEY') {
@@ -142,34 +134,45 @@ export default function Index() {
     }
   };
 
-  const handleClose = () => {
-    setStep('form');
-    setContent(null);
-    setNatureContent(null);
-  };
-
-  const steps: Step[] = ['style', 'form', 'video'];
+  const handleCloseRecorder = () => setShowRecorder(false);
 
   return (
-    <div className="min-h-screen transition-all duration-700" style={{ background: bg }}>
-      {/* Header */}
-      <header className="border-b border-white/8 px-6 py-4">
-        <div className="mx-auto flex max-w-2xl items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: `${accent}22`, border: `1px solid ${accent}50` }}
-            >
-              <Film size={16} style={{ color: accent }} />
-            </div>
-            <span className="text-base font-bold text-white">小福 · 视频生成器</span>
+    <div className="flex flex-col h-screen overflow-hidden transition-all duration-700" style={{ background: bg }}>
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <header className="flex-shrink-0 border-b px-5 py-3 flex items-center justify-between gap-4" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${accent}22`, border: `1px solid ${accent}50` }}>
+            <Film size={14} style={{ color: accent }} />
           </div>
+          <span className="text-sm font-bold text-white">小福 · 视频生成器</span>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Record button */}
+          {content && config && (
+            <button
+              onClick={() => setShowRecorder(true)}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
+              style={{
+                background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
+                color: '#fff',
+                boxShadow: `0 2px 12px ${accent}55`,
+              }}
+            >
+              <Video size={12} />
+              录制视频
+            </button>
+          )}
 
           {/* API Key button */}
           <button
             onClick={() => setApiKeyOpen(true)}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-xs transition-colors hover:border-white/20"
-            style={{ color: getStoredApiKey() ? accent : 'rgba(255,255,255,0.4)' }}
+            className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-white/20"
+            style={{
+              borderColor: 'rgba(255,255,255,0.1)',
+              color: getStoredApiKey() ? accent : 'rgba(255,255,255,0.4)',
+            }}
           >
             <Key size={11} />
             {getStoredApiKey() ? 'API Key ✓' : '设置 API Key'}
@@ -177,96 +180,61 @@ export default function Index() {
         </div>
       </header>
 
-      {/* Step indicator */}
-      <div className="mx-auto max-w-2xl px-6 pt-6">
-        <div className="flex items-center gap-3">
-          {steps.filter(s => s !== 'video').map((s, i, arr) => {
-            const isActive = s === step;
-            const isPast = steps.indexOf(s) < steps.indexOf(step);
-            return (
-              <div key={s} className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold transition-all"
-                    style={{
-                      background: isPast || isActive ? accent : 'rgba(255,255,255,0.1)',
-                      color: isPast || isActive ? '#fff' : 'rgba(255,255,255,0.3)',
-                    }}
-                  >
-                    {i + 1}
-                  </div>
-                  <span
-                    className="text-sm transition-colors"
-                    style={{ color: isActive ? '#fff' : isPast ? accent : 'rgba(255,255,255,0.3)' }}
-                  >
-                    {STEP_LABELS[s]}
-                  </span>
-                </div>
-                {i < arr.length - 1 && (
-                  <div
-                    className="h-px w-8 transition-all"
-                    style={{ background: isPast ? `${accent}80` : 'rgba(255,255,255,0.1)' }}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {/* ── Studio Body ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
+
+        {/* LEFT: Config Panel */}
+        <aside
+          className="flex-shrink-0 overflow-y-auto border-r"
+          style={{
+            width: 360,
+            borderColor: 'rgba(255,255,255,0.07)',
+            background: 'rgba(0,0,0,0.25)',
+          }}
+        >
+          <div className="p-4 space-y-4">
+            {/* Section: Style */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                选择风格
+              </p>
+              <StyleSelector selected={style} onChange={s => { setStyle(s); setContent(null); setNatureContent(null); setConfig(null); }} compact />
+            </div>
+
+            {/* Divider */}
+            <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+
+            {/* Section: Content */}
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                配置内容
+              </p>
+              <ContentForm
+                style={style}
+                onGenerate={handleGenerate}
+                isLoading={isLoading}
+                error={error}
+              />
+            </div>
+          </div>
+        </aside>
+
+        {/* RIGHT: Preview Panel */}
+        <main className="flex-1 min-w-0 flex flex-col items-center justify-center p-6 overflow-hidden">
+          <StudioCanvas
+            content={content}
+            style={style}
+            coverIndex={liveCoverIndex}
+            chineseOptions={liveChineseOptions}
+            aiOptions={liveAiOptions}
+            natureContent={natureContent}
+            accent={accent}
+          />
+        </main>
       </div>
 
-      {/* Main content */}
-      <main className="mx-auto max-w-2xl px-6 py-8 space-y-6">
-        {step === 'style' && (
-          <div className="space-y-6 animate-fade-in">
-            <div>
-              <h1 className="text-2xl font-bold text-white mb-1">选择视频风格</h1>
-              <p className="text-sm text-white/40">选择一种风格，AI 将按此风格生成动画视频</p>
-            </div>
-
-            <StyleSelector selected={style} onChange={s => { setStyle(s); }} />
-
-            <button
-              onClick={handleStyleNext}
-              className="flex w-full items-center justify-center gap-2 rounded-xl py-4 text-base font-semibold transition-all duration-200 active:scale-98"
-              style={{
-                background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
-                color: '#fff',
-                boxShadow: `0 4px 24px ${accent}50`,
-              }}
-            >
-              <Sparkles size={18} />
-              下一步：配置内容
-            </button>
-          </div>
-        )}
-
-        {step === 'form' && (
-          <div className="space-y-6 animate-fade-in">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setStep('style')}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-white/50 hover:text-white/70 border border-white/10 transition-colors"
-              >
-                ← 返回
-              </button>
-              <div>
-                <h2 className="text-xl font-bold text-white">配置内容</h2>
-                <p className="text-xs text-white/40">粘贴文章，AI 自动提炼要点</p>
-              </div>
-            </div>
-
-            <ContentForm
-              style={style}
-              onGenerate={handleGenerate}
-              isLoading={isLoading}
-              error={error}
-            />
-          </div>
-        )}
-      </main>
-
-      {/* Video Generator overlay */}
-      {step === 'video' && content && config && (
+      {/* ── Full-screen Recording Overlay ───────────────────────────────────── */}
+      {showRecorder && content && config && (
         <VideoGenerator
           content={content}
           style={config.style}
@@ -274,17 +242,16 @@ export default function Index() {
           chineseOptions={config.chineseOptions}
           aiOptions={config.aiOptions}
           natureContent={config.natureContent}
-          onClose={handleClose}
+          onClose={handleCloseRecorder}
         />
       )}
 
-      {/* API Key Dialog */}
+      {/* ── API Key Dialog ───────────────────────────────────────────────────── */}
       <ApiKeyDialog
         open={apiKeyOpen}
         onClose={() => setApiKeyOpen(false)}
         accent={accent}
       />
-
     </div>
   );
 }

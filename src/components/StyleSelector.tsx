@@ -3,6 +3,7 @@ import type { StyleType } from '../types/video';
 interface Props {
   selected: StyleType;
   onChange: (s: StyleType) => void;
+  compact?: boolean;
 }
 
 const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: string; accent: string }[] = [
@@ -56,7 +57,39 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
   },
 ];
 
-export default function StyleSelector({ selected, onChange }: Props) {
+export default function StyleSelector({ selected, onChange, compact = false }: Props) {
+  if (compact) {
+    return (
+      <div className="grid grid-cols-3 gap-1.5">
+        {STYLES.map(s => (
+          <button
+            key={s.key}
+            onClick={() => onChange(s.key)}
+            className="relative overflow-hidden rounded-xl border text-left transition-all duration-200 hover:scale-[1.02] active:scale-100"
+            style={{
+              background: s.bg,
+              borderColor: selected === s.key ? s.accent : 'rgba(255,255,255,0.1)',
+              boxShadow: selected === s.key
+                ? `0 0 0 1px ${s.accent}, 0 0 12px ${s.accent}40`
+                : '0 1px 6px rgba(0,0,0,0.3)',
+            }}
+          >
+            {selected === s.key && (
+              <div className="absolute inset-0 rounded-xl opacity-15 animate-pulse" style={{ background: s.accent }} />
+            )}
+            <div className="relative p-2.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: s.accent }} />
+                <div className="text-xs font-bold text-white truncate">{s.name}</div>
+              </div>
+              <div className="text-[10px] leading-tight" style={{ color: `${s.accent}cc` }}>{s.desc}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {STYLES.map(s => (
