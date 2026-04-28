@@ -1,125 +1,113 @@
-# Cover Redesign Plan
+# Phase 1: Studio Layout + Real-time Preview + Timeline Scrubber
 
 ## Context
-User wants two changes to the cover generation system:
-1. All covers: remove ALL text, add rainbow gradient border frame (reference image style), single colorful neon icon in lower-center (~1cm from bottom)
-2. City covers: each of the 23 cities should have a unique landmark icon (currently all identical tower)
-
-## Reference Design (from image)
-- Pure black background (#000)
-- Thick rainbow gradient rounded rectangle border (RGB neon glow going: magenta → red → yellow → green → cyan → blue → purple)
-- Single large colorful neon line-art icon occupying lower 50% of canvas
-- Zero text anywhere on the cover
-
-## Canvas Dimensions
-- 1080 × 1920 (9:16)
-- 1cm from bottom ≈ 38px → icon bottom at y = 1882, icon center at y = 1580, icon radius ≈ 300
+Currently the app uses a 3-step sequential flow (style → form → video overlay). The user wants a Studio layout where config and live canvas preview coexist side-by-side, with a timeline scrubber to seek any frame instantly.
 
 ---
 
-## Files to Create/Modify
+## Layout
 
-### 1. `src/lib/cover/registry.ts` — add `drawRainbowBorder` helper
-```ts
-export function drawRainbowBorder(ctx, W, H, pad, bw, r): void
-// Linear gradient: magenta→red→yellow→green→cyan→blue→purple
-// Thick stroke with shadowBlur glow on drawRoundRect
-// Double pass: outer thick stroke + inner faint glow ring
+```
+┌─────────────── header ──────────────────────────────────────┐
+│ [logo] 小福·视频生成器                      [API Key] [录制] │
+├─────────────────────────────────────────────────────────────┤
+│  LEFT PANEL (360px, scrollable)  │  RIGHT PANEL (flex-1)    │
+│                                  │                           │
+│  ① 风格选择 (compact 2-col grid)  │  ┌── canvas 9:16 ──┐    │
+│  ② 内容配置 (ContentForm)         │  │  animation       │    │
+│     · 文字输入                    │  │  (live preview)  │    │
+│     · 封面/高级选项               │  └──────────────────┘    │
+│  ③ [生成] button                  │                           │
+│                                  │  [◀] [▶/⏸] [▶▶] 0:03   │
+│                                  │  ═══════●══════ 0:14      │
+│                                  │  [⏺ 录制视频]             │
+└──────────────────────────────────┴───────────────────────────┘
 ```
 
-### 2. `src/lib/cover/city-landmarks.ts` — NEW file
-Array of 24 drawing functions, one per city in CITY_SHAPES order:
-```ts
-export type LandmarkFn = (ctx, cx, cy, r) => void;
-export const CITY_LANDMARKS: LandmarkFn[] = [ ... 24 functions ... ];
-```
-Each function draws a neon gradient line-art icon centered at (cx, cy) fitting within radius r.
-Colors assigned per city (2-3 harmonious neon colors per icon):
-- 0 Beijing: gate tower (Tiananmen style) — gold + red
-- 1 Tianjin: Ferris wheel (Eye of Tianjin) — cyan + blue
-- 2 Shijiazhuang: abstract skyscrapers — purple + magenta
-- 3 Shenyang: pagoda (multi-tier) — orange + red
-- 4 Changchun: modern dome — green + teal
-- 5 Harbin: onion-dome church — blue + cyan
-- 6 Shanghai: Oriental Pearl Tower (sphere on column) — purple + blue
-- 7 Nanjing: pagoda tower — orange + yellow
-- 8 Hangzhou: Leifeng Pagoda — teal + green
-- 9 Hefei: arch bridge — pink + purple
-- 10 Fuzhou: white pagoda — yellow + orange
-- 11 Nanchang: 3-tiered pavilion — red + orange
-- 12 Wuhan: Yellow Crane Tower (5-tier) — blue + cyan
-- 13 Changsha: mountain + tower — red + orange
-- 14 Guangzhou: Canton Tower (hyperboloid) — purple + magenta
-- 15 Nanning: tropical leaves + tower — green + lime
-- 16 Haikou: coconut palm + waves — teal + cyan
-- 17 Chengdu: panda face circle — green + white
-- 18 Kunming: lake + mountain — purple + blue
-- 19 Lhasa: Potala Palace (tiered pyramid) — gold + red
-- 20 Xi'an: Bell Tower (octagonal multi-roof) — gold + orange
-- 21 Lanzhou: bridge over river — blue + cyan
-- 22 Ürümqi: dome mosque + snowflake — white + blue
-- 23 Chongqing: mountain city bridge — red + orange
-
-File will be split into two if needed to stay ≤280 lines:
-- `city-landmarks-a.ts` (cities 0–11)
-- `city-landmarks-b.ts` (cities 12–23)
-
-### 3. `src/lib/cover/chinese-cover.ts` — REWRITE
-- Remove all text (drawTopBanner, drawItems, drawBg text)
-- Black background
-- drawRainbowBorder(ctx, W, H, 24, 14, 60)
-- Draw Chinese pattern (circular coin/bagua motif with gradient stroke) at (W/2, 1580)
-- Use gradient: gold → red → magenta for the dragon/coin icon
-
-### 4. `src/lib/cover/city-cover.ts` — REWRITE
-- Remove all text functions
-- Black background
-- drawRainbowBorder(ctx, W, H, 24, 14, 60)
-- Import CITY_LANDMARKS from city-landmarks-a + city-landmarks-b
-- Call CITY_LANDMARKS[coverIndex % 24](ctx, W/2, 1580, 300)
-- Each landmark draws with its own colors (no accent passed in — self-colored)
-
-### 5. `src/lib/cover/aitech-cover.ts` — REWRITE
-- Remove all text
-- Black background (keep dot grid for texture)
-- drawRainbowBorder(ctx, W, H, 24, 14, 60)
-- Draw polygon (sides = [3,4,5,6,8][coverIndex % 5]) with neon gradient at (W/2, 1580)
-- Colors: use gradient from accent to accent2 with shadowBlur glow
-
-### 6. `src/lib/cover/nature-cover.ts` — REWRITE
-- Remove all text
-- Dark green background
-- drawRainbowBorder(ctx, W, H, 24, 14, 60)
-- Draw two circles side-by-side with scenic spot silhouettes at (W/2, 1580)
-- Left circle: accent color, right circle: accent2 color
+Mobile (<768px): canvas top, config panel below (scrollable).
 
 ---
 
-## Icon Positioning (all covers)
-```
-ICON_CX = 540        (W/2)
-ICON_CY = 1580       (H - 340, approximately 1cm from bottom with r=300)
-ICON_R  = 300        (fits icon bottom at y=1880, ~2cm from canvas bottom)
+## Files to Change
+
+### 1. `src/lib/canvasEngine.ts`
+- Add `seekTo(ms: number): void` to `AnimEngine` interface
+  - Implementation: `stop(); render(ms); running=false;`
+- Update `restart(from?: number, cb?)`:
+  - `startTime = performance.now() - (from ?? 0)` — lets playback resume from any point
+
+### 2. NEW `src/components/StudioCanvas.tsx`
+Self-contained canvas preview component (manages its own engine instance):
+- Props: `content, style, coverIndex, chineseOptions, aiOptions, natureContent, accent`
+- Internal: `canvasRef`, `engineRef`, `isReady`, `playing`, `currentMs`, `totalMs`
+- Re-creates engine via `createAnimEngine` whenever `content` changes (using `useEffect([content])`)
+- Canvas always in DOM (no visibility toggle)
+- Timeline RAF: `requestAnimationFrame` loop that reads `elapsed = now - startTime` to update `currentMs` slider WITHOUT driving animation (engine drives itself)
+- `seekTo(ms)`: engine.seekTo(ms); setCurrentMs(ms); setPlaying(false)
+- Play/Pause: toggle `playing` state → engine.start() / engine.stop()
+- Auto-play when engine ready
+
+Timeline controls:
+```tsx
+<input type="range" min={0} max={totalMs} step={100} value={currentMs}
+  onChange={e => seekTo(Number(e.target.value))} />
+<span>{fmt(currentMs)} / {fmt(totalMs)}</span>
 ```
 
-## Rainbow Border Parameters
-```
-padding = 24px
-borderWidth = 14px  
-cornerRadius = 60px
-Colors: #ff00cc → #ff4400 → #ffcc00 → #00ff88 → #00ccff → #4400ff → #ff00cc
-glow: shadowColor='#ffffff', shadowBlur=18
+### 3. `src/pages/Index.tsx`
+Replace 3-step flow with Studio layout:
+- Remove `step` state, `Step` type, stepper indicator
+- Keep: `style`, `content`, `natureContent`, `config`, `isLoading`, `error`, `apiKeyOpen`
+- Layout: `flex h-screen` with:
+  - `<aside>` (360px, overflow-y-auto): StyleSelector + ContentForm + generate button
+  - `<main>` (flex-1): StudioCanvas + record button
+- `handleGenerate` → same AI logic, just sets content/config (no `setStep('video')`)
+- "录制视频" button in header or right panel bottom → opens `VideoGenerator` overlay
+- VideoGenerator keeps working as-is (receives `content, style, ...config`)
+
+### 4. `src/components/StyleSelector.tsx`
+Add compact mode for left panel:
+- New prop: `compact?: boolean`
+- When compact: render as 2-column grid with smaller cards (no tag badge, smaller padding)
+
+### 5. `src/components/VideoGenerator.tsx`
+No changes needed — still used as a full-screen overlay for recording.
+
+---
+
+## Key Technical Details
+
+### seekTo + currentMs tracking
+The engine loop calls `tick()` → `render(elapsed)` → `rAF`. To track current position for the slider:
+- StudioCanvas starts its own `syncRaf` loop alongside the engine
+- `syncRaf` just reads `engine.getElapsed()` (new getter) and calls `setCurrentMs`
+- Engine needs `getElapsed(): number` → `running ? performance.now() - startTime : lastElapsed`
+
+### Canvas Sizing
+Right panel canvas maintains 9:16 ratio:
+```tsx
+// CSS: height fills available space, width computed from aspect ratio
+<div style={{ aspectRatio: '9/16', height: '100%', maxHeight: 'calc(100vh - 120px)' }}>
+  <canvas ... style={{ width: '100%', height: '100%' }} />
+</div>
 ```
 
-## File Size Check
-- `registry.ts`: ~70 lines (add ~14 lines for drawRainbowBorder) ✓
-- `city-landmarks-a.ts`: ~150 lines (12 cities) ✓
-- `city-landmarks-b.ts`: ~150 lines (12 cities) ✓  
-- `chinese-cover.ts`: ~80 lines (simplified) ✓
-- `city-cover.ts`: ~60 lines (simplified) ✓
-- `aitech-cover.ts`: ~80 lines (simplified) ✓
-- `nature-cover.ts`: ~90 lines (simplified) ✓
+### Mobile Responsive
+```css
+/* < 768px: stack vertically */
+@media (max-width: 767px) {
+  aside: width 100%, height auto
+  main: canvas compact (max-h 50vh)
+}
+```
 
-## Key Principle
-**No text anywhere on any cover** — pure geometric/iconic visual design only.
-The landmark icons should look like neon line-art drawn with gradient colored strokes on black, matching the reference image aesthetic.
+---
+
+## Verification
+1. Studio layout renders: left config + right canvas on desktop
+2. Selecting a style updates the accent color across both panels
+3. Generating content → canvas auto-plays the animation
+4. Timeline scrubber drag → animation pauses, frame updates live
+5. Play button → resumes from scrubber position
+6. "录制视频" → opens VideoGenerator overlay (existing flow)
+7. Mobile: stacked layout, canvas visible above config
