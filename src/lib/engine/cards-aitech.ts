@@ -28,12 +28,12 @@ export function drawAITechCards(
 
   // Card body only (no footer — desc goes OUTSIDE below card)
   const CARD_W   = Math.round(340 * scale);
-  const CARD_H   = Math.round(260 * scale);   // taller to fit doubled label
+  // CARD_H is computed per-card (adaptive) — see loop below
   const POLY_R   = Math.round(145 * scale);
-  const lFsz     = Math.round(88 * scale);    // large label (doubled, yellow)
+  const lFsz     = Math.round(70 * scale);    // main label (yellow)
   const sFsz     = Math.round(48 * scale);    // short subtitle
-  const dFsz     = Math.round(52 * scale);    // desc beside/below card
-  const dLineH   = Math.round(72 * scale);    // desc line height
+  const dFsz     = Math.round(42 * scale);    // desc beside/below card (reduced 10px)
+  const dLineH   = Math.round(64 * scale);    // desc line height
   const cr       = Math.round(14 * scale);
   const sides    = polyShape === 'star5' ? 5 : POLY_SIDES[polyShape] ?? 6;
 
@@ -84,8 +84,25 @@ export function drawAITechCards(
     const dcy    = cardCY + Math.sin(angle) * slideR;
     const alpha  = clamp(te / 350, 0, 1);
 
-    const cx0    = dcx - CARD_W / 2;
-    const cy0    = dcy - CARD_H / 2;
+    const point = content.points[i];
+
+    // ── Adaptive CARD_H: compute required height from actual wrapped text ──
+    const PAD_Y      = Math.round(18 * scale);
+    const LABEL_GAP  = Math.round(12 * scale);
+    ctx.font = `700 ${sFsz}px "Noto Sans SC", sans-serif`;
+    const shortLines  = point.short
+      ? wrapText(ctx, point.short, CARD_W - Math.round(20 * scale)).slice(0, 2)
+      : [];
+    const shortLineH  = sFsz + Math.round(8 * scale);
+    const shortBlockH = shortLines.length > 0
+      ? shortLines.length * shortLineH - (shortLineH - sFsz)
+      : 0;
+    const CARD_H = lFsz + (shortLines.length > 0 ? LABEL_GAP + shortBlockH : 0) + PAD_Y * 2;
+
+    const cx0     = dcx - CARD_W / 2;
+    const cy0     = dcy - CARD_H / 2;
+    const labelY  = cy0 + PAD_Y + lFsz / 2;
+    const shortStartY = labelY + lFsz / 2 + LABEL_GAP + sFsz / 2;
 
     // Connector line
     if (eased > 0.3) {
@@ -120,26 +137,20 @@ export function drawAITechCards(
     ctx.shadowBlur = 0;
     ctx.restore(); // end scale-in
 
-    const point   = content.points[i];
-    const bodyMidY = cy0 + CARD_H / 2;
-
     // ── Label (大标题 — YELLOW) ────────────────────────────────────────────
     ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 28;
     ctx.font = `900 ${lFsz}px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffe655';
-    ctx.fillText(point.label, dcx, bodyMidY - Math.round(76 * scale));
+    ctx.fillText(point.label, dcx, labelY);
     ctx.shadowBlur = 0;
 
-    // ── Short (副标题 — white + accent glow, wraps up to 2 lines) ─────────
-    if (point.short) {
+    // ── Short (副标题 — white + accent glow) ───────────────────────────────
+    if (shortLines.length > 0) {
       ctx.shadowColor = accent2; ctx.shadowBlur = 22;
       ctx.font = `700 ${sFsz}px "Noto Sans SC", sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.98)';
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const shortLines = wrapText(ctx, point.short, CARD_W - Math.round(20 * scale)).slice(0, 2);
-      const shortLineH = sFsz + Math.round(8 * scale);
-      const shortStartY = bodyMidY + Math.round(10 * scale);
       shortLines.forEach((line, li) => {
         ctx.fillText(line, dcx, shortStartY + li * shortLineH);
       });
@@ -163,7 +174,6 @@ export function drawAITechCards(
       const isRight = cosA > 0.35;
       const GAP     = Math.round(14 * scale);
 
-      // Total block height for vertical centering
       const blockH = descLines.length * dFsz + (descLines.length - 1) * (dLineH - dFsz);
       const blockTopY = dcy - blockH / 2;
 
@@ -171,47 +181,36 @@ export function drawAITechCards(
         const lineY = blockTopY + li * dLineH + dFsz / 2;
         const lw    = ctx.measureText(line).width;
 
-        let textX: number;
-        let align: CanvasTextAlign;
-
         if (isLeft) {
-          // Desc to the LEFT of the card, right-aligned
-          align  = 'right';
-          textX  = cx0 - GAP;
-          ctx.textAlign = align; ctx.textBaseline = 'middle';
-          // Pill bg
+          const textX = cx0 - GAP;
+          ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
           ctx.save(); ctx.globalAlpha = alpha * 0.72;
           ctx.fillStyle = 'rgba(0,4,18,0.68)';
           ctx.beginPath();
           ctx.roundRect(textX - lw - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
-          ctx.fillStyle = 'rgba(255,168,48,0.97)'; // orange for desc
+          ctx.fillStyle = 'rgba(255,168,48,0.97)';
           ctx.fillText(line, textX, lineY);
         } else if (isRight) {
-          // Desc to the RIGHT of the card, left-aligned
-          align  = 'left';
-          textX  = cx0 + CARD_W + GAP;
-          ctx.textAlign = align; ctx.textBaseline = 'middle';
-          // Pill bg
+          const textX = cx0 + CARD_W + GAP;
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
           ctx.save(); ctx.globalAlpha = alpha * 0.72;
           ctx.fillStyle = 'rgba(0,4,18,0.68)';
           ctx.beginPath();
           ctx.roundRect(textX - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
-          ctx.fillStyle = 'rgba(255,168,48,0.97)'; // orange for desc
+          ctx.fillStyle = 'rgba(255,168,48,0.97)';
           ctx.fillText(line, textX, lineY);
         } else {
-          // Desc BELOW the card (top / bottom cards), centered
           const descStartY = dcy + CARD_H / 2 + Math.round(10 * scale);
           const belowY     = descStartY + li * dLineH + dFsz / 2;
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          // Pill bg
           ctx.save(); ctx.globalAlpha = alpha * 0.72;
           ctx.fillStyle = 'rgba(0,4,18,0.68)';
           ctx.beginPath();
           ctx.roundRect(dcx - lw / 2 - 14, belowY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
-          ctx.fillStyle = 'rgba(255,168,48,0.97)'; // orange for desc
+          ctx.fillStyle = 'rgba(255,168,48,0.97)';
           ctx.fillText(line, dcx, belowY);
         }
       });
