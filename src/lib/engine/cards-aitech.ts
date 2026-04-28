@@ -31,9 +31,9 @@ export function drawAITechCards(
   const CARD_H   = Math.round(148 * scale);   // body only
   const POLY_R   = Math.round(145 * scale);
   const lFsz     = Math.round(44 * scale);    // large label
-  const sFsz     = Math.round(28 * scale);    // short subtitle
-  const dFsz     = Math.round(24 * scale);    // desc below card
-  const dLineH   = Math.round(34 * scale);    // desc line height
+  const sFsz     = Math.round(36 * scale);    // short subtitle (bigger + brighter)
+  const dFsz     = Math.round(26 * scale);    // desc beside/below card
+  const dLineH   = Math.round(38 * scale);    // desc line height
   const cr       = Math.round(14 * scale);
   const sides    = polyShape === 'star5' ? 5 : POLY_SIDES[polyShape] ?? 6;
 
@@ -133,9 +133,9 @@ export function drawAITechCards(
 
     // ── Short (小标题) ─────────────────────────────────────────────────────
     if (point.short) {
-      ctx.shadowColor = hex2rgba(accent2, 0.7); ctx.shadowBlur = 10;
-      ctx.font = `600 ${sFsz}px "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = hex2rgba(accent2, 1.0);
+      ctx.shadowColor = accent2; ctx.shadowBlur = 22;
+      ctx.font = `700 ${sFsz}px "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.98)';
       const short = point.short.length > 14 ? point.short.slice(0, 13) + '…' : point.short;
       ctx.fillText(short, dcx, bodyMidY + Math.round(26 * scale));
       ctx.shadowBlur = 0;
@@ -147,29 +147,68 @@ export function drawAITechCards(
     ctx.fillStyle = hex2rgba(accent, 0.72);
     ctx.fillText(`${String(i + 1).padStart(2, '0')}`, cx0 + CARD_W - 8, cy0 + 6);
 
-    // ── Desc: OUTSIDE card, below bottom border, up to 2 lines ───────────
+    // ── Desc: placed BESIDE the card based on card position ──────────────
     if (point.desc) {
       ctx.font = `500 ${dFsz}px "Noto Sans SC", sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const descMaxW = CARD_W + Math.round(20 * scale); // slightly wider than card
-      const descLines = wrapText(ctx, point.desc, descMaxW).slice(0, 2);
-      const descStartY = dcy + CARD_H / 2 + Math.round(10 * scale);
+      const descMaxW = CARD_W + Math.round(10 * scale);
+      const descLines = wrapText(ctx, point.desc, descMaxW).slice(0, 3);
+
+      const cosA = Math.cos(angle);
+      const isLeft  = cosA < -0.35;
+      const isRight = cosA > 0.35;
+      const GAP     = Math.round(14 * scale);
+
+      // Total block height for vertical centering
+      const blockH = descLines.length * dFsz + (descLines.length - 1) * (dLineH - dFsz);
+      const blockTopY = dcy - blockH / 2;
 
       descLines.forEach((line, li) => {
-        const lineY  = descStartY + li * dLineH + dFsz / 2;
-        const lw     = ctx.measureText(line).width;
+        const lineY = blockTopY + li * dLineH + dFsz / 2;
+        const lw    = ctx.measureText(line).width;
 
-        // Readable dark pill background
-        ctx.save(); ctx.globalAlpha = alpha * 0.72;
-        ctx.fillStyle = 'rgba(0,4,18,0.68)';
-        ctx.beginPath();
-        ctx.roundRect(dcx - lw / 2 - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
-        ctx.fill();
-        ctx.restore();
+        let textX: number;
+        let align: CanvasTextAlign;
 
-        // Bright text
-        ctx.fillStyle = 'rgba(255,255,255,0.97)';
-        ctx.fillText(line, dcx, lineY);
+        if (isLeft) {
+          // Desc to the LEFT of the card, right-aligned
+          align  = 'right';
+          textX  = cx0 - GAP;
+          ctx.textAlign = align; ctx.textBaseline = 'middle';
+          // Pill bg
+          ctx.save(); ctx.globalAlpha = alpha * 0.72;
+          ctx.fillStyle = 'rgba(0,4,18,0.68)';
+          ctx.beginPath();
+          ctx.roundRect(textX - lw - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.fill(); ctx.restore();
+          ctx.fillStyle = 'rgba(255,255,255,0.97)';
+          ctx.fillText(line, textX, lineY);
+        } else if (isRight) {
+          // Desc to the RIGHT of the card, left-aligned
+          align  = 'left';
+          textX  = cx0 + CARD_W + GAP;
+          ctx.textAlign = align; ctx.textBaseline = 'middle';
+          // Pill bg
+          ctx.save(); ctx.globalAlpha = alpha * 0.72;
+          ctx.fillStyle = 'rgba(0,4,18,0.68)';
+          ctx.beginPath();
+          ctx.roundRect(textX - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.fill(); ctx.restore();
+          ctx.fillStyle = 'rgba(255,255,255,0.97)';
+          ctx.fillText(line, textX, lineY);
+        } else {
+          // Desc BELOW the card (top / bottom cards), centered
+          const descStartY = dcy + CARD_H / 2 + Math.round(10 * scale);
+          const belowY     = descStartY + li * dLineH + dFsz / 2;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          // Pill bg
+          ctx.save(); ctx.globalAlpha = alpha * 0.72;
+          ctx.fillStyle = 'rgba(0,4,18,0.68)';
+          ctx.beginPath();
+          ctx.roundRect(dcx - lw / 2 - 14, belowY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.fill(); ctx.restore();
+          ctx.fillStyle = 'rgba(255,255,255,0.97)';
+          ctx.fillText(line, dcx, belowY);
+        }
       });
     }
 
