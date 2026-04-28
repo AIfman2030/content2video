@@ -26,9 +26,11 @@ function slideDur(nLines: number): number {
 export function subtitleTotalMs(content: GeneratedContent): number {
   let total = PRE_ROLL;
   for (const pt of content.points) {
-    const nRaw = pt.desc.split('\n').filter(l => l.trim().length > 0).length;
-    // ×2 overestimate: wrapping can double visual-line count; extra = harmless black frames
-    total += slideDur(Math.max(nRaw * 2, 1));
+    // Estimate visual lines from character count (conservative: 11 chars/line at max font 88px)
+    // This must always be >= actual visual lines so the engine doesn't stop recording early.
+    const nChars     = pt.desc.replace(/\n/g, '').trim().length;
+    const nLinesEst  = Math.max(Math.ceil(nChars / 11), 1);
+    total += slideDur(nLinesEst);
   }
   return total + POST_ROLL;
 }
