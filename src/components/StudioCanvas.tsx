@@ -25,13 +25,15 @@ export default function StudioCanvas({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<AnimEngine | null>(null);
   const syncRafRef = useRef<number>(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [initError, setInitError] = useState('');
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // ── Sync loop: polls engine elapsed to keep slider in sync ──────────────────
+  // ── Sync loop: polls engine elapsed to keep timeline slider in sync ──────────
   const startSync = useCallback(() => {
     cancelAnimationFrame(syncRafRef.current);
     const loop = () => {
@@ -47,7 +49,29 @@ export default function StudioCanvas({
     syncRafRef.current = requestAnimationFrame(loop);
   }, []);
 
-  // ── Re-create engine whenever content changes ────────────────────────────────
+  // ── Core: create engine from current props ──────────────────────────────────
+  const buildEngine = useCallback((
+    canvas: HTMLCanvasElement,
+    c: GeneratedContent,
+    sty: StyleType,
+    ci: number,
+    cho: ChineseOptions,
+    aio: AIOptions,
+    nat: NatureContent | null,
+    onDone: (eng: AnimEngine) => void,
+    onFail: (e: string) => void,
+  ) => {
+    let cancelled = false;
+    createAnimEngine(canvas, c, sty, ci, cho, aio, nat ?? undefined).then(eng => {
+      if (cancelled) { eng.stop(); return; }
+      onDone(eng);
+    }).catch(err => {
+      if (!cancelled) onFail(String(err));
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // ── Re-init when content changes (immediately) ──────────────────────────────
   useEffect(() => {
     if (!canvasRef.current || !content) return;
 
@@ -56,32 +80,63 @@ export default function StudioCanvas({
     setCurrentMs(0);
     setPlaying(false);
     cancelAnimationFrame(syncRafRef.current);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     engineRef.current?.stop();
     engineRef.current = null;
 
-    let cancelled = false;
-    createAnimEngine(
-      canvasRef.current, content, style, coverIndex,
-      chineseOptions, aiOptions, natureContent ?? undefined,
-    ).then(eng => {
-      if (cancelled) { eng.stop(); return; }
-      engineRef.current = eng;
-      setTotalMs(eng.getTotalMs());
-      setIsReady(true);
-      eng.start();
-      setPlaying(true);
-      startSync();
-    }).catch(err => {
-      if (!cancelled) setInitError(String(err));
-    });
-
-    return () => {
-      cancelled = true;
-      engineRef.current?.stop();
-      cancelAnimationFrame(syncRafRef.current);
-    };
+    const cancel = buildEngine(
+      canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent,
+      (eng) => {
+        engineRef.current = eng;
+        setTotalMs(eng.getTotalMs());
+        setIsReady(true);
+        setRefreshing(false);
+        eng.start();
+        setPlaying(true);
+        startSync();
+      },
+      (err) => { setInitError(err); setRefreshing(false); },
+    );
+    return cancel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [content]);
+
+  // ── Re-init (debounced 400ms) when style options / coverIndex change ─────────
+  useEffect(() => {
+    if (!canvasRef.current || !content) return;
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setRefreshing(true);
+
+    debounceRef.current = setTimeout(() => {
+      const canvas = canvasRef.current;
+      if (!canvas || !content) return;
+
+      cancelAnimationFrame(syncRafRef.current);
+      engineRef.current?.stop();
+      engineRef.current = null;
+
+      buildEngine(
+        canvas, content, style, coverIndex, chineseOptions, aiOptions, natureContent,
+        (eng) => {
+          engineRef.current = eng;
+          setTotalMs(eng.getTotalMs());
+          setIsReady(true);
+          setRefreshing(false);
+          setCurrentMs(0);
+          eng.start();
+          setPlaying(true);
+          startSync();
+        },
+        (err) => { setInitError(err); setRefreshing(false); },
+      );
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverIndex, chineseOptions, aiOptions, style]);
 
   // ── Play / Pause ────────────────────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {
@@ -92,11 +147,8 @@ export default function StudioCanvas({
       setPlaying(false);
       cancelAnimationFrame(syncRafRef.current);
     } else {
-      if (eng.getElapsed() >= eng.getTotalMs() - 100) {
-        eng.restart();
-      } else {
-        eng.start();
-      }
+      if (eng.getElapsed() >= eng.getTotalMs() - 100) eng.restart();
+      else eng.start();
       setPlaying(true);
       startSync();
     }
@@ -126,14 +178,12 @@ export default function StudioCanvas({
   return (
     <div className="flex flex-col items-center gap-4 w-full h-full">
 
-      {/* ── Canvas area ── */}
+      {/* ── Canvas area ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center w-full min-h-0">
         {!content ? (
-          /* Placeholder when no content */
           <div
             className="flex flex-col items-center justify-center gap-3 rounded-2xl"
             style={{
-              // Portrait placeholder that matches canvas aspect
               height: 'min(100%, calc(100vh - 200px))',
               aspectRatio: `${CW} / ${CH}`,
               maxWidth: '100%',
@@ -152,7 +202,6 @@ export default function StudioCanvas({
             </p>
           </div>
         ) : (
-          /* Canvas wrapper — portrait, fills available height */
           <div
             style={{
               position: 'relative',
@@ -164,14 +213,16 @@ export default function StudioCanvas({
               boxShadow: '0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.06)',
             }}
           >
-            {/* Loading overlay */}
-            {!isReady && !initError && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80 z-10">
+            {/* Loading / refreshing overlay */}
+            {(!isReady || refreshing) && !initError && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 z-10"
+                style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
                 <Loader2 size={22} className="animate-spin" style={{ color: accent }} />
-                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>加载动画资源…</span>
+                <span className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                  {refreshing ? '更新预览…' : '加载动画资源…'}
+                </span>
               </div>
             )}
-            {/* Error overlay */}
             {initError && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10 p-4">
                 <span className="text-xs text-red-400 text-center">{initError}</span>
@@ -187,31 +238,24 @@ export default function StudioCanvas({
         )}
       </div>
 
-      {/* ── Timeline + playback controls (shown once content loaded) ── */}
+      {/* ── Controls ─────────────────────────────────────────────────────────── */}
       {content && (
         <div className="w-full max-w-sm space-y-2">
           {/* Progress bar + scrubber */}
           <div className="space-y-1">
             <div className="relative h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.1)' }}>
-              {/* Filled bar */}
               <div
                 className="absolute left-0 top-0 h-full rounded-full pointer-events-none"
                 style={{ width: `${progress * 100}%`, background: `linear-gradient(90deg, ${accent}bb, ${accent})` }}
               />
-              {/* Transparent range input on top */}
               <input
-                type="range"
-                min={0}
-                max={totalMs || 1}
-                step={50}
-                value={currentMs}
+                type="range" min={0} max={totalMs || 1} step={50} value={currentMs}
                 onChange={handleSeekChange}
-                disabled={!isReady}
+                disabled={!isReady || refreshing}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-default"
                 style={{ margin: 0 }}
               />
             </div>
-            {/* Time labels */}
             <div className="flex justify-between text-[10px] tabular-nums" style={{ color: 'rgba(255,255,255,0.3)' }}>
               <span>{fmtMs(currentMs)}</span>
               <span>{fmtMs(totalMs)}</span>
@@ -220,30 +264,17 @@ export default function StudioCanvas({
 
           {/* Buttons */}
           <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={handleRestart}
-              disabled={!isReady}
-              title="从头播放"
+            <button onClick={handleRestart} disabled={!isReady || refreshing} title="从头播放"
               className="flex items-center justify-center w-8 h-8 rounded-full transition-all hover:bg-white/10 disabled:opacity-30"
-              style={{ border: '1px solid rgba(255,255,255,0.1)' }}
-            >
+              style={{ border: '1px solid rgba(255,255,255,0.1)' }}>
               <RotateCcw size={13} style={{ color: 'rgba(255,255,255,0.5)' }} />
             </button>
-
-            <button
-              onClick={handlePlayPause}
-              disabled={!isReady}
-              title={playing ? '暂停' : '播放'}
+            <button onClick={handlePlayPause} disabled={!isReady || refreshing} title={playing ? '暂停' : '播放'}
               className="flex items-center justify-center w-10 h-10 rounded-full transition-all hover:scale-105 active:scale-95 disabled:opacity-30"
-              style={{
-                background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
-                boxShadow: `0 4px 16px ${accent}55`,
-              }}
-            >
+              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)`, boxShadow: `0 4px 16px ${accent}55` }}>
               {playing
                 ? <Pause size={15} className="text-white" />
-                : <Play size={15} className="text-white ml-0.5" />
-              }
+                : <Play  size={15} className="text-white ml-0.5" />}
             </button>
           </div>
         </div>

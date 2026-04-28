@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Film, Key, Video } from 'lucide-react';
-import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, GeneratorConfig } from '../types/video';
+import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
+import StyleConfigPanel from '../components/StyleConfigPanel';
 import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
 import StudioCanvas from '../components/StudioCanvas';
@@ -38,14 +39,12 @@ function parseSubtitleContent(text: string): GeneratedContent {
     for (const item of items) groups.push([item]);
   }
 
-  const points = groups.map((lines, i) => ({
-    label:     `${i + 1}`,
-    short:     '',
-    desc:      lines.join('\n'),
-    formatted: lines.join(' '),
-  }));
-
-  return { title: '字幕视频', points };
+  return {
+    title: '字幕视频',
+    points: groups.map((lines, i) => ({
+      label: `${i + 1}`, short: '', desc: lines.join('\n'), formatted: lines.join(' '),
+    })),
+  };
 }
 
 const BG_BY_STYLE: Record<StyleType, string> = {
@@ -70,38 +69,39 @@ export default function Index() {
   const [style, setStyle] = useState<StyleType>('chinese');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [config, setConfig] = useState<GeneratorConfig | null>(null);
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [natureContent, setNatureContent] = useState<NatureContent | null>(null);
   const [showRecorder, setShowRecorder] = useState(false);
   const [apiKeyOpen, setApiKeyOpen] = useState(false);
-  // Forwarded from ContentForm so StudioCanvas gets the latest options even before generate
-  const [liveChineseOptions, setLiveChineseOptions] = useState<ChineseOptions>({
+
+  // ── Live config state (lifted from ContentForm) ───────────────────────────
+  const [coverIndex, setCoverIndex] = useState(0);
+  const [chineseOptions, setChineseOptions] = useState<ChineseOptions>({
     colorScheme: 'cinnabar', borderWidth: 2, lineWidth: 2, animMode: 'single',
   });
-  const [liveCoverIndex, setLiveCoverIndex] = useState(0);
-  const [liveAiOptions, setLiveAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
+  const [aiOptions, setAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
 
   const accent = ACCENT_BY_STYLE[style];
   const bg = BG_BY_STYLE[style];
 
-  const handleGenerate = async (
-    text: string,
-    coverIndex: number,
-    chineseOptions: ChineseOptions,
-    aiOptions: AIOptions,
-  ) => {
+  // ── When style changes, reset content + config ───────────────────────────
+  const handleStyleChange = (s: StyleType) => {
+    setStyle(s);
+    setContent(null);
+    setNatureContent(null);
+    setError('');
+    setCoverIndex(0);
+  };
+
+  // ── Generate ─────────────────────────────────────────────────────────────
+  const handleGenerate = async (text: string) => {
     setError('');
     setIsLoading(true);
-    setLiveCoverIndex(coverIndex);
-    setLiveChineseOptions(chineseOptions);
-    setLiveAiOptions(aiOptions);
     try {
       if (style === 'subtitle') {
         const result = parseSubtitleContent(text);
         setContent(result);
         setNatureContent(null);
-        setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
       } else if (style === 'translation') {
         const englishText = await translateSentence(text.trim());
         const result: GeneratedContent = {
@@ -110,69 +110,53 @@ export default function Index() {
         };
         setContent(result);
         setNatureContent(null);
-        setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
       } else if (style === 'nature') {
         const nc = await extractNatureContent(text);
         setNatureContent(nc);
         setContent({ title: nc.title, points: [] });
-        setConfig({ style, coverIndex, text, chineseOptions, aiOptions, natureContent: nc });
       } else {
         const result = await extractContent(text);
         setContent(result);
         setNatureContent(null);
-        setConfig({ style, coverIndex, text, chineseOptions, aiOptions });
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
-      if (msg === 'NO_API_KEY') {
-        setApiKeyOpen(true);
-      } else {
-        setError(msg);
-      }
+      if (msg === 'NO_API_KEY') setApiKeyOpen(true);
+      else setError(msg);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleCloseRecorder = () => setShowRecorder(false);
-
   return (
     <div className="flex flex-col h-screen overflow-hidden transition-all duration-700" style={{ background: bg }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="flex-shrink-0 border-b px-5 py-3 flex items-center justify-between gap-4" style={{ borderColor: 'rgba(255,255,255,0.07)' }}>
+      <header
+        className="flex-shrink-0 flex items-center justify-between gap-4 px-5 py-3 border-b"
+        style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+      >
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg" style={{ background: `${accent}22`, border: `1px solid ${accent}50` }}>
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg"
+            style={{ background: `${accent}22`, border: `1px solid ${accent}50` }}>
             <Film size={14} style={{ color: accent }} />
           </div>
           <span className="text-sm font-bold text-white">小福 · 视频生成器</span>
         </div>
-
         <div className="flex items-center gap-2">
-          {/* Record button */}
-          {content && config && (
+          {content && (
             <button
               onClick={() => setShowRecorder(true)}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
-              style={{
-                background: `linear-gradient(135deg, ${accent}, ${accent}cc)`,
-                color: '#fff',
-                boxShadow: `0 2px 12px ${accent}55`,
-              }}
+              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}cc)`, color: '#fff', boxShadow: `0 2px 12px ${accent}55` }}
             >
-              <Video size={12} />
-              录制视频
+              <Video size={12} />录制视频
             </button>
           )}
-
-          {/* API Key button */}
           <button
             onClick={() => setApiKeyOpen(true)}
             className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-white/20"
-            style={{
-              borderColor: 'rgba(255,255,255,0.1)',
-              color: getStoredApiKey() ? accent : 'rgba(255,255,255,0.4)',
-            }}
+            style={{ borderColor: 'rgba(255,255,255,0.1)', color: getStoredApiKey() ? accent : 'rgba(255,255,255,0.4)' }}
           >
             <Key size={11} />
             {getStoredApiKey() ? 'API Key ✓' : '设置 API Key'}
@@ -183,50 +167,65 @@ export default function Index() {
       {/* ── Studio Body ─────────────────────────────────────────────────────── */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
 
-        {/* LEFT: Config Panel */}
+        {/* LEFT: Config Panel (scrollable) */}
         <aside
           className="flex-shrink-0 overflow-y-auto border-r"
-          style={{
-            width: 360,
-            borderColor: 'rgba(255,255,255,0.07)',
-            background: 'rgba(0,0,0,0.25)',
-          }}
+          style={{ width: 360, borderColor: 'rgba(255,255,255,0.07)', background: 'rgba(0,0,0,0.25)' }}
         >
-          <div className="p-4 space-y-4">
-            {/* Section: Style */}
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                选择风格
-              </p>
-              <StyleSelector selected={style} onChange={s => { setStyle(s); setContent(null); setNatureContent(null); setConfig(null); }} compact />
-            </div>
+          <div className="p-4 space-y-5">
 
-            {/* Divider */}
-            <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+            {/* ① 风格选择 */}
+            <section className="space-y-2">
+              <SectionTitle>选择风格</SectionTitle>
+              <StyleSelector selected={style} onChange={handleStyleChange} compact />
+            </section>
 
-            {/* Section: Content */}
-            <div className="space-y-2">
-              <p className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.3)' }}>
-                配置内容
-              </p>
+            <Divider />
+
+            {/* ② 风格配置（实时预览） */}
+            <section className="space-y-2">
+              <SectionTitle>
+                风格配置
+                <span className="ml-1.5 text-[9px] font-normal px-1.5 py-0.5 rounded-full" style={{ background: `${accent}22`, color: accent }}>
+                  实时
+                </span>
+              </SectionTitle>
+              <StyleConfigPanel
+                style={style}
+                accent={accent}
+                coverIndex={coverIndex}
+                onCoverIndexChange={setCoverIndex}
+                chineseOptions={chineseOptions}
+                onChineseOptionsChange={setChineseOptions}
+                aiOptions={aiOptions}
+                onAiOptionsChange={setAiOptions}
+              />
+            </section>
+
+            <Divider />
+
+            {/* ③ 内容输入 + 生成 */}
+            <section className="space-y-2">
+              <SectionTitle>内容配置</SectionTitle>
               <ContentForm
                 style={style}
                 onGenerate={handleGenerate}
                 isLoading={isLoading}
                 error={error}
               />
-            </div>
+            </section>
+
           </div>
         </aside>
 
-        {/* RIGHT: Preview Panel */}
+        {/* RIGHT: Live Preview */}
         <main className="flex-1 min-w-0 flex flex-col items-center justify-center p-6 overflow-hidden">
           <StudioCanvas
             content={content}
             style={style}
-            coverIndex={liveCoverIndex}
-            chineseOptions={liveChineseOptions}
-            aiOptions={liveAiOptions}
+            coverIndex={coverIndex}
+            chineseOptions={chineseOptions}
+            aiOptions={aiOptions}
             natureContent={natureContent}
             accent={accent}
           />
@@ -234,15 +233,15 @@ export default function Index() {
       </div>
 
       {/* ── Full-screen Recording Overlay ───────────────────────────────────── */}
-      {showRecorder && content && config && (
+      {showRecorder && content && (
         <VideoGenerator
           content={content}
-          style={config.style}
-          coverIndex={config.coverIndex}
-          chineseOptions={config.chineseOptions}
-          aiOptions={config.aiOptions}
-          natureContent={config.natureContent}
-          onClose={handleCloseRecorder}
+          style={style}
+          coverIndex={coverIndex}
+          chineseOptions={chineseOptions}
+          aiOptions={aiOptions}
+          natureContent={natureContent}
+          onClose={() => setShowRecorder(false)}
         />
       )}
 
@@ -254,4 +253,19 @@ export default function Index() {
       />
     </div>
   );
+}
+
+// ─── Micro components ──────────────────────────────────────────────────────────
+function SectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <p className="text-[11px] font-semibold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        {children}
+      </p>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />;
 }

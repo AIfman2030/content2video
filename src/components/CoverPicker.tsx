@@ -11,10 +11,12 @@ interface Props {
 }
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
-  chinese: '#e74c3c',
-  city: '#f5d87a',
-  aitech: '#a855f7',
-  nature: '#4ade80',
+  chinese:     '#e74c3c',
+  city:        '#f5d87a',
+  aitech:      '#a855f7',
+  nature:      '#4ade80',
+  subtitle:    '#ffd700',
+  translation: '#ffe44d',
 };
 
 const ShapeThumbnail = memo(function ShapeThumbnail({
