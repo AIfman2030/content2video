@@ -3,7 +3,7 @@
  * 10 geometric patterns cycle through cards (idx % 10).
  */
 import type { GeneratedContent } from '../../types/video';
-import { CH, clamp, easeOutCubic, easeOutBack, hex2rgba, wrapText, T } from './helpers';
+import { CH, clamp, easeOutCubic, easeOutBack, wrapText, T } from './helpers';
 
 // ── Timing ───────────────────────────────────────────────────────────────────
 const CITY_CARD_DUR  = 4400;
@@ -99,8 +99,8 @@ export function drawCityCards(
   ctx: CanvasRenderingContext2D,
   elapsed: number,
   content: GeneratedContent,
-  accent: string,
-  accent2: string,
+  _accent: string,
+  _accent2: string,
   _shapeImg: HTMLImageElement,
   _coverIndex = 0,
 ): void {
@@ -118,7 +118,7 @@ export function drawCityCards(
     );
     const alpha = inA * outA;
     if (alpha < 0.01) continue;
-    drawCard(ctx, te, alpha, i, content, accent, accent2, elapsed);
+    drawCard(ctx, te, alpha, i, content, elapsed);
   }
 }
 
@@ -129,8 +129,6 @@ function drawCard(
   alpha: number,
   idx: number,
   content: GeneratedContent,
-  accent: string,
-  accent2: string,
   elapsed: number,
 ): void {
   const point     = content.points[idx];
@@ -150,8 +148,8 @@ function drawCard(
   {
     const dg = ctx.createLinearGradient(960, 70, 960, CH - 70);
     dg.addColorStop(0,    'rgba(0,0,0,0)');
-    dg.addColorStop(0.25, hex2rgba(accent, 0.28));
-    dg.addColorStop(0.75, hex2rgba(accent, 0.28));
+    dg.addColorStop(0.25, 'rgba(255,136,0,0.32)');
+    dg.addColorStop(0.75, 'rgba(255,136,0,0.32)');
     dg.addColorStop(1,    'rgba(0,0,0,0)');
     ctx.strokeStyle = dg; ctx.lineWidth = 1; ctx.setLineDash([4, 10]);
     ctx.beginPath(); ctx.moveTo(960, 70); ctx.lineTo(960, CH - 70); ctx.stroke();
@@ -159,11 +157,12 @@ function drawCard(
   }
 
   // ── Geometric pattern layers (outside → inside) ───────────────────────────
+  // ── Geometric pattern layers — ORANGE / RED contrast colors ─────────────
   const COLORS: string[] = [
-    accent,
-    accent2,
-    'rgba(255,255,255,0.88)',
-    hex2rgba(accent2, 0.60),
+    '#ff8800',                    // layer 0 → orange
+    '#e52222',                    // layer 1 → red
+    'rgba(255,200,100,0.88)',     // layer 2 → warm light orange
+    'rgba(229,34,34,0.50)',       // layer 3 → dim red
   ];
 
   LAYER_SIZES.forEach((sz, li) => {
@@ -192,9 +191,9 @@ function drawCard(
     const badgeT = clamp((te - LAYER_DELAYS[3] - LAYER_ENTER) / 400, 0, 1);
     if (badgeT > 0) {
       ctx.save(); ctx.globalAlpha *= badgeT;
-      ctx.font = `600 22px "Noto Sans SC", sans-serif`;
+      ctx.font = `600 44px "Noto Sans SC", sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = hex2rgba(accent, 0.60);
+      ctx.fillStyle = 'rgba(255,136,0,0.70)';
       ctx.fillText(patLabel, SQ_CX, SQ_CY + 268);
       ctx.restore();
     }
@@ -208,21 +207,21 @@ function drawCard(
   const visText   = fullLabel.slice(0, visChars);
   const typeDone  = visChars >= fullLabel.length;
 
-  const labelY = CH * 0.40;
-  const shortY = CH * 0.545;
-  const descY  = CH * 0.675;
+  const labelY = CH * 0.38;
+  const shortY = CH * 0.58;
+  const descY  = CH * 0.74;
 
-  // Label — typewriter, large, accent
-  ctx.font = `900 88px "Noto Sans SC", "PingFang SC", sans-serif`;
+  // Label — typewriter, large, ORANGE
+  ctx.font = `900 176px "Noto Sans SC", "PingFang SC", sans-serif`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.shadowColor = hex2rgba(accent, 0.85); ctx.shadowBlur = 28;
-  ctx.fillStyle = accent;
+  ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 28;
+  ctx.fillStyle = '#ff8800';
   ctx.fillText(visText, TEXT_X, labelY);
 
   // Cursor
   if (!typeDone && Math.floor(elapsed / 500) % 2 === 0) {
     const tw = ctx.measureText(visText).width;
-    ctx.shadowBlur = 0; ctx.font = `300 88px monospace`;
+    ctx.shadowBlur = 0; ctx.font = `300 176px monospace`;
     ctx.fillText('|', TEXT_X + tw + 6, labelY);
   }
   ctx.shadowBlur = 0;
@@ -232,12 +231,12 @@ function drawCard(
     const fullW = Math.min(ctx.measureText(fullLabel).width, MAX_TW);
     const lineA = clamp((visChars - 2) / Math.max(1, fullLabel.length - 2), 0, 1);
     const lg    = ctx.createLinearGradient(TEXT_X, 0, TEXT_X + fullW, 0);
-    lg.addColorStop(0, hex2rgba(accent, 0.9));
-    lg.addColorStop(0.75, hex2rgba(accent, 0.55));
+    lg.addColorStop(0, 'rgba(255,136,0,0.9)');
+    lg.addColorStop(0.75, 'rgba(255,136,0,0.55)');
     lg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.strokeStyle = lg; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = lg; ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(TEXT_X, labelY + 56); ctx.lineTo(TEXT_X + fullW * lineA, labelY + 56);
+    ctx.moveTo(TEXT_X, labelY + 106); ctx.lineTo(TEXT_X + fullW * lineA, labelY + 106);
     ctx.stroke();
   }
 
@@ -246,7 +245,7 @@ function drawCard(
   const shortAlpha = clamp((te - shortDelay) / 480, 0, 1);
   if (shortAlpha > 0 && point.short) {
     ctx.save(); ctx.globalAlpha *= shortAlpha;
-    ctx.font = `500 52px "Noto Sans SC", sans-serif`;
+    ctx.font = `500 104px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     ctx.shadowColor = 'rgba(255,255,255,0.2)'; ctx.shadowBlur = 6;
@@ -263,11 +262,11 @@ function drawCard(
   const descAlpha  = clamp((te - descDelay) / 480, 0, 1);
   if (descAlpha > 0 && point.desc) {
     ctx.save(); ctx.globalAlpha *= descAlpha;
-    ctx.font = `400 32px "Noto Sans SC", sans-serif`;
+    ctx.font = `400 64px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(255,255,255,0.80)';
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
     const descLines = wrapText(ctx, point.desc, MAX_TW).slice(0, 2);
-    descLines.forEach((line, li) => ctx.fillText(line, TEXT_X, descY + li * 44));
+    descLines.forEach((line, li) => ctx.fillText(line, TEXT_X, descY + li * 80));
     ctx.restore();
   }
 
