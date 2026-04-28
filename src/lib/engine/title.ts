@@ -169,7 +169,7 @@ export function drawTitle(
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillStyle = hex2rgba(accent, tagAlpha * 0.88);
       ctx.fillText(
-        style === 'chinese' ? '✦ 核心解析 ✦' : style === 'city' ? '▸ INSIGHT REPORT' : '▸ NATURE INSIGHT',
+        style === 'chinese' ? '✦  ✦' : style === 'city' ? '▸ INSIGHT REPORT' : '▸ NATURE INSIGHT',
         CW / 2, tagY,
       );
     }
