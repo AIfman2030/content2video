@@ -28,11 +28,11 @@ export function drawAITechCards(
 
   // Card body only (no footer — desc goes OUTSIDE below card)
   const CARD_W   = Math.round(340 * scale);
-  const CARD_H   = Math.round(210 * scale);   // taller to fit bigger subtitle
+  const CARD_H   = Math.round(260 * scale);   // taller to fit doubled label
   const POLY_R   = Math.round(145 * scale);
-  const lFsz     = Math.round(44 * scale);    // large label (title — size unchanged, color → yellow)
-  const sFsz     = Math.round(48 * scale);    // short subtitle (bigger, was 36)
-  const dFsz     = Math.round(52 * scale);    // desc beside/below card (doubled from 26)
+  const lFsz     = Math.round(88 * scale);    // large label (doubled, yellow)
+  const sFsz     = Math.round(48 * scale);    // short subtitle
+  const dFsz     = Math.round(52 * scale);    // desc beside/below card
   const dLineH   = Math.round(72 * scale);    // desc line height
   const cr       = Math.round(14 * scale);
   const sides    = polyShape === 'star5' ? 5 : POLY_SIDES[polyShape] ?? 6;
@@ -128,7 +128,7 @@ export function drawAITechCards(
     ctx.font = `900 ${lFsz}px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffe655';
-    ctx.fillText(point.label, dcx, bodyMidY - Math.round(56 * scale));
+    ctx.fillText(point.label, dcx, bodyMidY - Math.round(76 * scale));
     ctx.shadowBlur = 0;
 
     // ── Short (副标题 — white + accent glow, wraps up to 2 lines) ─────────
