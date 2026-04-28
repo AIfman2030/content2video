@@ -17,6 +17,10 @@ import {
   drawSubtitle, subtitleTotalMs,
   initSubtitleParticles, type SubParticle,
 } from './engine/subtitle';
+import {
+  drawTranslation, TR_TOTAL_MS,
+  initTrParticles, type TrParticle,
+} from './engine/translation';
 
 export { CW, CH };
 
@@ -39,14 +43,15 @@ export async function createAnimEngine(
   onComplete?: () => void,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
-  const isNature   = style === 'nature';
-  const isSubtitle = style === 'subtitle';
+  const isNature      = style === 'nature';
+  const isSubtitle    = style === 'subtitle';
+  const isTranslation = style === 'translation';
 
   const rand = seededRandom(coverIndex * 31 + content.points.length * 17 + 7);
 
-  // Shape image not needed for nature or subtitle styles
+  // Shape image not needed for nature, subtitle, or translation styles
   let shapeImg: HTMLImageElement | null = null;
-  if (!isNature && !isSubtitle) {
+  if (!isNature && !isSubtitle && !isTranslation) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     const shapeId = shapeList[coverIndex % shapeList.length]?.id ?? shapeList[0].id;
@@ -60,6 +65,8 @@ export async function createAnimEngine(
   const aiEffects      = style === 'aitech'    ? initAIEffects(rand)      : null;
   const subtitlePs: SubParticle[] | null = isSubtitle
     ? initSubtitleParticles(rand) : null;
+  const trPs: TrParticle[] | null = isTranslation
+    ? initTrParticles(rand) : null;
 
   const ctx = canvas.getContext('2d')!;
   const total = isNature
@@ -70,9 +77,11 @@ export async function createAnimEngine(
       )
     : isSubtitle
       ? subtitleTotalMs(content)
-      : style === 'city'
-        ? cityTotalMs(content.points.length)
-        : totalDuration(content.points.length);
+      : isTranslation
+        ? TR_TOTAL_MS
+        : style === 'city'
+          ? cityTotalMs(content.points.length)
+          : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
   let completionCallback = onComplete;
@@ -83,6 +92,12 @@ export async function createAnimEngine(
     // ── Subtitle: fully self-contained pipeline ──
     if (isSubtitle && subtitlePs) {
       drawSubtitle(ctx, elapsed, content, subtitlePs);
+      return;
+    }
+
+    // ── Translation: fully self-contained pipeline ──
+    if (isTranslation && trPs) {
+      drawTranslation(ctx, elapsed, content, trPs);
       return;
     }
 

@@ -29,11 +29,12 @@ const POLY_SHAPE_OPTIONS: { id: PolyShape; name: string; sides: number }[] = [
 ];
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
-  chinese:  '#e74c3c',
-  city:     '#f5d87a',
-  aitech:   '#a855f7',
-  nature:   '#4ade80',
-  subtitle: '#ffd700',
+  chinese:     '#e74c3c',
+  city:        '#f5d87a',
+  aitech:      '#a855f7',
+  nature:      '#4ade80',
+  subtitle:    '#ffd700',
+  translation: '#ffe44d',
 };
 
 const PLACEHOLDER = `粘贴你的文章内容，或者直接输入任何文字…
@@ -58,6 +59,11 @@ const SUBTITLE_PLACEHOLDER = `直接输入字幕内容，每个序号是一组�
 4. 数据驱动创作
 分析每条视频，找出爆款规律`;
 
+const TRANSLATION_PLACEHOLDER = `输入一句中文话语，自动生成英文翻译版视频
+
+示例：
+当着外人的面贬低你，实际上是在测试你的底线。`;
+
 export default function ContentForm({ style, onGenerate, isLoading, error }: Props) {
   const [text, setText] = useState('');
   const [coverIndex, setCoverIndex] = useState(0);
@@ -72,7 +78,8 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
 
   const accent = ACCENT_BY_STYLE[style];
   const charCount = text.length;
-  const isValid = charCount >= 20 && charCount <= 8000;
+  const minChars = style === 'translation' ? 4 : 20;
+  const isValid = charCount >= minChars && charCount <= 8000;
 
   const handleSubmit = async () => {
     if (!isValid || isLoading) return;
@@ -84,13 +91,17 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
       {/* Text area */}
       <div className="space-y-2">
         <label className="text-sm font-medium text-white/70">
-          {style === 'subtitle' ? '输入字幕内容（按序号分组）' : '粘贴文章内容'}
+          {style === 'subtitle' ? '输入字幕内容（按序号分组）'
+            : style === 'translation' ? '输入一句中文话语'
+            : '粘贴文章内容'}
         </label>
         <div className="relative">
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
-            placeholder={style === 'subtitle' ? SUBTITLE_PLACEHOLDER : PLACEHOLDER}
+            placeholder={style === 'subtitle' ? SUBTITLE_PLACEHOLDER
+              : style === 'translation' ? TRANSLATION_PLACEHOLDER
+              : PLACEHOLDER}
             rows={8}
             className="w-full resize-none rounded-xl bg-white/5 border border-white/10 px-4 py-3 text-sm text-white/90 placeholder-white/25 outline-none transition-colors focus:border-white/30 focus:bg-white/8"
             style={{ fontFamily: '"Noto Sans SC", "PingFang SC", sans-serif', lineHeight: 1.7 }}
@@ -108,8 +119,8 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
         )}
       </div>
 
-      {/* Cover picker — not used for subtitle style */}
-      {style !== 'subtitle' && (
+      {/* Cover picker — not used for subtitle or translation style */}
+      {style !== 'subtitle' && style !== 'translation' && (
         <div
           className="rounded-xl border border-white/10 p-4"
           style={{ background: 'rgba(255,255,255,0.03)' }}
@@ -279,12 +290,16 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
         {isLoading ? (
           <>
             <Loader2 size={18} className="animate-spin" />
-            {style === 'subtitle' ? '生成中…' : 'AI 提炼中…'}
+            {style === 'subtitle' ? '生成中…'
+              : style === 'translation' ? '翻译中…'
+              : 'AI 提炼中…'}
           </>
         ) : (
           <>
             <Sparkles size={18} />
-            {style === 'subtitle' ? '生成字幕视频' : '生成并录制视频'}
+            {style === 'subtitle' ? '生成字幕视频'
+              : style === 'translation' ? '生成翻译视频'
+              : '生成并录制视频'}
           </>
         )}
       </button>

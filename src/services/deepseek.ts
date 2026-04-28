@@ -120,3 +120,10 @@ export async function extractNatureContent(text: string): Promise<NatureContent>
   }
   return parsed;
 }
+
+const TRANSLATION_PROMPT = `将用户提供的中文句子翻译成自然流畅的英文。只返回英文翻译，不要标注、不要引号、不要任何其他内容。`;
+
+export async function translateSentence(text: string): Promise<string> {
+  const raw = await callDeepSeek(TRANSLATION_PROMPT, text, 250);
+  return raw.trim().replace(/^["'\s]+|["'\s]+$/g, '');
+}

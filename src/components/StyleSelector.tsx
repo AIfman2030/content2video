@@ -46,6 +46,14 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
     bg: 'linear-gradient(135deg,#020204,#0a0a14)',
     accent: '#ffd700',
   },
+  {
+    key: 'translation',
+    name: '中英翻译',
+    desc: '双语字幕 · 暖调红韵',
+    tag: '收到扣1系列',
+    bg: 'linear-gradient(135deg,#190404,#631414)',
+    accent: '#ffe44d',
+  },
 ];
 
 export default function StyleSelector({ selected, onChange }: Props) {
