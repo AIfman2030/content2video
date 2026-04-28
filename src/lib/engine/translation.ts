@@ -224,7 +224,7 @@ function drawEnding(ctx: CanvasRenderingContext2D, elapsed: number) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.shadowColor = '#c83030'; ctx.shadowBlur = 50;
     ctx.fillStyle = '#7a1a1a';
-    ctx.fillText('再', 0, 0);
+    ctx.fillText('欢迎', 0, 0);
     ctx.shadowBlur = 0;
     ctx.restore();
   }
@@ -241,7 +241,7 @@ function drawEnding(ctx: CanvasRenderingContext2D, elapsed: number) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.shadowColor = '#c83030'; ctx.shadowBlur = 50;
     ctx.fillStyle = '#7a1a1a';
-    ctx.fillText('来', 0, 0);
+    ctx.fillText('再来', 0, 0);
     ctx.shadowBlur = 0;
     ctx.restore();
   }
