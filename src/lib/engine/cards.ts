@@ -84,10 +84,10 @@ export function drawCards(
     ctx.shadowColor = hex2rgba(accent, 0.7); ctx.shadowBlur = 20;
     ctx.font = `800 68px "Noto Sans SC", sans-serif`; ctx.textAlign = 'left';
     ctx.fillStyle = accent; ctx.fillText(point.label, textX, 82); ctx.shadowBlur = 0;
-    ctx.font = `500 36px "Noto Sans SC", sans-serif`; ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    ctx.font = `600 36px "Noto Sans SC", sans-serif`; ctx.fillStyle = accent2;
     ctx.fillText(point.short || '', textX, 138);
-    ctx.font = `400 27px "Noto Sans SC", sans-serif`; ctx.fillStyle = 'rgba(255,255,255,0.72)';
-    wrapText(ctx, point.desc || '', textAvailW).slice(0, 2).forEach((l, li) => ctx.fillText(l, textX, 184 + li * 34));
+    ctx.font = `400 32px "Noto Sans SC", sans-serif`; ctx.fillStyle = 'rgba(255,255,255,0.92)';
+    wrapText(ctx, point.desc || '', textAvailW).slice(0, 2).forEach((l, li) => ctx.fillText(l, textX, 186 + li * 38));
 
     // Rotating diamond
     const rdX = cardW - 55, rdY = cardH / 2;
