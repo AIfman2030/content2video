@@ -163,26 +163,29 @@ export function drawAITechCards(
     ctx.fillStyle = hex2rgba(accent, 0.72);
     ctx.fillText(`${String(i + 1).padStart(2, '0')}`, cx0 + CARD_W - 8, cy0 + 6);
 
-    // ── Desc: placed BESIDE the card based on card position ──────────────
+    // ── Desc: placed BESIDE or ABOVE/BELOW card based on position ────────
     if (point.desc) {
       ctx.font = `500 ${dFsz}px "Noto Sans SC", sans-serif`;
       const descMaxW = CARD_W + Math.round(10 * scale);
-      const descLines = wrapText(ctx, point.desc, descMaxW).slice(0, 3);
+      const descLines = wrapText(ctx, point.desc, descMaxW).slice(0, 4);
 
       const cosA = Math.cos(angle);
-      const isLeft  = cosA < -0.35;
-      const isRight = cosA > 0.35;
-      const GAP     = Math.round(14 * scale);
+      const sinA = Math.sin(angle);
+      const isLeft   = cosA < -0.35;
+      const isRight  = cosA > 0.35;
+      const isBottom = !isLeft && !isRight && sinA > 0;  // center-bottom
+      const GAP      = Math.round(14 * scale);
 
       const blockH = descLines.length * dFsz + (descLines.length - 1) * (dLineH - dFsz);
-      const blockTopY = dcy - blockH / 2;
 
       descLines.forEach((line, li) => {
-        const lineY = blockTopY + li * dLineH + dFsz / 2;
-        const lw    = ctx.measureText(line).width;
+        const lw = ctx.measureText(line).width;
 
         if (isLeft) {
           const textX = cx0 - GAP;
+          // clamp Y so text never exits canvas
+          const rawY  = dcy - blockH / 2 + li * dLineH + dFsz / 2;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(rawY, CH - dFsz / 2 - 5));
           ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
           ctx.save(); ctx.globalAlpha = alpha * 0.72;
           ctx.fillStyle = 'rgba(0,4,18,0.68)';
@@ -191,8 +194,11 @@ export function drawAITechCards(
           ctx.fill(); ctx.restore();
           ctx.fillStyle = 'rgba(255,168,48,0.97)';
           ctx.fillText(line, textX, lineY);
+
         } else if (isRight) {
           const textX = cx0 + CARD_W + GAP;
+          const rawY  = dcy - blockH / 2 + li * dLineH + dFsz / 2;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(rawY, CH - dFsz / 2 - 5));
           ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
           ctx.save(); ctx.globalAlpha = alpha * 0.72;
           ctx.fillStyle = 'rgba(0,4,18,0.68)';
@@ -201,17 +207,34 @@ export function drawAITechCards(
           ctx.fill(); ctx.restore();
           ctx.fillStyle = 'rgba(255,168,48,0.97)';
           ctx.fillText(line, textX, lineY);
-        } else {
-          const descStartY = dcy + CARD_H / 2 + Math.round(10 * scale);
-          const belowY     = descStartY + li * dLineH + dFsz / 2;
+
+        } else if (isBottom) {
+          // Card is in the lower half — put description ABOVE the card
+          const descEndY   = dcy - CARD_H / 2 - Math.round(10 * scale);
+          const belowY     = descEndY - (descLines.length - 1 - li) * dLineH - dFsz / 2;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(belowY, CH - dFsz / 2 - 5));
           ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
           ctx.save(); ctx.globalAlpha = alpha * 0.72;
           ctx.fillStyle = 'rgba(0,4,18,0.68)';
           ctx.beginPath();
-          ctx.roundRect(dcx - lw / 2 - 14, belowY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.roundRect(dcx - lw / 2 - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
           ctx.fillStyle = 'rgba(255,168,48,0.97)';
-          ctx.fillText(line, dcx, belowY);
+          ctx.fillText(line, dcx, lineY);
+
+        } else {
+          // Top center — put description BELOW the card
+          const descStartY = dcy + CARD_H / 2 + Math.round(10 * scale);
+          const rawY       = descStartY + li * dLineH + dFsz / 2;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(rawY, CH - dFsz / 2 - 5));
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.save(); ctx.globalAlpha = alpha * 0.72;
+          ctx.fillStyle = 'rgba(0,4,18,0.68)';
+          ctx.beginPath();
+          ctx.roundRect(dcx - lw / 2 - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.fill(); ctx.restore();
+          ctx.fillStyle = 'rgba(255,168,48,0.97)';
+          ctx.fillText(line, dcx, lineY);
         }
       });
     }
