@@ -27,7 +27,7 @@ export interface TrParticle {
   phaseOffset: number;
 }
 
-const FLOAT_TEXTS = ['收到', '扣1', '收到', '扣1', '收到', '扣1', '好的', '收到', '扣1', '收', '到', '扣', '1', '收到', '扣1', '好'];
+const FLOAT_TEXTS = ['收到', 'OK', '收到', 'OK', '收到', 'OK', '好的', '收到', 'OK', '收', '到', '扣', 'OK', '收到', 'OK', '好'];
 
 export function initTrParticles(rand: () => number): TrParticle[] {
   return FLOAT_TEXTS.map((text) => ({
@@ -157,7 +157,7 @@ function drawEnglishText(ctx: CanvasRenderingContext2D, elapsed: number, alpha: 
   ctx.restore();
 }
 
-// ── 收到，扣1 + floating particles ───────────────────────────────────────────
+// ── 收到，ok + floating particles ───────────────────────────────────────────
 function drawOK(
   ctx: CanvasRenderingContext2D,
   elapsed: number,
@@ -185,11 +185,11 @@ function drawOK(
     ctx.restore();
   });
 
-  // Main centered text "收到，扣1"
+  // Main centered text "收到，OK"
   ctx.save(); ctx.globalAlpha = mainA;
   // Pill background
   ctx.font = `900 88px "Noto Sans SC", sans-serif`;
-  const tw = ctx.measureText('收到，扣1').width;
+  const tw = ctx.measureText('收到，OK').width;
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath();
   ctx.roundRect(CW / 2 - tw / 2 - 24, CH * 0.862 - 54, tw + 48, 88, 12);
@@ -197,7 +197,7 @@ function drawOK(
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 28;
   ctx.fillStyle = '#ffe44d';
-  ctx.fillText('收到，扣1', CW / 2, CH * 0.875);
+  ctx.fillText('收到，OK', CW / 2, CH * 0.875);
   ctx.shadowBlur = 0;
   ctx.restore();
 }
