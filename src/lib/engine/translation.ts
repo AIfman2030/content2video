@@ -112,7 +112,7 @@ function drawPrefix(ctx: CanvasRenderingContext2D, elapsed: number, alpha: numbe
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.shadowColor = 'rgba(255,180,120,0.40)'; ctx.shadowBlur = 22;
   ctx.fillStyle = 'rgba(255,248,236,0.90)';
-  ctx.fillText('小福悟语：', 90 + dx, CH * 0.27);
+  ctx.fillText('小福to Everybody：', 90 + dx, CH * 0.27);
   ctx.shadowBlur = 0;
   ctx.restore();
 }
@@ -224,7 +224,7 @@ function drawEnding(ctx: CanvasRenderingContext2D, elapsed: number) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.shadowColor = '#c83030'; ctx.shadowBlur = 50;
     ctx.fillStyle = '#7a1a1a';
-    ctx.fillText('欢迎', 0, 0);
+    ctx.fillText('拜', 0, 0);
     ctx.shadowBlur = 0;
     ctx.restore();
   }
@@ -241,7 +241,7 @@ function drawEnding(ctx: CanvasRenderingContext2D, elapsed: number) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.shadowColor = '#c83030'; ctx.shadowBlur = 50;
     ctx.fillStyle = '#7a1a1a';
-    ctx.fillText('再来', 0, 0);
+    ctx.fillText('拜', 0, 0);
     ctx.shadowBlur = 0;
     ctx.restore();
   }
