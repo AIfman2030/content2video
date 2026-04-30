@@ -203,13 +203,129 @@ function TextInput({ label, value, onChange, placeholder }: {
   );
 }
 
-// ─── Per-style panels ──────────────────────────────────────────────────────────
+/** Numeric range slider with label + value display */
+function NumericSlider({
+  label, value, min, max, step = 1, unit = 'px', onChange,
+}: {
+  label: string; value: number; min: number; max: number; step?: number;
+  unit?: string; onChange: (v: number) => void;
+}) {
+  const pct = ((value - min) / (max - min)) * 100;
+  return (
+    <Row>
+      <div className="flex items-center justify-between">
+        <Label>{label}</Label>
+        <span className="text-[11px] mb-1.5 tabular-nums font-semibold" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          {value}{unit}
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min} max={max} step={step} value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        className="w-full h-1 rounded-full appearance-none outline-none cursor-pointer"
+        style={{
+          background: `linear-gradient(to right,rgba(255,255,255,0.7) 0%,rgba(255,255,255,0.7) ${pct}%,rgba(255,255,255,0.12) ${pct}%,rgba(255,255,255,0.12) 100%)`,
+        }}
+      />
+      <div className="flex justify-between text-[9px] mt-0.5" style={{ color: 'rgba(255,255,255,0.18)' }}>
+        <span>{min}{unit}</span>
+        <span>{max}{unit}</span>
+      </div>
+    </Row>
+  );
+}
+
+/** Optional colour picker — allows clearing to "auto/theme default" */
+function OptionalColorPicker({
+  label, value, placeholder, onChange, accent,
+}: {
+  label: string; value: string; placeholder: string;
+  onChange: (c: string) => void; accent: string;
+}) {
+  return (
+    <Row>
+      <div className="flex items-center justify-between mb-1">
+        <Label>{label}</Label>
+        {value && (
+          <button
+            onClick={() => onChange('')}
+            className="text-[10px] mb-1 transition-opacity hover:opacity-100 opacity-40"
+            style={{ color: '#fff' }}
+          >
+            ← 恢复默认
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5 items-center">
+        {/* "Auto" swatch */}
+        <button
+          onClick={() => onChange('')}
+          title={placeholder}
+          className="px-2 h-6 rounded-full text-[10px] font-medium transition-all flex-shrink-0"
+          style={{
+            background: value === '' ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)',
+            border: `1px solid ${value === '' ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.1)'}`,
+            color: value === '' ? '#fff' : 'rgba(255,255,255,0.35)',
+          }}
+        >
+          默认
+        </button>
+        {COLOR_PRESETS.map(p => {
+          const active = value === p.value;
+          return (
+            <button
+              key={p.value}
+              title={p.name}
+              onClick={() => onChange(p.value)}
+              className="relative w-6 h-6 rounded-full transition-transform hover:scale-110"
+              style={{
+                background: p.value,
+                boxShadow: active ? `0 0 0 2px ${accent}, 0 0 0 4px ${p.value}55` : '0 0 0 1px rgba(255,255,255,0.15)',
+              }}
+            >
+              {active && (
+                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold" style={{ color: '#000' }}>✓</span>
+              )}
+            </button>
+          );
+        })}
+        <label
+          className="relative w-6 h-6 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-110 overflow-hidden"
+          title="自定义颜色"
+          style={{
+            background: 'conic-gradient(#ff4444,#ffcc00,#44ff88,#44ccff,#8844ff,#ff44cc,#ff4444)',
+            boxShadow: value && !COLOR_PRESETS.some(p => p.value === value) ? `0 0 0 2px ${accent}` : '0 0 0 1px rgba(255,255,255,0.15)',
+          }}
+        >
+          <input type="color" value={value || '#ffffff'} onChange={e => onChange(e.target.value)} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+          {value && !COLOR_PRESETS.some(p => p.value === value) && (
+            <div className="absolute inset-0.5 rounded-full" style={{ background: value }} />
+          )}
+        </label>
+      </div>
+    </Row>
+  );
+}
+
+/** Thin divider with label */
+function SectionDivider({ title }: { title: string }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+      <span className="text-[9px] font-bold tracking-widest uppercase" style={{ color: 'rgba(255,255,255,0.2)' }}>{title}</span>
+      <div className="flex-1 h-px" style={{ background: 'rgba(255,255,255,0.08)' }} />
+    </div>
+  );
+}
 
 function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChange, style }: {
   options: ChineseOptions; onChange: (v: ChineseOptions) => void;
   accent: string; coverIndex: number; onCoverIndexChange: (v: number) => void;
   style: StyleType;
 }) {
+  const upd = (patch: Partial<ChineseOptions>) => onChange({ ...options, ...patch });
+
   const COLOR_SCHEMES: { value: ColorScheme; label: string }[] = [
     { value: 'cinnabar', label: '朱砂' },
     { value: 'gold',     label: '金墨' },
@@ -221,16 +337,56 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
     { value: 'single', label: '单句呈现' },
     { value: 'grid',   label: '九宫格' },
   ];
+
   return (
     <div className="space-y-4">
+      {/* ── Cover ─────────────────────────────────────────────────────────── */}
       <Row>
         <Label>封面图案</Label>
         <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
       </Row>
-      <PillSelect label="配色方案" value={options.colorScheme} onChange={cs => onChange({ ...options, colorScheme: cs as ColorScheme })} options={COLOR_SCHEMES} />
-      <StepSlider label="边框宽度" value={options.borderWidth} min={1} max={4} onChange={v => onChange({ ...options, borderWidth: v as 1|2|3|4 })} />
-      <StepSlider label="线条宽度" value={options.lineWidth}   min={1} max={4} onChange={v => onChange({ ...options, lineWidth:   v as 1|2|3|4 })} />
-      <PillSelect label="动画模式" value={options.animMode}    onChange={am => onChange({ ...options, animMode: am as AnimMode })} options={ANIM_MODES} />
+
+      {/* ── Theme & Layout ────────────────────────────────────────────────── */}
+      <SectionDivider title="主题 · 布局" />
+      <PillSelect label="配色方案" value={options.colorScheme} onChange={cs => upd({ colorScheme: cs as ColorScheme })} options={COLOR_SCHEMES} />
+      <StepSlider label="边框宽度" value={options.borderWidth} min={1} max={4} onChange={v => upd({ borderWidth: v as 1|2|3|4 })} />
+      <StepSlider label="线条宽度" value={options.lineWidth}   min={1} max={4} onChange={v => upd({ lineWidth:   v as 1|2|3|4 })} />
+      <PillSelect label="动画模式" value={options.animMode}    onChange={am => upd({ animMode: am as AnimMode })} options={ANIM_MODES} />
+
+      {/* ── Title ─────────────────────────────────────────────────────────── */}
+      <SectionDivider title="标题样式" />
+      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.35)' }}>
+        字号&nbsp;<b style={{color:'rgba(255,255,255,0.55)'}}>{options.titleFontSize ?? 68}px</b>
+        &nbsp;·&nbsp;颜色&nbsp;<b style={{color:options.titleColor||accent}}>{options.titleColor||'主题强调色（默认）'}</b>
+      </div>
+      <NumericSlider label="标题字号" value={options.titleFontSize ?? 68} min={40} max={100} onChange={v => upd({ titleFontSize: v })} />
+      <OptionalColorPicker label="标题颜色（空=强调色）" value={options.titleColor ?? ''} placeholder="跟随主题强调色" onChange={c => upd({ titleColor: c })} accent={accent} />
+
+      {/* ── Short / subtitle ──────────────────────────────────────────────── */}
+      <SectionDivider title="副标题样式" />
+      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.35)' }}>
+        字号&nbsp;<b style={{color:'rgba(255,255,255,0.55)'}}>{options.shortFontSize ?? 36}px</b>
+        &nbsp;·&nbsp;颜色&nbsp;<b style={{color:options.shortColor||'#aaffcc'}}>{options.shortColor||'主题次要色（默认）'}</b>
+      </div>
+      <NumericSlider label="副标题字号" value={options.shortFontSize ?? 36} min={20} max={60} onChange={v => upd({ shortFontSize: v })} />
+      <OptionalColorPicker label="副标题颜色（空=次要色）" value={options.shortColor ?? ''} placeholder="跟随主题次要色" onChange={c => upd({ shortColor: c })} accent={accent} />
+
+      {/* ── Desc ──────────────────────────────────────────────────────────── */}
+      <SectionDivider title="辅助说明样式" />
+      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.35)' }}>
+        字号&nbsp;<b style={{color:'rgba(255,255,255,0.55)'}}>{options.descFontSize ?? 32}px</b>
+        &nbsp;·&nbsp;颜色&nbsp;<b style={{color:options.descColor||'rgba(255,255,255,0.92)'}}>{options.descColor||'近白色 0.92（默认）'}</b>
+      </div>
+      <NumericSlider label="辅助说明字号" value={options.descFontSize ?? 32} min={16} max={48} onChange={v => upd({ descFontSize: v })} />
+      <OptionalColorPicker label="辅助说明颜色（空=白色）" value={options.descColor ?? ''} placeholder="rgba(255,255,255,0.92)" onChange={c => upd({ descColor: c })} accent={accent} />
+
+      {/* ── Background ────────────────────────────────────────────────────── */}
+      <SectionDivider title="背景配色" />
+      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.25)' }}>
+        不选则使用配色方案的默认背景色
+      </div>
+      <OptionalColorPicker label="背景主色" value={options.bgColor1 ?? ''} placeholder="跟随配色方案" onChange={c => upd({ bgColor1: c })} accent={accent} />
+      <OptionalColorPicker label="背景次色" value={options.bgColor2 ?? ''} placeholder="跟随配色方案" onChange={c => upd({ bgColor2: c })} accent={accent} />
     </div>
   );
 }

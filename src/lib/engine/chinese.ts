@@ -37,14 +37,19 @@ export function drawChineseBg(
   elapsed: number,
   accent: string,
   effects: ChineseEffects,
+  bgColor1?: string,
+  bgColor2?: string,
 ) {
   const { inkBlobs, brushStrokes, particles } = effects;
   const bloom = Math.min(elapsed / 1000, 1);
 
+  const c1 = bgColor1 || '#06060f';
+  const c2 = bgColor2 || '#0d0d1a';
+
   const grad = ctx.createLinearGradient(0, 0, 0, CH);
-  grad.addColorStop(0, '#06060f');
-  grad.addColorStop(0.4, '#0d0d1a');
-  grad.addColorStop(1, '#120814');
+  grad.addColorStop(0,   c1);
+  grad.addColorStop(0.4, c2);
+  grad.addColorStop(1,   bgColor1 ? c1 : '#120814');
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, CW, CH);
 

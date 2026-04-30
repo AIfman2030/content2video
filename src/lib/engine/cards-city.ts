@@ -1,274 +1,535 @@
-/**
- * City (十二生肖) — one card at a time, alternating layout.
- * 10 geometric patterns cycle through cards (idx % 10).
- */
+// cards-city.ts – 十二生肖风格卡片
+// • 每层使用不同图案（混合嵌套）
+// • 新增有机图案：螺旋、花形、波浪环、星射线、交叉、弧线等
+// • 用生肖图案图标替代文字标签
+
 import type { GeneratedContent } from '../../types/video';
-import { CH, clamp, easeOutCubic, easeOutBack, wrapText, T } from './helpers';
+import { CW, CH, clamp, easeOutBack, wrapText, T, PAGE_HOLD, PAGE_TRANS } from './helpers';
 
-// ── Timing ───────────────────────────────────────────────────────────────────
-const CITY_CARD_DUR  = 4400;
-const CITY_ENTER_DUR = 700;
-const CITY_EXIT_DUR  = 650;
+// ─── Canvas units ────────────────────────────────────────────────────────────
+const CX = CW / 2, CY = CH / 2;
+const SQ_SIZE = 420;          // bounding square for the circle of shapes
+const SQ_CX   = CX;
+const SQ_CY   = CY - 20;
+const CARD_W  = 340, CARD_H = 130;
+const CARD_RADIUS = 370;      // orbit radius
 
-// ── Pattern layer config ─────────────────────────────────────────────────────
-const LAYER_SIZES  = [440, 296, 166, 84] as const;
-const LAYER_WIDTHS = [4,   3.5, 2.5, 2 ] as const;
-const LAYER_DELAYS = [0,   300, 600, 900] as const;
-const LAYER_ENTER  = 520;
+// City shows up to 12 cards per page (all on one page for small sets)
+const CITY_PAGE = 12;
 
 export function cityTotalMs(n: number): number {
-  return T.cardBase + n * CITY_CARD_DUR + T.outroDur;
+  const numPages = Math.ceil(n / CITY_PAGE);
+  const pageSlot = CITY_PAGE * T.cardSlot;
+  const pageTotal = pageSlot + PAGE_HOLD;
+  return T.cardBase + numPages * pageTotal + T.outroDur;
 }
 
-// ── 10 pattern renderers (called with ctx already translated to center) ──────
-type DrawFn = (ctx: CanvasRenderingContext2D, sz: number, li: number, rot: number) => void;
+// ─── Pattern functions ────────────────────────────────────────────────────────
+// Each function draws a centred shape of radius r using ctx's current stroke/fill style.
+type DrawFn = (ctx: CanvasRenderingContext2D, r: number, t: number, seed: number) => void;
 
-function polygon(ctx: CanvasRenderingContext2D, r: number, sides: number, start = -Math.PI / 2) {
+/** Rotating square */
+const pSquare: DrawFn = (ctx, r, t, seed) => {
+  const rot = t * 0.3 + seed;
+  ctx.save(); ctx.rotate(rot);
+  ctx.strokeRect(-r, -r, r * 2, r * 2);
+  ctx.restore();
+};
+
+/** Circle */
+const pCircle: DrawFn = (ctx, r) => {
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+};
+
+/** Polygon (n sides) */
+function polygon(n: number, rot = 0): DrawFn {
+  return (ctx, r, t, seed) => {
+    const a0 = rot + t * 0.25 + seed * 0.5;
+    ctx.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + (i / n) * Math.PI * 2;
+      if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else         ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath(); ctx.stroke();
+  };
+}
+
+/** Star (n tips) */
+function star(n: number): DrawFn {
+  return (ctx, r, t, seed) => {
+    const a0 = t * 0.2 + seed;
+    ctx.beginPath();
+    for (let i = 0; i <= n * 2; i++) {
+      const a  = a0 + (i / (n * 2)) * Math.PI * 2;
+      const rr = i % 2 === 0 ? r : r * 0.45;
+      if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      else         ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    ctx.closePath(); ctx.stroke();
+  };
+}
+
+/** Spiral (logarithmic-like) */
+const pSpiral: DrawFn = (ctx, r, t, seed) => {
+  const turns = 3;
+  const steps = 100;
+  const rot   = t * 0.4 + seed;
+  ctx.save(); ctx.rotate(rot);
   ctx.beginPath();
-  for (let s = 0; s < sides; s++) {
-    const a = start + (s * Math.PI * 2) / sides;
-    if (s === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    else         ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  for (let i = 0; i <= steps; i++) {
+    const frac = i / steps;
+    const a  = frac * turns * Math.PI * 2;
+    const rr = frac * r;
+    if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    else         ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  ctx.stroke(); ctx.restore();
+};
+
+/** Flower (overlapping circles on orbit) */
+const pFlower: DrawFn = (ctx, r, t, seed) => {
+  const petals = 6;
+  const pR  = r * 0.5;
+  const rot = t * 0.35 + seed;
+  for (let i = 0; i < petals; i++) {
+    const a = rot + (i / petals) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * pR, Math.sin(a) * pR, pR, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+};
+
+/** Wave ring — circle with sinusoidal radius variation */
+const pWaveRing: DrawFn = (ctx, r, t, seed) => {
+  const waves = 8, amp = r * 0.2;
+  const steps = 180;
+  const phase = t * 0.8 + seed;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const a  = (i / steps) * Math.PI * 2;
+    const rr = r + amp * Math.sin(waves * a + phase);
+    if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    else         ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
   }
   ctx.closePath(); ctx.stroke();
-}
+};
 
-function star(ctx: CanvasRenderingContext2D, outer: number, inner: number, pts: number, start = -Math.PI / 2) {
+/** Starburst — many alternating short/long rays */
+const pStarburst: DrawFn = (ctx, r, t, seed) => {
+  const rays = 20;
+  const rot  = t * 0.15 + seed;
   ctx.beginPath();
-  for (let i = 0; i < pts * 2; i++) {
-    const a = start + (i * Math.PI) / pts;
-    const r = i % 2 === 0 ? outer : inner;
-    if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-    else         ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  for (let i = 0; i <= rays; i++) {
+    const a  = rot + (i / rays) * Math.PI * 2;
+    const rr = i % 2 === 0 ? r : r * 0.6;
+    if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    else         ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
   }
   ctx.closePath(); ctx.stroke();
-}
+};
+
+/** Cross / plus — thick + shape */
+const pCross: DrawFn = (ctx, r, t, seed) => {
+  const rot = t * 0.2 + seed;
+  ctx.save(); ctx.rotate(rot);
+  const th = r * 0.28;
+  ctx.strokeRect(-th, -r, th * 2, r * 2);
+  ctx.strokeRect(-r, -th, r * 2, th * 2);
+  ctx.restore();
+};
+
+/** Double ring — two concentric circles with dashes */
+const pDoubleRing: DrawFn = (ctx, r, t, seed) => {
+  ctx.save();
+  ctx.setLineDash([r * 0.25, r * 0.15]);
+  ctx.lineDashOffset = t * 40 + seed * 10;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+};
+
+/** Arc trio — three arcs at 120° apart */
+const pArcTrio: DrawFn = (ctx, r, t, seed) => {
+  const rot = t * 0.5 + seed;
+  for (let i = 0; i < 3; i++) {
+    const a = rot + i * (Math.PI * 2 / 3);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, a, a + Math.PI * 0.9);
+    ctx.stroke();
+  }
+};
+
+/** Diamond (rotated square) */
+const pDiamond: DrawFn = (ctx, r, t, seed) => {
+  ctx.save(); ctx.rotate(Math.PI / 4 + t * 0.22 + seed);
+  ctx.strokeRect(-r * 0.75, -r * 0.75, r * 1.5, r * 1.5);
+  ctx.restore();
+};
+
+/** Lissajous-ish figure */
+const pLissajous: DrawFn = (ctx, r, t, seed) => {
+  const steps = 150;
+  const phase = t * 0.5 + seed;
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const angle = (i / steps) * Math.PI * 2;
+    const x = r * Math.sin(2 * angle + phase);
+    const y = r * Math.sin(3 * angle);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+};
+
+/** Nested hexagon + triangle combo */
+const pHexTri: DrawFn = (ctx, r, t, seed) => {
+  polygon(6)(ctx, r, t, seed);
+  polygon(3, Math.PI)(ctx, r * 0.55, t, seed);
+};
 
 const PATTERNS: DrawFn[] = [
-  // 0 — nested squares
-  (ctx, sz) => ctx.strokeRect(-sz / 2, -sz / 2, sz, sz),
+  pSquare, pCircle, polygon(6), polygon(3), star(5), pDiamond,
+  pDoubleRing, pCross, polygon(8), polygon(5),
+  pSpiral, pFlower, pWaveRing, pStarburst, pArcTrio, pLissajous, pHexTri,
+];
 
-  // 1 — concentric circles
-  (ctx, sz) => { ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI * 2); ctx.stroke(); },
+/** For card i, return 4 different pattern indices (one per layer) */
+function layerPatterns(cardIdx: number): [DrawFn, DrawFn, DrawFn, DrawFn] {
+  const N  = PATTERNS.length;
+  const b  = cardIdx * 4;
+  // Use prime-like steps to ensure max variety across cards
+  return [
+    PATTERNS[b        % N],
+    PATTERNS[(b + 3)  % N],
+    PATTERNS[(b + 7)  % N],
+    PATTERNS[(b + 11) % N],
+  ];
+}
 
-  // 2 — concentric hexagons
-  (ctx, sz, li) => polygon(ctx, sz / 2, 6, (Math.PI / 6) * li),
+// ─── Zodiac icon symbols ──────────────────────────────────────────────────────
+// 12 distinct geometric icons, one per zodiac, drawn centred at (0,0).
+function drawZodiacIcon(
+  ctx: CanvasRenderingContext2D,
+  idx: number,
+  r: number,
+  t: number,
+) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.lineWidth = 3;
+  ctx.beginPath();
 
-  // 3 — nested equilateral triangles (alternating up/down)
-  (ctx, sz, li) => polygon(ctx, sz / 2, 3, -Math.PI / 2 + li * (Math.PI / 3)),
+  switch (idx % 12) {
+    case 0: // 子鼠 — circle + 6 whiskers
+      ctx.arc(0, 0, r * 0.45, 0, Math.PI * 2); ctx.stroke();
+      for (let w = 0; w < 6; w++) {
+        const a = (w / 6) * Math.PI * 2 + t * 0.05;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a)*r*0.5, Math.sin(a)*r*0.5);
+        ctx.lineTo(Math.cos(a)*r*0.85, Math.sin(a)*r*0.85); ctx.stroke();
+      }
+      break;
 
-  // 4 — nested 5-pointed stars
-  (ctx, sz) => star(ctx, sz / 2, sz * 0.21, 5),
+    case 1: // 丑牛 — two curved horns
+      ctx.arc(-r*0.42, -r*0.1, r*0.42, Math.PI*1.15, Math.PI*2.5); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc( r*0.42, -r*0.1, r*0.42, Math.PI*0.5, Math.PI*1.85); ctx.stroke();
+      break;
 
-  // 5 — rotated diamonds (each layer rotates a bit more)
-  (ctx, sz, li) => {
-    ctx.save(); ctx.rotate(Math.PI / 4 + li * (Math.PI / 8));
-    ctx.strokeRect(-sz / 2, -sz / 2, sz, sz); ctx.restore();
-  },
+    case 2: // 寅虎 — nested triangles (outer + inner inverted)
+      polygon(3)(ctx, r * 0.85, t, 0);
+      polygon(3, Math.PI)(ctx, r * 0.42, t, 0);
+      break;
 
-  // 6 — dashed concentric rings (alternating dash patterns)
-  (ctx, sz, li) => {
+    case 3: // 卯兔 — oval + two loop ears
+      ctx.ellipse(0, r*0.1, r*0.45, r*0.55, 0, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(-r*0.32, -r*0.55, r*0.18, r*0.28, -0.3, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse( r*0.32, -r*0.55, r*0.18, r*0.28,  0.3, 0, Math.PI*2); ctx.stroke();
+      break;
+
+    case 4: // 辰龙 — spiral
+      pSpiral(ctx, r * 0.85, t, 0);
+      break;
+
+    case 5: { // 巳蛇 — S-curve
+      const pts = 60;
+      ctx.beginPath();
+      for (let i = 0; i <= pts; i++) {
+        const u = (i / pts) * 2 - 1;
+        const x = Math.sin(u * Math.PI) * r * 0.5;
+        const y = u * r * 0.85;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke(); break;
+    }
+
+    case 6: // 午马 — upward arrow / chevron stack
+      for (let ch = 0; ch < 3; ch++) {
+        const yOff = ch * r * 0.3 - r * 0.3;
+        ctx.beginPath();
+        ctx.moveTo(-r*0.5, yOff + r*0.2);
+        ctx.lineTo(0, yOff - r*0.1);
+        ctx.lineTo(r*0.5, yOff + r*0.2);
+        ctx.stroke();
+      }
+      break;
+
+    case 7: // 未羊 — trident (Ψ)
+      ctx.moveTo(0, r*0.8); ctx.lineTo(0, -r*0.2);
+      ctx.moveTo(-r*0.5, r*0.8); ctx.lineTo(-r*0.5, r*0.1);
+      ctx.moveTo( r*0.5, r*0.8); ctx.lineTo( r*0.5, r*0.1);
+      // top arc
+      ctx.moveTo(-r*0.5, r*0.1);
+      ctx.quadraticCurveTo(-r*0.5, -r*0.5, 0, -r*0.7);
+      ctx.quadraticCurveTo( r*0.5, -r*0.5, r*0.5, r*0.1);
+      ctx.stroke(); break;
+
+    case 8: // 申猴 — diamond + small hook tail
+      ctx.moveTo(0, -r*0.8); ctx.lineTo(r*0.55, 0); ctx.lineTo(0, r*0.8); ctx.lineTo(-r*0.55, 0); ctx.closePath(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(r*0.55, 0); ctx.quadraticCurveTo(r*0.9, -r*0.2, r*0.75, -r*0.6);
+      ctx.stroke(); break;
+
+    case 9: // 酉鸡 — pentagon + beak
+      polygon(5)(ctx, r*0.75, t, 0);
+      ctx.beginPath();
+      ctx.moveTo(r*0.55, -r*0.1); ctx.lineTo(r*0.9, r*0.05); ctx.lineTo(r*0.55, r*0.2);
+      ctx.stroke(); break;
+
+    case 10: { // 戌狗 — 4 circles in cross arrangement
+      const offsets = [[0,-r*0.45],[r*0.45,0],[0,r*0.45],[-r*0.45,0]];
+      for (const [ox,oy] of offsets) {
+        ctx.beginPath(); ctx.arc(ox, oy, r*0.28, 0, Math.PI*2); ctx.stroke();
+      }
+      break;
+    }
+
+    case 11: // 亥猪 — fat rounded oval + curly snout
+      ctx.ellipse(0, 0, r*0.65, r*0.8, 0, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(r*0.65, -r*0.1);
+      ctx.quadraticCurveTo(r*1.1, -r*0.1, r*1.05, r*0.3);
+      ctx.quadraticCurveTo(r*0.95, r*0.55, r*0.7, r*0.45);
+      ctx.stroke(); break;
+
+    default: polygon(6)(ctx, r*0.7, t, idx); break;
+  }
+}
+
+// ─── Pattern decoration (circle of shapes around centre) ─────────────────────
+function drawPatternDecoration(
+  ctx: CanvasRenderingContext2D,
+  elapsed: number,
+  accent: string,
+  accent2: string,
+  coverIndex: number,
+) {
+  const t = elapsed * 0.001;
+  const cx = SQ_CX, cy = SQ_CY;
+  const N_RINGS   = 4;
+  const BASE_SIZE = SQ_SIZE / 2;
+
+  const [p0, p1, p2, p3] = layerPatterns(coverIndex);
+  const ring: [DrawFn, number, number, string][] = [
+    [p0, BASE_SIZE * 0.95, 1.5, accent + '55'],
+    [p1, BASE_SIZE * 0.72, 1.5, accent  + '90'],
+    [p2, BASE_SIZE * 0.50, 2,   accent2 + 'bb'],
+    [p3, BASE_SIZE * 0.28, 2,   accent2],
+  ];
+
+  ring.forEach(([fn, r, lw, col], ri) => {
     ctx.save();
-    ctx.setLineDash(li % 2 === 0 ? [10, 7] : [4, 11]);
-    ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]); ctx.restore();
-  },
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = col;
+    ctx.lineWidth   = lw;
+    ctx.globalAlpha = 0.75 + 0.25 * Math.sin(t * 0.7 + ri * 1.2);
+    fn(ctx, r, t, ri * 2.3);
+    ctx.restore();
+  });
 
-  // 7 — nested cross / plus shapes
-  (ctx, sz) => {
-    const arm = sz * 0.28;
-    ctx.strokeRect(-sz / 2, -arm / 2, sz, arm); // horizontal bar
-    ctx.strokeRect(-arm / 2, -sz / 2, arm, sz); // vertical bar
-  },
+  // Centre zodiac icon
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.strokeStyle = accent;
+  ctx.fillStyle   = accent;
+  ctx.shadowColor = accent;
+  ctx.shadowBlur  = 14;
+  ctx.globalAlpha = 0.9 + 0.1 * Math.sin(t * 1.3);
+  drawZodiacIcon(ctx, coverIndex, BASE_SIZE * 0.22, t);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
 
-  // 8 — concentric octagons
-  (ctx, sz, li) => polygon(ctx, sz / 2, 8, (Math.PI / 8) * li),
-
-  // 9 — nested pentagons (each slightly rotated)
-  (ctx, sz, li) => polygon(ctx, sz / 2, 5, -Math.PI / 2 + li * (Math.PI / 5)),
-];
-
-// ── Pattern name labels (shown as small badge on decoration) ─────────────────
-const PATTERN_LABELS = [
-  '方形', '圆环', '六边', '三角', '星形',
-  '菱形', '虚环', '十字', '八边', '五边',
-];
-
-// ── Main exports ─────────────────────────────────────────────────────────────
+// ─── Card rows ────────────────────────────────────────────────────────────────
 export function drawCityCards(
   ctx: CanvasRenderingContext2D,
   elapsed: number,
   content: GeneratedContent,
-  _accent: string,
-  _accent2: string,
+  accent: string,
+  accent2: string,
   _shapeImg: HTMLImageElement,
-  _coverIndex = 0,
-): void {
+  coverIndex: number,
+) {
   if (elapsed < T.cardBase) return;
-  const n           = content.points.length;
-  const cardElapsed = elapsed - T.cardBase;
 
-  for (let i = 0; i < n; i++) {
-    const te = cardElapsed - i * CITY_CARD_DUR;
-    if (te < 0 || te > CITY_CARD_DUR + CITY_ENTER_DUR) continue;
+  // Pattern decoration (centred, behind cards)
+  const patAlpha = clamp((elapsed - T.cardBase) / 600, 0, 1);
+  ctx.save(); ctx.globalAlpha = patAlpha;
+  drawPatternDecoration(ctx, elapsed, accent, accent2, coverIndex);
+  ctx.restore();
 
-    const inA  = easeOutCubic(clamp(te / CITY_ENTER_DUR, 0, 1));
-    const outA = 1 - easeOutCubic(
-      clamp((te - (CITY_CARD_DUR - CITY_EXIT_DUR)) / CITY_EXIT_DUR, 0, 1),
-    );
-    const alpha = inA * outA;
-    if (alpha < 0.01) continue;
-    drawCard(ctx, te, alpha, i, content, elapsed);
-  }
-}
+  const n = content.points.length;
+  const pageSlot  = CITY_PAGE * T.cardSlot;
+  const pageTotal = pageSlot + PAGE_HOLD;
+  const pageElapsed = elapsed - T.cardBase;
+  const numPages = Math.ceil(n / CITY_PAGE);
+  const curPage  = Math.min(Math.floor(pageElapsed / pageTotal), numPages - 1);
+  const withinPage = pageElapsed - curPage * pageTotal;
+  const outA = curPage < numPages - 1 ? clamp(1 - (withinPage - pageSlot) / PAGE_TRANS, 0, 1) : 1;
 
-// ── Single card renderer ──────────────────────────────────────────────────────
-function drawCard(
-  ctx: CanvasRenderingContext2D,
-  te: number,
-  alpha: number,
-  idx: number,
-  content: GeneratedContent,
-  elapsed: number,
-): void {
-  const point     = content.points[idx];
-  const isFlipped = idx % 2 === 1;
-  const TEXT_X    = isFlipped ? 1050 : 108;
-  const MAX_TW    = 810;
-  const SQ_CX     = isFlipped ? 480 : 1440;
-  const SQ_CY     = CH / 2;
-  const pattern   = PATTERNS[idx % 10];
-  const patLabel  = PATTERN_LABELS[idx % 10];
-  const cardRot   = idx * 0.16;
+  const startCard = curPage * CITY_PAGE;
+  const endCard   = Math.min(startCard + CITY_PAGE, n);
 
-  ctx.save();
-  ctx.globalAlpha = alpha;
+  // Compute orbit positions
+  const displayN = endCard - startCard;
+  const baseAngle = -Math.PI / 2;
 
-  // ── Divider ────────────────────────────────────────────────────────────────
-  {
-    const dg = ctx.createLinearGradient(960, 70, 960, CH - 70);
-    dg.addColorStop(0,    'rgba(0,0,0,0)');
-    dg.addColorStop(0.25, 'rgba(255,136,0,0.32)');
-    dg.addColorStop(0.75, 'rgba(255,136,0,0.32)');
-    dg.addColorStop(1,    'rgba(0,0,0,0)');
-    ctx.strokeStyle = dg; ctx.lineWidth = 1; ctx.setLineDash([4, 10]);
-    ctx.beginPath(); ctx.moveTo(960, 70); ctx.lineTo(960, CH - 70); ctx.stroke();
-    ctx.setLineDash([]);
-  }
+  for (let i = startCard; i < endCard; i++) {
+    const localI = i - startCard;
+    const te     = withinPage - localI * T.cardSlot;
+    if (te <= 0) continue;
 
-  // ── Geometric pattern layers (outside → inside) ───────────────────────────
-  // ── Geometric pattern layers — ORANGE / RED contrast colors ─────────────
-  const COLORS: string[] = [
-    '#ff8800',                    // layer 0 → orange
-    '#e52222',                    // layer 1 → red
-    'rgba(255,200,100,0.88)',     // layer 2 → warm light orange
-    'rgba(229,34,34,0.50)',       // layer 3 → dim red
-  ];
+    const enterT = clamp(te / 600, 0, 1);
+    const eased  = easeOutBack(Math.min(enterT, 0.999));
+    const alpha  = clamp(te / 350, 0, 1) * outA;
 
-  LAYER_SIZES.forEach((sz, li) => {
-    const sqTe = te - LAYER_DELAYS[li];
-    if (sqTe <= 0) return;
-    const sqT   = clamp(sqTe / LAYER_ENTER, 0, 1);
-    const sqA   = easeOutCubic(sqT);
-    const scale = sqT >= 1
-      ? 1 + 0.013 * Math.sin(elapsed * 0.0014 + li * 1.5)
-      : easeOutBack(Math.min(sqT, 0.999));
+    const angle = baseAngle + (localI / displayN) * Math.PI * 2;
+    const dcx = SQ_CX + Math.cos(angle) * CARD_RADIUS;
+    const dcy = SQ_CY + Math.sin(angle) * CARD_RADIUS;
+
+    const cosA = Math.cos(angle);
+    const sinA = Math.sin(angle);
+    const isLeft   = cosA < -0.35;
+    const isRight  = cosA > 0.35;
+    const scale    = 0.5 + 0.5 * eased;
+    const CARD_W_S = CARD_W * scale;
+    const CARD_H_S = CARD_H * scale;
+    const lFsz     = Math.round(44 * scale);
+    const sFsz     = Math.round(30 * scale);
+    const dFsz     = Math.round(24 * scale);
+    const dLineH   = Math.round(32 * scale);
+    const cx0      = dcx - CARD_W_S / 2;
 
     ctx.save();
-    ctx.globalAlpha *= sqA;
-    ctx.translate(SQ_CX, SQ_CY);
-    ctx.rotate(li % 2 === 0 ? cardRot * 0.4 : -cardRot * 0.28);
-    ctx.scale(scale, scale);
-    ctx.shadowColor = COLORS[li]; ctx.shadowBlur = li === 1 ? 28 : 20;
-    ctx.strokeStyle = COLORS[li]; ctx.lineWidth = LAYER_WIDTHS[li];
-    pattern(ctx, sz, li, cardRot);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-  });
+    ctx.globalAlpha = alpha;
 
-  // Pattern name badge (small, bottom of decoration zone)
-  {
-    const badgeT = clamp((te - LAYER_DELAYS[3] - LAYER_ENTER) / 400, 0, 1);
-    if (badgeT > 0) {
-      ctx.save(); ctx.globalAlpha *= badgeT;
-      ctx.font = `600 44px "Noto Sans SC", sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(255,136,0,0.70)';
-      ctx.fillText(patLabel, SQ_CX, SQ_CY + 268);
-      ctx.restore();
+    // ── Card background ─────────────────────────────────────────────────────
+    const RADII = Math.round(14 * scale);
+    ctx.beginPath();
+    ctx.roundRect(cx0, dcy - CARD_H_S / 2, CARD_W_S, CARD_H_S, RADII);
+    const cg = ctx.createLinearGradient(cx0, dcy - CARD_H_S/2, cx0 + CARD_W_S, dcy + CARD_H_S/2);
+    cg.addColorStop(0, 'rgba(18,8,0,0.82)');
+    cg.addColorStop(1, 'rgba(26,14,2,0.88)');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.strokeStyle = `${accent}88`; ctx.lineWidth = Math.round(1.5 * scale); ctx.stroke();
+
+    // ── Card content ─────────────────────────────────────────────────────────
+    const padL    = Math.round(22 * scale);
+    const textX   = cx0 + padL;
+    const point   = content.points[i];
+
+    // Label
+    ctx.font         = `700 ${lFsz}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle    = accent;
+    ctx.shadowColor  = accent; ctx.shadowBlur = 8;
+    ctx.fillText(point.label || '', textX, dcy - CARD_H_S/2 + Math.round(16*scale));
+    ctx.shadowBlur = 0;
+
+    // Short
+    ctx.font      = `500 ${sFsz}px "Noto Sans SC", sans-serif`;
+    ctx.fillStyle = '#ffffffdd';
+    ctx.fillText(point.short || '', textX, dcy - CARD_H_S/2 + Math.round(16*scale) + lFsz + Math.round(6*scale));
+
+    // Desc with wrapping
+    if (point.desc) {
+      ctx.font = `400 ${dFsz}px "Noto Sans SC", sans-serif`;
+      const descMaxW = CARD_W_S - padL * 2;
+      const descLines = wrapText(ctx, point.desc, descMaxW).slice(0, 4);
+
+      const posDesc = dcy - CARD_H_S/2 + Math.round(16*scale) + lFsz + Math.round(6*scale) + sFsz + Math.round(8*scale);
+
+      const cosA_ = Math.cos(angle), sinA_ = Math.sin(angle);
+      const isLeft_  = cosA_ < -0.35;
+      const isRight_ = cosA_ > 0.35;
+      const isBottom = !isLeft_ && !isRight_ && sinA_ > 0;
+      const GAP      = Math.round(14 * scale);
+      const blockH   = descLines.length * dFsz + (descLines.length - 1) * (dLineH - dFsz);
+
+      descLines.forEach((line, li) => {
+        const lw = ctx.measureText(line).width;
+
+        if (isLeft_) {
+          const rawY = dcy - blockH / 2 + li * dLineH + dFsz / 2;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(rawY, CH - dFsz / 2 - 5));
+          const textX_ = cx0 - GAP;
+          ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+          ctx.save(); ctx.globalAlpha = alpha * 0.72;
+          ctx.fillStyle = 'rgba(0,4,18,0.68)';
+          ctx.beginPath(); ctx.roundRect(textX_ - lw - 14, lineY - dFsz/2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.fill(); ctx.restore();
+          ctx.fillStyle = `${accent}ee`;
+          ctx.fillText(line, textX_, lineY);
+
+        } else if (isRight_) {
+          const rawY = dcy - blockH / 2 + li * dLineH + dFsz / 2;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(rawY, CH - dFsz / 2 - 5));
+          const textX_ = cx0 + CARD_W_S + GAP;
+          ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+          ctx.save(); ctx.globalAlpha = alpha * 0.72;
+          ctx.fillStyle = 'rgba(0,4,18,0.68)';
+          ctx.beginPath(); ctx.roundRect(textX_ - 14, lineY - dFsz/2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.fill(); ctx.restore();
+          ctx.fillStyle = `${accent}ee`;
+          ctx.fillText(line, textX_, lineY);
+
+        } else if (isBottom) {
+          const descEndY = dcy - CARD_H_S / 2 - GAP;
+          const rawY = descEndY - (descLines.length - 1 - li) * dLineH - dFsz / 2;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(rawY, CH - dFsz / 2 - 5));
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.save(); ctx.globalAlpha = alpha * 0.72;
+          ctx.fillStyle = 'rgba(0,4,18,0.68)';
+          ctx.beginPath(); ctx.roundRect(dcx - lw/2 - 14, lineY - dFsz/2 - 5, lw + 28, dFsz + 10, 8);
+          ctx.fill(); ctx.restore();
+          ctx.fillStyle = `${accent}ee`;
+          ctx.fillText(line, dcx, lineY);
+
+        } else {
+          const rawY = posDesc + li * dLineH;
+          const lineY = Math.max(dFsz / 2 + 5, Math.min(rawY, CH - dFsz / 2 - 5));
+          ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+          ctx.fillStyle = 'rgba(255,200,130,0.78)';
+          ctx.fillText(line, textX, lineY);
+        }
+      });
+    }
+
+    ctx.restore();
+  }
+
+  // Page indicator
+  if (numPages > 1) {
+    const dotR = 8, dotGap = 24, dotY = CH - 28;
+    const dotX0 = (CW - numPages * (dotR * 2 + dotGap) + dotGap) / 2;
+    for (let p = 0; p < numPages; p++) {
+      ctx.save();
+      ctx.globalAlpha = p === curPage ? 0.9 : 0.3;
+      ctx.fillStyle   = p === curPage ? accent : accent2;
+      ctx.shadowColor = accent; ctx.shadowBlur = p === curPage ? 10 : 0;
+      ctx.beginPath();
+      ctx.arc(dotX0 + p * (dotR * 2 + dotGap) + dotR, dotY, dotR * (p === curPage ? 1 : 0.7), 0, Math.PI * 2);
+      ctx.fill(); ctx.restore();
     }
   }
-
-  // ── Text ───────────────────────────────────────────────────────────────────
-  const fullLabel = `${idx + 1}. ${point.label}`;
-  const CHAR_MS   = 48;
-  const typeStart = CITY_ENTER_DUR;
-  const visChars  = Math.min(Math.floor(Math.max(0, te - typeStart) / CHAR_MS), fullLabel.length);
-  const visText   = fullLabel.slice(0, visChars);
-  const typeDone  = visChars >= fullLabel.length;
-
-  const labelY = CH * 0.38;
-  const shortY = CH * 0.58;
-  const descY  = CH * 0.74;
-
-  // Label — typewriter, large, ORANGE
-  ctx.font = `900 176px "Noto Sans SC", "PingFang SC", sans-serif`;
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.shadowColor = '#ff8800'; ctx.shadowBlur = 28;
-  ctx.fillStyle = '#ff8800';
-  ctx.fillText(visText, TEXT_X, labelY);
-
-  // Cursor
-  if (!typeDone && Math.floor(elapsed / 500) % 2 === 0) {
-    const tw = ctx.measureText(visText).width;
-    ctx.shadowBlur = 0; ctx.font = `300 176px monospace`;
-    ctx.fillText('|', TEXT_X + tw + 6, labelY);
-  }
-  ctx.shadowBlur = 0;
-
-  // Progressive underline
-  if (visChars > 2) {
-    const fullW = Math.min(ctx.measureText(fullLabel).width, MAX_TW);
-    const lineA = clamp((visChars - 2) / Math.max(1, fullLabel.length - 2), 0, 1);
-    const lg    = ctx.createLinearGradient(TEXT_X, 0, TEXT_X + fullW, 0);
-    lg.addColorStop(0, 'rgba(255,136,0,0.9)');
-    lg.addColorStop(0.75, 'rgba(255,136,0,0.55)');
-    lg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.strokeStyle = lg; ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(TEXT_X, labelY + 106); ctx.lineTo(TEXT_X + fullW * lineA, labelY + 106);
-    ctx.stroke();
-  }
-
-  // Short
-  const shortDelay = typeStart + fullLabel.length * CHAR_MS + 200;
-  const shortAlpha = clamp((te - shortDelay) / 480, 0, 1);
-  if (shortAlpha > 0 && point.short) {
-    ctx.save(); ctx.globalAlpha *= shortAlpha;
-    ctx.font = `500 104px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(255,255,255,0.96)';
-    ctx.shadowColor = 'rgba(255,255,255,0.2)'; ctx.shadowBlur = 6;
-    let short = point.short;
-    while (short.length > 4 && ctx.measureText(short).width > MAX_TW)
-      short = short.slice(0, -1);
-    if (short.length < point.short.length) short += '…';
-    ctx.fillText(short, TEXT_X, shortY);
-    ctx.shadowBlur = 0; ctx.restore();
-  }
-
-  // Desc
-  const descDelay  = shortDelay + 500;
-  const descAlpha  = clamp((te - descDelay) / 480, 0, 1);
-  if (descAlpha > 0 && point.desc) {
-    ctx.save(); ctx.globalAlpha *= descAlpha;
-    ctx.font = `400 64px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    const descLines = wrapText(ctx, point.desc, MAX_TW).slice(0, 2);
-    descLines.forEach((line, li) => ctx.fillText(line, TEXT_X, descY + li * 80));
-    ctx.restore();
-  }
-
-  ctx.restore();
 }

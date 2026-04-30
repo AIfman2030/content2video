@@ -115,7 +115,7 @@ export async function createAnimEngine(
     }
 
     if (style === 'chinese' && chineseEffects) {
-      drawChineseBg(ctx, elapsed, accent, chineseEffects);
+      drawChineseBg(ctx, elapsed, accent, chineseEffects, chineseOptions?.bgColor1, chineseOptions?.bgColor2);
     } else if (style === 'city' && cityEffects) {
       drawCityBg(ctx, elapsed, accent, cityEffects);
     } else if (style === 'aitech' && aiEffects) {
@@ -124,7 +124,7 @@ export async function createAnimEngine(
 
     drawShapeDecoration(ctx, elapsed, shapeImg!, accent, style);
     drawTitle(ctx, elapsed, content, accent, accent2, style);
-    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex);
+    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex, chineseOptions);
 
     const outroStart = (style === 'city'
       ? cityTotalMs(content.points.length)

@@ -1,4 +1,4 @@
-import type { GeneratedContent, StyleType, PolyShape } from '../../types/video';
+import type { GeneratedContent, StyleType, PolyShape, ChineseOptions } from '../../types/video';
 import { CW, CH, clamp, easeOutBack, hex2rgba, roundRect, wrapText, T, PAGE_SIZE, PAGE_HOLD, PAGE_TRANS } from './helpers';
 import { drawCityCards } from './cards-city';
 import { drawAITechCards } from './cards-aitech';
@@ -13,6 +13,7 @@ export function drawCards(
   shapeImg: HTMLImageElement,
   polyShape?: PolyShape,
   coverIndex = 0,
+  chineseOptions?: ChineseOptions,
 ) {
   if (style === 'city') { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex); return; }
   if (style === 'aitech') { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon'); return; }
@@ -78,16 +79,31 @@ export function drawCards(
     ctx.font = `800 52px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#fff'; ctx.fillText(`${i + 1}`, badgeX, badgeY);
 
-    // Text
+    // Text — sizes and colours configurable via chineseOptions
+    // ctx.textBaseline is 'middle' (set by the badge section above)
+    const tFsz = chineseOptions?.titleFontSize ?? 68;
+    const sFsz = chineseOptions?.shortFontSize ?? 36;
+    const dFsz = chineseOptions?.descFontSize  ?? 32;
+    const tClr = chineseOptions?.titleColor || accent;
+    const sClr = chineseOptions?.shortColor || accent2;
+    const dClr = chineseOptions?.descColor  || 'rgba(255,255,255,0.92)';
+    const lineH = Math.round(dFsz * 1.28);
+
+    // Vertical layout respects textBaseline='middle'
+    const labelY  = 82;
+    const shortY  = labelY + Math.round(tFsz / 2) + Math.round(sFsz / 2) + 8;
+    const descY0  = shortY + Math.round(sFsz / 2) + Math.round(dFsz / 2) + 12;
+
     const textX = 130, textAvailW = cardW - textX - 90;
     const point = content.points[i];
     ctx.shadowColor = hex2rgba(accent, 0.7); ctx.shadowBlur = 20;
-    ctx.font = `800 68px "Noto Sans SC", sans-serif`; ctx.textAlign = 'left';
-    ctx.fillStyle = accent; ctx.fillText(point.label, textX, 82); ctx.shadowBlur = 0;
-    ctx.font = `600 36px "Noto Sans SC", sans-serif`; ctx.fillStyle = accent2;
-    ctx.fillText(point.short || '', textX, 138);
-    ctx.font = `400 32px "Noto Sans SC", sans-serif`; ctx.fillStyle = 'rgba(255,255,255,0.92)';
-    wrapText(ctx, point.desc || '', textAvailW).slice(0, 2).forEach((l, li) => ctx.fillText(l, textX, 186 + li * 38));
+    ctx.font = `800 ${tFsz}px "Noto Sans SC", sans-serif`; ctx.textAlign = 'left';
+    ctx.fillStyle = tClr; ctx.fillText(point.label, textX, labelY); ctx.shadowBlur = 0;
+    ctx.font = `600 ${sFsz}px "Noto Sans SC", sans-serif`; ctx.fillStyle = sClr;
+    ctx.fillText(point.short || '', textX, shortY);
+    ctx.font = `400 ${dFsz}px "Noto Sans SC", sans-serif`; ctx.fillStyle = dClr;
+    wrapText(ctx, point.desc || '', textAvailW).slice(0, 2).forEach((l, li) =>
+      ctx.fillText(l, textX, descY0 + li * lineH));
 
     // Rotating diamond
     const rdX = cardW - 55, rdY = cardH / 2;

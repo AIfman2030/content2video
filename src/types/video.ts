@@ -13,6 +13,16 @@ export interface ChineseOptions {
   borderWidth: 1 | 2 | 3 | 4;
   lineWidth: 1 | 2 | 3 | 4;
   animMode: AnimMode;
+  // ── Optional text style overrides (undefined = use theme defaults) ──────
+  titleFontSize?: number;    // default 68
+  titleColor?: string;       // default '' = use accent
+  shortFontSize?: number;    // default 36
+  shortColor?: string;       // default '' = use accent2
+  descFontSize?: number;     // default 32
+  descColor?: string;        // default '' = rgba(255,255,255,0.92)
+  // ── Optional background overrides ('' = use colorScheme defaults) ───────
+  bgColor1?: string;
+  bgColor2?: string;
 }
 
 // ─── Subtitle style options ────────────────────────────────────────────────────
