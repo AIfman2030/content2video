@@ -185,7 +185,7 @@ function drawOK(
     ctx.restore();
   });
 
-  // Main centered text "收到评论：OK"
+  // Main centered text "收到回复：Yes"
   ctx.save(); ctx.globalAlpha = mainA;
   // Pill background
   ctx.font = `900 88px "Noto Sans SC", sans-serif`;
