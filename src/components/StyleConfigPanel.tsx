@@ -1,6 +1,8 @@
 // StyleConfigPanel.tsx
 // Per-style live configuration panel with colour pickers, selectors, and sliders.
+import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { Plus, X } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
@@ -320,6 +322,30 @@ function SubtitlePanel({ opts, onChange, accentColor, onAccentColorChange }: {
 }) {
   const u = (patch: Partial<SubtitleOptions>) => onChange({ ...opts, ...patch });
 
+  // ── Keyword highlight add form local state ──────────────────────────────
+  const [hlText,  setHlText]  = useState('');
+  const [hlColor, setHlColor] = useState('#ff4488');
+
+  const highlights = opts.highlights ?? [];
+
+  const addHighlight = () => {
+    const t = hlText.trim();
+    if (!t) return;
+    // Avoid duplicates
+    if (highlights.some(h => h.text === t)) { setHlText(''); return; }
+    u({ highlights: [...highlights, { text: t, color: hlColor }] });
+    setHlText('');
+  };
+
+  const removeHighlight = (i: number) => {
+    u({ highlights: highlights.filter((_, idx) => idx !== i) });
+  };
+
+  const updateHighlightColor = (i: number, color: string) => {
+    const next = highlights.map((h, idx) => idx === i ? { ...h, color } : h);
+    u({ highlights: next });
+  };
+
   return (
     <div className="space-y-4">
 
@@ -421,6 +447,88 @@ function SubtitlePanel({ opts, onChange, accentColor, onAccentColorChange }: {
         </div>
         <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
           超过此行数自动分页到下一画面
+        </p>
+      </Row>
+
+      {/* ── Keyword highlights ─────────────────────────────────────────────── */}
+      <Row>
+        <Label>关键词高亮</Label>
+
+        {/* Existing highlight pills */}
+        {highlights.length > 0 && (
+          <div className="flex flex-col gap-1.5 mb-2">
+            {highlights.map((hl, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+                style={{ background: `${hl.color}18`, border: `1px solid ${hl.color}45` }}
+              >
+                {/* Inline colour dot / tiny picker */}
+                <label className="relative w-4 h-4 rounded-full cursor-pointer flex-shrink-0 overflow-hidden"
+                  style={{ background: hl.color }}>
+                  <input
+                    type="color"
+                    value={hl.color}
+                    onChange={e => updateHighlightColor(i, e.target.value)}
+                    className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                  />
+                </label>
+                <span className="flex-1 text-xs font-medium truncate" style={{ color: hl.color }}>
+                  {hl.text}
+                </span>
+                <button
+                  onClick={() => removeHighlight(i)}
+                  className="flex-shrink-0 w-4 h-4 flex items-center justify-center rounded hover:bg-white/10 transition-colors"
+                  style={{ color: 'rgba(255,255,255,0.35)' }}
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Add new keyword form */}
+        <div className="flex gap-1.5 items-center">
+          <input
+            type="text"
+            value={hlText}
+            onChange={e => setHlText(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addHighlight()}
+            placeholder="输入关键词…"
+            className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg text-xs text-white placeholder-white/25 outline-none transition-all"
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+            }}
+            onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)')}
+            onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
+          />
+          {/* Colour dot picker */}
+          <label
+            className="relative w-7 h-7 rounded-lg cursor-pointer flex-shrink-0 flex items-center justify-center overflow-hidden"
+            style={{ background: hlColor, border: '1px solid rgba(255,255,255,0.2)' }}
+            title="选择颜色"
+          >
+            <input
+              type="color"
+              value={hlColor}
+              onChange={e => setHlColor(e.target.value)}
+              className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+            />
+          </label>
+          {/* Add button */}
+          <button
+            onClick={addHighlight}
+            disabled={!hlText.trim()}
+            className="flex-shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition-all hover:scale-105 active:scale-95 disabled:opacity-30"
+            style={{ background: opts.accentColor, boxShadow: `0 0 10px ${opts.accentColor}50` }}
+          >
+            <Plus size={13} className="text-black" />
+          </button>
+        </div>
+        <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          匹配到的关键词将用指定颜色高亮，点击色块可修改颜色
         </p>
       </Row>
 

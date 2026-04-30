@@ -23,6 +23,11 @@ export type SubtitleEnterAnim =
   | 'typewriter'
   | 'fadeIn';
 
+export interface SubtitleHighlight {
+  text: string;   // keyword to match (exact)
+  color: string;  // highlight colour (hex)
+}
+
 export interface SubtitleOptions {
   titleText: string;           // account badge name (top-left)
   titleColor: string;          // hex — accent stripe + badge highlight
@@ -31,6 +36,7 @@ export interface SubtitleOptions {
   fontSize: 'auto' | 'sm' | 'md' | 'lg';  // auto = adaptive, others set ceiling
   enterAnim: SubtitleEnterAnim;
   linesPerSlide: 1 | 2 | 3 | 4 | 5 | 6;  // max visual lines per page
+  highlights: SubtitleHighlight[];         // keyword → colour overrides
 }
 
 export const DEFAULT_SUBTITLE_OPTIONS: SubtitleOptions = {
@@ -41,6 +47,7 @@ export const DEFAULT_SUBTITLE_OPTIONS: SubtitleOptions = {
   fontSize: 'auto',
   enterAnim: 'slideUp',
   linesPerSlide: 3,
+  highlights: [],
 };
 
 // ─── City style options ────────────────────────────────────────────────────────
