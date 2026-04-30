@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Film, Key, Video } from 'lucide-react';
-import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent } from '../types/video';
+import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, SubtitleOptions } from '../types/video';
+import { DEFAULT_SUBTITLE_OPTIONS } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import StyleConfigPanel from '../components/StyleConfigPanel';
@@ -80,8 +81,12 @@ export default function Index() {
     colorScheme: 'cinnabar', borderWidth: 2, lineWidth: 2, animMode: 'single',
   });
   const [aiOptions, setAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
+  const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOptions>(DEFAULT_SUBTITLE_OPTIONS);
+  const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
 
-  const accent = ACCENT_BY_STYLE[style];
+  const accent = style === 'subtitle'
+    ? subtitleOptions.accentColor
+    : (accentOverrides[style] ?? ACCENT_BY_STYLE[style]);
   const bg = BG_BY_STYLE[style];
 
   // ── When style changes, reset content + config ───────────────────────────
@@ -199,6 +204,12 @@ export default function Index() {
                 onChineseOptionsChange={setChineseOptions}
                 aiOptions={aiOptions}
                 onAiOptionsChange={setAiOptions}
+                subtitleOptions={subtitleOptions}
+                onSubtitleOptionsChange={setSubtitleOptions}
+                accentOverrides={accentOverrides}
+                onAccentOverrideChange={(sty, color) =>
+                  setAccentOverrides(prev => ({ ...prev, [sty]: color }))
+                }
               />
             </section>
 
@@ -228,6 +239,8 @@ export default function Index() {
             aiOptions={aiOptions}
             natureContent={natureContent}
             accent={accent}
+            subtitleOptions={subtitleOptions}
+            accentOverride={accentOverrides[style]}
           />
         </main>
       </div>
@@ -242,6 +255,8 @@ export default function Index() {
           aiOptions={aiOptions}
           natureContent={natureContent}
           onClose={() => setShowRecorder(false)}
+          subtitleOptions={subtitleOptions}
+          accentOverride={accentOverrides[style]}
         />
       )}
 

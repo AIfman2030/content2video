@@ -1,5 +1,5 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions } from '../types/video';
 import { getThemeConfig } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
@@ -43,8 +43,13 @@ export async function createAnimEngine(
   aiOptions?: AIOptions,
   natureContent?: NatureContent,
   onComplete?: () => void,
+  subtitleOptions?: SubtitleOptions,
+  accentOverride?: string,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
+  // Allow per-style accent override (affects BG, title, overlays, shape decoration)
+  const accent  = accentOverride ?? theme.accent;
+  const accent2 = theme.accent2;
   const isNature      = style === 'nature';
   const isSubtitle    = style === 'subtitle';
   const isTranslation = style === 'translation';
@@ -57,7 +62,7 @@ export async function createAnimEngine(
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     const shapeId = shapeList[coverIndex % shapeList.length]?.id ?? shapeList[0].id;
-    const shapeColor = style === 'city' ? '#f5d87a' : theme.accent;
+    const shapeColor = style === 'city' ? '#f5d87a' : accent;
     const lineWidth = style === 'chinese' ? (chineseOptions?.lineWidth ?? 2) : 1.5;
     shapeImg = await loadShapeImage(style, shapeId, shapeColor, lineWidth);
   }
@@ -78,7 +83,7 @@ export async function createAnimEngine(
         natureContent?.commonItems?.length ?? 0,
       )
     : isSubtitle
-      ? subtitleTotalMs(content)
+      ? subtitleTotalMs(content, subtitleOptions)
       : isTranslation
         ? TR_TOTAL_MS
         : style === 'city'
@@ -94,7 +99,7 @@ export async function createAnimEngine(
 
     // ── Subtitle: fully self-contained pipeline ──
     if (isSubtitle && subtitlePs) {
-      drawSubtitle(ctx, elapsed, content, subtitlePs);
+      drawSubtitle(ctx, elapsed, content, subtitlePs, subtitleOptions);
       return;
     }
 
@@ -105,30 +110,30 @@ export async function createAnimEngine(
     }
 
     if (isNature && natureContent) {
-      drawNatureScene(ctx, elapsed, natureContent, theme.accent, theme.accent2, coverIndex);
+      drawNatureScene(ctx, elapsed, natureContent, accent, accent2, coverIndex);
       return;
     }
 
     if (style === 'chinese' && chineseEffects) {
-      drawChineseBg(ctx, elapsed, theme.accent, chineseEffects);
+      drawChineseBg(ctx, elapsed, accent, chineseEffects);
     } else if (style === 'city' && cityEffects) {
-      drawCityBg(ctx, elapsed, theme.accent, cityEffects);
+      drawCityBg(ctx, elapsed, accent, cityEffects);
     } else if (style === 'aitech' && aiEffects) {
-      drawAIBg(ctx, elapsed, theme.accent, theme.accent2, aiEffects);
+      drawAIBg(ctx, elapsed, accent, accent2, aiEffects);
     }
 
-    drawShapeDecoration(ctx, elapsed, shapeImg!, theme.accent, style);
-    drawTitle(ctx, elapsed, content, theme.accent, theme.accent2, style);
-    drawCards(ctx, elapsed, content, theme.accent, theme.accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex);
+    drawShapeDecoration(ctx, elapsed, shapeImg!, accent, style);
+    drawTitle(ctx, elapsed, content, accent, accent2, style);
+    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex);
 
     const outroStart = (style === 'city'
       ? cityTotalMs(content.points.length)
       : totalDuration(content.points.length)) - T.outroDur;
     if (elapsed > outroStart) {
-      drawOutro(ctx, elapsed - outroStart, content, theme.accent, theme.accent2, style);
+      drawOutro(ctx, elapsed - outroStart, content, accent, accent2, style);
     }
 
-    drawOverlays(ctx, elapsed, theme.accent, style);
+    drawOverlays(ctx, elapsed, accent, style);
   }
 
   function tick(now: number) {
