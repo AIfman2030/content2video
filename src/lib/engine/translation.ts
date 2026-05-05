@@ -102,7 +102,7 @@ function drawBadge(ctx: CanvasRenderingContext2D, alpha: number) {
 }
 
 // ── Decorative prefix "小福悟语：" ────────────────────────────────────────────
-function drawPrefix(ctx: CanvasRenderingContext2D, elapsed: number, alpha: number) {
+function drawPrefix(ctx: CanvasRenderingContext2D, elapsed: number, alpha: number, y: number) {
   const te = elapsed - PREFIX_IN;
   if (te <= 0) return;
   const a  = easeOutCubic(clamp(te / 700, 0, 1)) * alpha;
@@ -112,7 +112,7 @@ function drawPrefix(ctx: CanvasRenderingContext2D, elapsed: number, alpha: numbe
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.shadowColor = 'rgba(255,180,120,0.40)'; ctx.shadowBlur = 22;
   ctx.fillStyle = 'rgba(255,248,236,0.90)';
-  ctx.fillText(' To Everybody：', 90 + dx, CH * 0.27);
+  ctx.fillText(' To Everybody：', 90 + dx, y);
   ctx.shadowBlur = 0;
   ctx.restore();
 }
@@ -294,7 +294,16 @@ export function drawTranslation(
 
   if (mainAlpha > 0.01) {
     drawBadge(ctx, mainAlpha);
-    drawPrefix(ctx, elapsed, mainAlpha);
+
+    // Compute Chinese text block top to adaptively position prefix 15px above it
+    ctx.font = `900 96px "Noto Sans SC", sans-serif`;
+    const cnLines    = wrapText(ctx, chineseText, 1060);
+    const cnTotalH   = cnLines.length * 128;           // 128px lineH matches drawChineseText
+    const cnBlockTop = CH * 0.44 - cnTotalH / 2;      // top edge of Chinese text block
+    const prefixFsz  = 78;
+    const prefixY    = cnBlockTop - 15 - prefixFsz / 2; // 15px gap + half font (middle baseline)
+
+    drawPrefix(ctx, elapsed, mainAlpha, prefixY);
     drawChineseText(ctx, elapsed, mainAlpha, chineseText);
     drawEnglishText(ctx, elapsed, mainAlpha, englishText);
     drawOK(ctx, elapsed, mainAlpha, particles);
