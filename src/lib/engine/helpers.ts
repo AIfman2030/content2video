@@ -85,7 +85,7 @@ export const T = {
   cardBase: 2800,
   cardSlot: 2200,
   cardReadDelay: 400,
-  outroDur: 3000,
+  outroDur: 2000,
 };
 
 // ── Chinese card layout pagination ────────────────────────────────────────────

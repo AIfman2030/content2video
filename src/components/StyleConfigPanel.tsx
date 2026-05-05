@@ -383,10 +383,8 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
       {/* ── Background ────────────────────────────────────────────────────── */}
       <SectionDivider title="背景配色" />
       <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.25)' }}>
-        不选则使用配色方案的默认背景色
+        当前背景为纯黑色，配色方案仅影响文字和装饰元素颜色
       </div>
-      <OptionalColorPicker label="背景主色" value={options.bgColor1 ?? ''} placeholder="跟随配色方案" onChange={c => upd({ bgColor1: c })} accent={accent} />
-      <OptionalColorPicker label="背景次色" value={options.bgColor2 ?? ''} placeholder="跟随配色方案" onChange={c => upd({ bgColor2: c })} accent={accent} />
     </div>
   );
 }
@@ -576,7 +574,7 @@ function SubtitlePanel({ opts, onChange, accentColor, onAccentColorChange }: {
       {/* Lines per slide */}
       <Row>
         <div className="flex items-center justify-between">
-          <Label>每页最多行数</Label>
+          <Label>同时显示行数（滚动窗口）</Label>
           <span className="text-[11px] mb-1.5" style={{ color: opts.accentColor }}>
             {opts.linesPerSlide} 行
           </span>

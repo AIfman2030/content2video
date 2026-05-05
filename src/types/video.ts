@@ -50,7 +50,7 @@ export interface SubtitleOptions {
 }
 
 export const DEFAULT_SUBTITLE_OPTIONS: SubtitleOptions = {
-  titleText: '小福分享舍',
+  titleText: '',
   titleColor: '#ffd700',
   accentColor: '#ffd700',
   defaultTextColor: '#ffffff',

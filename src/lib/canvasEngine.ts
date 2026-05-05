@@ -5,9 +5,9 @@ import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
 
 import { CW, CH, seededRandom, T, totalDuration } from './engine/helpers';
-import { initChineseEffects, drawChineseBg } from './engine/chinese';
-import { initCityEffects, drawCityBg } from './engine/city';
-import { initAIEffects, drawAIBg } from './engine/aitech';
+import { initChineseEffects } from './engine/chinese';
+import { initCityEffects } from './engine/city';
+import { initAIEffects } from './engine/aitech';
 import { drawTitle } from './engine/title';
 import { drawCards } from './engine/cards';
 import { drawOutro, drawOverlays, drawShapeDecoration } from './engine/outro';
@@ -115,11 +115,15 @@ export async function createAnimEngine(
     }
 
     if (style === 'chinese' && chineseEffects) {
-      drawChineseBg(ctx, elapsed, accent, chineseEffects, chineseOptions?.bgColor1, chineseOptions?.bgColor2);
+      // Static black background (user request: no animated bg)
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, CW, CH);
     } else if (style === 'city' && cityEffects) {
-      drawCityBg(ctx, elapsed, accent, cityEffects);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, CW, CH);
     } else if (style === 'aitech' && aiEffects) {
-      drawAIBg(ctx, elapsed, accent, accent2, aiEffects);
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, CW, CH);
     }
 
     drawShapeDecoration(ctx, elapsed, shapeImg!, accent, style);

@@ -112,12 +112,10 @@ export function drawNatureScene(
   const NC = nc.commonItems?.length ?? 0;
   const N = Math.max(NL, NR);
 
-  // BG
+  // BG — static black (user request: no animated backgrounds)
   ctx.save();
-  const bgA = clamp(elapsed / N_BG_END, 0, 1);
-  const bg = ctx.createRadialGradient(CW / 2, CH / 2, 0, CW / 2, CH / 2, CW * 0.75);
-  bg.addColorStop(0, `rgba(10,24,12,${bgA})`); bg.addColorStop(1, `rgba(4,10,5,${bgA})`);
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, CW, CH);
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, CW, CH);
   // Mountain silhouette
   if (elapsed > N_BG_END * 0.5) {
     const ma = clamp((elapsed - N_BG_END * 0.5) / (N_BG_END * 0.5), 0, 1) * 0.15;
