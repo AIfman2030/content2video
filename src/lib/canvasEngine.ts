@@ -10,7 +10,7 @@ import { initCityEffects } from './engine/city';
 import { initAIEffects } from './engine/aitech';
 import { drawTitle } from './engine/title';
 import { drawCards } from './engine/cards';
-import { drawOutro, drawOverlays, drawShapeDecoration } from './engine/outro';
+import { drawOutro, drawOverlays } from './engine/outro';
 import { drawNatureScene, natureTotalMs } from './engine/nature-scene';
 import { cityTotalMs } from './engine/cards-city';
 import {
@@ -126,7 +126,7 @@ export async function createAnimEngine(
       ctx.fillRect(0, 0, CW, CH);
     }
 
-    drawShapeDecoration(ctx, elapsed, shapeImg!, accent, style);
+    // Shape decoration removed — background is plain black
     drawTitle(ctx, elapsed, content, accent, accent2, style);
     drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex, chineseOptions);
 

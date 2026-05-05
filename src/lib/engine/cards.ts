@@ -52,15 +52,11 @@ export function drawCards(
     ctx.translate(cardX + (1 - eased) * 120 + cardW / 2, cardY + cardH / 2);
     ctx.translate(-cardW / 2, -cardH / 2);
 
-    // Card bg + border
+    // Card bg + border — solid colours (no gradients)
     roundRect(ctx, 0, 0, cardW, cardH, 18);
-    const bg = ctx.createLinearGradient(0, 0, cardW, cardH);
-    bg.addColorStop(0, 'rgba(255,255,255,0.07)'); bg.addColorStop(1, hex2rgba(accent, 0.08));
-    ctx.fillStyle = bg; ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
     roundRect(ctx, 0, 0, cardW, cardH, 18);
-    const bord = ctx.createLinearGradient(0, 0, cardW, cardH);
-    bord.addColorStop(0, hex2rgba(accent, 0.7)); bord.addColorStop(1, hex2rgba(accent2, 0.3));
-    ctx.strokeStyle = bord; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = hex2rgba(accent, 0.65); ctx.lineWidth = 2; ctx.stroke();
 
     // Ink-drip left bar
     ctx.fillStyle = accent;
@@ -68,12 +64,10 @@ export function drawCards(
     ctx.beginPath(); ctx.arc(3, 20 + (cardH - 40) * eased, 8, 0, Math.PI * 2);
     ctx.fillStyle = hex2rgba(accent, 0.5); ctx.fill();
 
-    // Number badge
+    // Number badge — solid fill (no radial gradient)
     const badgeX = 55, badgeY = cardH / 2;
     ctx.beginPath(); ctx.arc(badgeX, badgeY, 50, 0, Math.PI * 2);
-    const nbg = ctx.createRadialGradient(badgeX, badgeY - 10, 0, badgeX, badgeY, 50);
-    nbg.addColorStop(0, hex2rgba(accent, 0.35)); nbg.addColorStop(1, hex2rgba(accent, 0.1));
-    ctx.fillStyle = nbg; ctx.fill();
+    ctx.fillStyle = hex2rgba(accent, 0.22); ctx.fill();
     ctx.strokeStyle = hex2rgba(accent, 0.8); ctx.lineWidth = 2;
     ctx.shadowColor = accent; ctx.shadowBlur = 15; ctx.stroke(); ctx.shadowBlur = 0;
     ctx.font = `800 52px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';

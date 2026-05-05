@@ -371,12 +371,6 @@ export function drawCityCards(
 ) {
   if (elapsed < T.cardBase) return;
 
-  // Pattern decoration (centred, behind cards)
-  const patAlpha = clamp((elapsed - T.cardBase) / 600, 0, 1);
-  ctx.save(); ctx.globalAlpha = patAlpha;
-  drawPatternDecoration(ctx, elapsed, accent, accent2, coverIndex);
-  ctx.restore();
-
   const n = content.points.length;
   const pageSlot  = CITY_PAGE * T.cardSlot;
   const pageTotal = pageSlot + PAGE_HOLD;

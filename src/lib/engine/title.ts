@@ -29,25 +29,8 @@ export function drawTitle(
   ctx.save();
 
   // ── Entrance background effects (non-aitech) ───────────────────────────────
-  if (style === 'chinese' && te < 600) {
-    const circleT = easeOutCubic(clamp(te / 400, 0, 1));
-    ctx.beginPath();
-    ctx.arc(CW / 2, centerY, 250 * circleT, 0, Math.PI * 2);
-    ctx.fillStyle = hex2rgba(accent, 0.12 * circleT); ctx.fill();
-    ctx.strokeStyle = hex2rgba(accent, 0.4 * circleT); ctx.lineWidth = 3; ctx.stroke();
-  } else if (style === 'city' && te < 800) {
-    const beamY = lerp(-200, centerY, easeOutCubic(clamp(te / 600, 0, 1)));
-    const bg2 = ctx.createRadialGradient(CW / 2, beamY, 0, CW / 2, beamY, 350);
-    bg2.addColorStop(0, hex2rgba(accent, 0.2)); bg2.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = bg2; ctx.fillRect(0, 0, CW, CH);
-  } else if (style !== 'aitech' && te < 300 && Math.sin(te * 0.08) > 0.3) {
-    ctx.fillStyle = hex2rgba(accent, 0.08); ctx.fillRect(0, 0, CW, CH);
-    for (let gi = 0; gi < 4; gi++) {
-      const gy = centerY - 80 + gi * 40;
-      ctx.fillStyle = hex2rgba(accent2, 0.15); ctx.fillRect(0, gy, CW, 8);
-      ctx.fillStyle = hex2rgba(accent, 0.1); ctx.fillRect(Math.random() * 200, gy + 4, CW * 0.7, 4);
-    }
-  }
+  // Background entrance effects removed — background is plain black
+
 
   // ── Measure text (font must be set before measureText) ────────────────────
   ctx.font = `900 ${fontSize.toFixed(0)}px "Noto Sans SC", "PingFang SC", sans-serif`;
