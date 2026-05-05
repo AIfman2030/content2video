@@ -1,23 +1,15 @@
 // ── Translation style engine ─────────────────────────────────────────────────
-// Layout: warm wine-red bg · Chinese sentence · English translation · 收到扣1 · 再来 ending
+// Layout: warm wine-red bg · "To Everybody" · Chinese sentence · English translation · 收到OK
 import type { GeneratedContent } from '../../types/video';
 import { CW, CH, clamp, easeOutCubic, wrapText } from './helpers';
 
 // ── Timing constants (ms) ────────────────────────────────────────────────────
-const BADGE_IN    = 200;
-const PREFIX_IN   = 800;
-const CHINESE_IN  = 1400;
-const ENGLISH_IN  = 3600;
-const OK_IN       = 5600;
-const MAIN_FADE   = 7800;   // main content starts fading out
-const END_BG      = 8300;   // black overlay
-const END_RE      = 8800;   // "再" char pops in
-const END_LAI     = 9100;   // "来" char pops in
-const END_LINE    = 9600;   // divider line grows
-const FINAL_FADE  = 12500;
-export const TR_TOTAL_MS = 14000;
+const FADE_IN   = 600;   // all content fades in together
+const MAIN_FADE = 5000;  // content starts fading out
+const FADE_OUT  = 800;   // fade to black duration
+export const TR_TOTAL_MS = MAIN_FADE + FADE_OUT + 200; // ~6000ms
 
-// ── Floating 收到/扣1 particle ───────────────────────────────────────────────
+// ── Floating 收到/OK particle ────────────────────────────────────────────────
 export interface TrParticle {
   x: number; y: number;
   size: number; baseAlpha: number;
@@ -69,44 +61,11 @@ function drawBg(ctx: CanvasRenderingContext2D, alpha: number) {
   ctx.restore();
 }
 
-// ── Account badge (top-left) ─────────────────────────────────────────────────
-function drawBadge(ctx: CanvasRenderingContext2D, alpha: number) {
-  ctx.save(); ctx.globalAlpha = alpha;
-
-  const bx = 52, by = 38, bw = 186, bh = 72;
-
-  // Badge background
-  ctx.fillStyle = 'rgba(0,0,0,0.40)';
-  ctx.strokeStyle = 'rgba(200,70,70,0.75)';
-  ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill(); ctx.stroke();
-
-  // Left red accent stripe
-  ctx.fillStyle = '#c83030';
-  ctx.beginPath(); ctx.roundRect(bx, by, 4, bh, [6, 0, 0, 6]); ctx.fill();
-
-  // Main account name
-  ctx.font = '700 28px "Noto Sans SC", sans-serif';
-  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(220,80,80,0.5)'; ctx.shadowBlur = 8;
-  ctx.fillStyle = 'rgba(255,238,218,0.96)';
-  ctx.fillText('小福分享舍', bx + 16, by + bh / 2 - 8);
-  ctx.shadowBlur = 0;
-
-  // Sub-label
-  ctx.font = '400 18px "Noto Sans SC", sans-serif';
-  ctx.fillStyle = 'rgba(255,200,160,0.65)';
-  ctx.fillText('- Xiao Fu Share -', bx + 16, by + bh / 2 + 18);
-
-  ctx.restore();
-}
-
-// ── Decorative prefix "小福悟语：" ────────────────────────────────────────────
+// ── "To Everybody：" prefix ──────────────────────────────────────────────────
 function drawPrefix(ctx: CanvasRenderingContext2D, elapsed: number, alpha: number, y: number) {
-  const te = elapsed - PREFIX_IN;
-  if (te <= 0) return;
-  const a  = easeOutCubic(clamp(te / 700, 0, 1)) * alpha;
-  const dx = (1 - easeOutCubic(clamp(te / 700, 0, 1))) * -70;
+  const ea  = easeOutCubic(clamp(elapsed / 600, 0, 1));
+  const dx  = (1 - ea) * -70;
+  const a   = clamp(elapsed / 400, 0, 1) * alpha;
   ctx.save(); ctx.globalAlpha = a;
   ctx.font = 'italic bold 78px Georgia, "Noto Serif SC", serif';
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -119,10 +78,8 @@ function drawPrefix(ctx: CanvasRenderingContext2D, elapsed: number, alpha: numbe
 
 // ── Chinese main sentence ─────────────────────────────────────────────────────
 function drawChineseText(ctx: CanvasRenderingContext2D, elapsed: number, alpha: number, text: string) {
-  const te = elapsed - CHINESE_IN;
-  if (te <= 0) return;
-  const ea  = easeOutCubic(clamp(te / 900, 0, 1));
-  const a   = clamp(te / 700, 0, 1) * alpha;
+  const ea   = easeOutCubic(clamp(elapsed / 700, 0, 1));
+  const a    = clamp(elapsed / 500, 0, 1) * alpha;
   const yOff = (1 - ea) * 50;
   ctx.save(); ctx.globalAlpha = a;
   ctx.font = `900 96px "Noto Sans SC", sans-serif`;
@@ -140,10 +97,9 @@ function drawChineseText(ctx: CanvasRenderingContext2D, elapsed: number, alpha: 
 
 // ── English translation ───────────────────────────────────────────────────────
 function drawEnglishText(ctx: CanvasRenderingContext2D, elapsed: number, alpha: number, text: string) {
-  const te = elapsed - ENGLISH_IN;
-  if (te <= 0) return;
-  const a  = easeOutCubic(clamp(te / 800, 0, 1)) * alpha;
-  const yOff = (1 - easeOutCubic(clamp(te / 800, 0, 1))) * 30;
+  const ea   = easeOutCubic(clamp(elapsed / 700, 0, 1));
+  const a    = clamp(elapsed / 500, 0, 1) * alpha;
+  const yOff = (1 - ea) * 30;
   ctx.save(); ctx.globalAlpha = a;
   ctx.font = `italic 400 58px Georgia, "Times New Roman", serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -157,20 +113,18 @@ function drawEnglishText(ctx: CanvasRenderingContext2D, elapsed: number, alpha: 
   ctx.restore();
 }
 
-// ── 收到，ok + floating particles ───────────────────────────────────────────
+// ── 收到，OK + floating particles ────────────────────────────────────────────
 function drawOK(
   ctx: CanvasRenderingContext2D,
   elapsed: number,
   alpha: number,
   particles: TrParticle[],
 ) {
-  const te = elapsed - OK_IN;
-  if (te <= 0) return;
-  const mainA = easeOutCubic(clamp(te / 700, 0, 1)) * alpha;
+  const mainA = easeOutCubic(clamp(elapsed / 800, 0, 1)) * alpha;
 
   // Floating background copies
   particles.forEach(p => {
-    const pt = te - p.delay;
+    const pt = elapsed - p.delay;
     if (pt <= 0 || pt > 4000) return;
     const fadeIn  = clamp(pt / 500, 0, 1);
     const fadeOut = 1 - clamp((pt - 3200) / 800, 0, 1);
@@ -185,9 +139,8 @@ function drawOK(
     ctx.restore();
   });
 
-  // Main centered text "收到回复：Yes"
+  // Main centered "收到，OK"
   ctx.save(); ctx.globalAlpha = mainA;
-  // Pill background
   ctx.font = `900 88px "Noto Sans SC", sans-serif`;
   const tw = ctx.measureText('收到，OK').width;
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
@@ -202,76 +155,13 @@ function drawOK(
   ctx.restore();
 }
 
-// ── Ending "再来" poster ──────────────────────────────────────────────────────
+// ── Simple fade-to-black ending ──────────────────────────────────────────────
 function drawEnding(ctx: CanvasRenderingContext2D, elapsed: number) {
-  const bgTe = elapsed - END_BG;
-  if (bgTe <= 0) return;
-
-  // Black fade-over
-  const bgA = easeOutCubic(clamp(bgTe / 600, 0, 1));
-  ctx.fillStyle = `rgba(4,0,0,${bgA * 0.97})`;
+  const te = elapsed - MAIN_FADE;
+  if (te <= 0) return;
+  const a = easeOutCubic(clamp(te / FADE_OUT, 0, 1));
+  ctx.fillStyle = `rgba(0,0,0,${a})`;
   ctx.fillRect(0, 0, CW, CH);
-
-  // "再" — left character
-  const re = elapsed - END_RE;
-  if (re > 0) {
-    const ea = easeOutCubic(clamp(re / 700, 0, 1));
-    const sc = 0.55 + ea * 0.45;
-    ctx.save();
-    ctx.translate(CW / 2 - 190, CH / 2 + 10);
-    ctx.scale(sc, sc);
-    ctx.font = `900 310px "Noto Serif SC", "Songti SC", serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#c83030'; ctx.shadowBlur = 50;
-    ctx.fillStyle = '#7a1a1a';
-    ctx.fillText('拜', 0, 0);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-  }
-
-  // "来" — right character (200ms delay)
-  const lai = elapsed - END_LAI;
-  if (lai > 0) {
-    const ea = easeOutCubic(clamp(lai / 700, 0, 1));
-    const sc = 0.55 + ea * 0.45;
-    ctx.save();
-    ctx.translate(CW / 2 + 190, CH / 2 + 10);
-    ctx.scale(sc, sc);
-    ctx.font = `900 310px "Noto Serif SC", "Songti SC", serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.shadowColor = '#c83030'; ctx.shadowBlur = 50;
-    ctx.fillStyle = '#7a1a1a';
-    ctx.fillText('拜', 0, 0);
-    ctx.shadowBlur = 0;
-    ctx.restore();
-  }
-
-  // Divider line
-  const lineTe = elapsed - END_LINE;
-  if (lineTe > 0) {
-    const lineA = easeOutCubic(clamp(lineTe / 500, 0, 1));
-    const lineH = 280 * lineA;
-    ctx.save(); ctx.globalAlpha = lineA * 0.55;
-    ctx.strokeStyle = '#c83030'; ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(CW / 2, CH / 2 - 140);
-    ctx.lineTo(CW / 2, CH / 2 - 140 + lineH);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // "小福分享舍" badge persists on ending
-  if (bgA > 0.5) {
-    drawBadge(ctx, bgA);
-  }
-
-  // Final fade to black
-  const finalTe = elapsed - FINAL_FADE;
-  if (finalTe > 0) {
-    const fa = clamp(finalTe / 1200, 0, 1);
-    ctx.fillStyle = `rgba(0,0,0,${fa})`;
-    ctx.fillRect(0, 0, CW, CH);
-  }
 }
 
 // ── Main draw function ────────────────────────────────────────────────────────
@@ -285,23 +175,21 @@ export function drawTranslation(
   const englishText = content.points[0]?.desc ?? '';
 
   // Background
-  const bgAlpha = clamp(elapsed / 600, 0, 1);
+  const bgAlpha = clamp(elapsed / FADE_IN, 0, 1);
   drawBg(ctx, bgAlpha);
 
   // Main content fades out as ending approaches
-  const mainFade = clamp((elapsed - MAIN_FADE) / 600, 0, 1);
-  const mainAlpha = (1 - mainFade) * bgAlpha;
+  const fadeOut   = clamp((elapsed - MAIN_FADE) / FADE_OUT, 0, 1);
+  const mainAlpha = (1 - fadeOut) * bgAlpha;
 
   if (mainAlpha > 0.01) {
-    drawBadge(ctx, mainAlpha);
-
-    // Compute Chinese text block top to adaptively position prefix 15px above it
+    // Compute Chinese text block top to position prefix 15px above it
     ctx.font = `900 96px "Noto Sans SC", sans-serif`;
     const cnLines    = wrapText(ctx, chineseText, 1060);
-    const cnTotalH   = cnLines.length * 128;           // 128px lineH matches drawChineseText
-    const cnBlockTop = CH * 0.44 - cnTotalH / 2;      // top edge of Chinese text block
+    const cnTotalH   = cnLines.length * 128;
+    const cnBlockTop = CH * 0.44 - cnTotalH / 2;
     const prefixFsz  = 78;
-    const prefixY    = cnBlockTop - 15 - prefixFsz / 2; // 15px gap + half font (middle baseline)
+    const prefixY    = cnBlockTop - 15 - prefixFsz / 2;
 
     drawPrefix(ctx, elapsed, mainAlpha, prefixY);
     drawChineseText(ctx, elapsed, mainAlpha, chineseText);
