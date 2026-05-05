@@ -178,7 +178,7 @@ function drawAccountBadge(
   ctx.shadowBlur   = 0;
   ctx.font      = `400 24px "Noto Sans SC", sans-serif`;
   ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.fillText('知识分享 · 每日更新', 68, 106);
+  ctx.fillText('', 68, 106);
   ctx.restore();
 }
 
