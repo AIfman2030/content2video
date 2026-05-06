@@ -18,6 +18,7 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   nature:      '#4ade80',
   subtitle:    '#ffd700',
   translation: '#ffe44d',
+  manga:       '#f59e0b',
 };
 
 const MAX_POINTS: Record<StyleType, number> = {

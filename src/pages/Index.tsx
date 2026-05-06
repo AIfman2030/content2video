@@ -1,15 +1,28 @@
 import { useState, type ReactNode } from 'react';
 import { Film, Key, Video } from 'lucide-react';
-import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, SubtitleOptions, CityOptions } from '../types/video';
-import { DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS } from '../types/video';
+import type {
+  StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
+  SubtitleOptions, CityOptions, MangaContent, MangaOptions,
+} from '../types/video';
+import {
+  DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS,
+} from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import ContentEditor from '../components/ContentEditor';
+import MangaContentEditor from '../components/MangaContentEditor';
+import MangaGenerationProgress from '../components/MangaGenerationProgress';
 import StyleConfigPanel from '../components/StyleConfigPanel';
 import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
 import StudioCanvas from '../components/StudioCanvas';
-import { extractContent, extractNatureContent, translateSentence, getStoredApiKey } from '../services/deepseek';
+import {
+  extractContent, extractNatureContent, translateSentence, getStoredApiKey,
+} from '../services/deepseek';
+import {
+  generateMangaContent, type GenerationProgress,
+} from '../services/mangaGenerator';
+import { supabase } from '../integrations/supabase/client';
 
 // ─── Subtitle: parse numbered items from raw text (no AI) ─────────────────────
 function parseSubtitleContent(text: string): GeneratedContent {
@@ -56,6 +69,7 @@ const BG_BY_STYLE: Record<StyleType, string> = {
   nature:      'linear-gradient(160deg, #060e06 0%, #0d1a0e 50%, #111f12 100%)',
   subtitle:    'linear-gradient(160deg, #020204 0%, #07070f 50%, #0a0a12 100%)',
   translation: 'linear-gradient(160deg, #190404 0%, #3b0c0c 50%, #631414 100%)',
+  manga:       'linear-gradient(160deg, #0e0818 0%, #1a0a2e 50%, #2d1b4e 100%)',
 };
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
@@ -65,6 +79,13 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   nature:      '#4ade80',
   subtitle:    '#ffd700',
   translation: '#ffe44d',
+  manga:       '#f59e0b',
+};
+
+// Dummy content used to trigger canvas engine for manga style
+const MANGA_DUMMY_CONTENT: GeneratedContent = {
+  title: '',
+  points: [],
 };
 
 export default function Index() {
@@ -75,6 +96,12 @@ export default function Index() {
   const [natureContent, setNatureContent] = useState<NatureContent | null>(null);
   const [showRecorder, setShowRecorder] = useState(false);
   const [apiKeyOpen, setApiKeyOpen] = useState(false);
+
+  // ── Manga-specific state ───────────────────────────────────────────────────
+  const [mangaContent, setMangaContent] = useState<MangaContent | null>(null);
+  const [mangaProgress, setMangaProgress] = useState<GenerationProgress | null>(null);
+  const [mangaOptions, setMangaOptions] = useState<MangaOptions>(DEFAULT_MANGA_OPTIONS);
+  const [mangaRegeneratingIndexes, setMangaRegeneratingIndexes] = useState<Set<number>>(new Set());
 
   // ── Live config state (lifted from ContentForm) ───────────────────────────
   const [coverIndex, setCoverIndex] = useState(0);
@@ -96,11 +123,13 @@ export default function Index() {
     setStyle(s);
     setContent(null);
     setNatureContent(null);
+    setMangaContent(null);
+    setMangaProgress(null);
     setError('');
     setCoverIndex(0);
   };
 
-  // ── Generate ─────────────────────────────────────────────────────────────
+  // ── Generate (non-manga styles) ───────────────────────────────────────────
   const handleGenerate = async (text: string) => {
     setError('');
     setIsLoading(true);
@@ -135,6 +164,80 @@ export default function Index() {
     }
   };
 
+  // ── Generate manga style ──────────────────────────────────────────────────
+  const handleGenerateManga = async (text: string) => {
+    if (!text.trim()) return;
+    setError('');
+    setMangaContent(null);
+    setMangaProgress({ phase: 'script', total: 0, done: 0, segments: [] });
+    setIsLoading(true);
+    try {
+      const result = await generateMangaContent(
+        text,
+        (p) => setMangaProgress(p),
+        mangaOptions.disclaimer,
+      );
+      setMangaContent(result);
+      setMangaProgress(null);
+      // Trigger StudioCanvas with dummy content so canvas engine initializes
+      setContent(MANGA_DUMMY_CONTENT);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '生成失败，请重试';
+      if (msg === 'NO_API_KEY') setApiKeyOpen(true);
+      else setError(msg);
+      setMangaProgress(null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ── Manga: per-image regenerate ───────────────────────────────────────────
+  const handleRegenerateImage = async (index: number) => {
+    if (!mangaContent) return;
+    const seg = mangaContent.segments[index];
+    if (!seg) return;
+
+    setMangaRegeneratingIndexes(prev => new Set(prev).add(index));
+    try {
+      const { data } = await supabase.functions.invoke('manga-image-submit', {
+        body: { prompt: seg.scene },
+      });
+      if (!data?.task_id) return;
+
+      // Poll for result
+      let url: string | null = null;
+      for (let i = 0; i < 60; i++) {
+        await new Promise(r => setTimeout(r, 2500));
+        const { data: statusData } = await supabase.functions.invoke('manga-image-status', {
+          body: { task_id: data.task_id },
+        });
+        if (statusData?.status === 'succeed' && statusData?.images?.[0]?.url) {
+          url = statusData.images[0].url;
+          break;
+        }
+        if (statusData?.status === 'failed') break;
+      }
+
+      if (url) {
+        setMangaContent(prev => {
+          if (!prev) return prev;
+          const segments = prev.segments.map((s, i2) =>
+            i2 === index ? { ...s, imageUrl: url! } : s
+          );
+          return { ...prev, segments };
+        });
+        // Trigger canvas rebuild
+        setContent(c => c ? { ...c } : MANGA_DUMMY_CONTENT);
+      }
+    } finally {
+      setMangaRegeneratingIndexes(prev => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
+    }
+  };
+
   // ── Manual entry: create blank content skeleton ─────────────────────────
   const handleManual = () => {
     const blank: GeneratedContent = {
@@ -148,6 +251,17 @@ export default function Index() {
 
   // ── Live content editing (from ContentEditor) ────────────────────────────
   const handleContentChange = (c: GeneratedContent) => setContent(c);
+
+  // ── Manga content change → triggers canvas re-init ───────────────────────
+  const handleMangaContentChange = (mc: MangaContent) => {
+    setMangaContent(mc);
+    setContent(c => c ? { ...c } : MANGA_DUMMY_CONTENT);
+  };
+
+  // Determine whether canvas can be shown
+  const isManga = style === 'manga';
+  const canvasContent = isManga ? (mangaContent ? MANGA_DUMMY_CONTENT : null) : content;
+  const hasRecordableContent = isManga ? !!mangaContent : !!content;
 
   return (
     <div className="flex flex-col h-screen overflow-hidden transition-all duration-700" style={{ background: bg }}>
@@ -165,7 +279,7 @@ export default function Index() {
           <span className="text-sm font-bold text-white">小福 · 视频生成器</span>
         </div>
         <div className="flex items-center gap-2">
-          {content && (
+          {hasRecordableContent && (
             <button
               onClick={() => setShowRecorder(true)}
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all hover:scale-105 active:scale-95"
@@ -224,6 +338,8 @@ export default function Index() {
                 onSubtitleOptionsChange={setSubtitleOptions}
                 cityOptions={cityOptions}
                 onCityOptionsChange={setCityOptions}
+                mangaOptions={mangaOptions}
+                onMangaOptionsChange={setMangaOptions}
                 accentOverrides={accentOverrides}
                 onAccentOverrideChange={(sty, color) =>
                   setAccentOverrides(prev => ({ ...prev, [sty]: color }))
@@ -233,31 +349,55 @@ export default function Index() {
 
             <Divider />
 
-            {/* ③ 内容输入 + 生成 */}
+            {/* ③ 内容 */}
             <section className="space-y-2">
               <SectionTitle>
                 内容配置
-                {content && (
+                {(content || mangaContent) && (
                   <span className="ml-1.5 text-[9px] font-normal px-1.5 py-0.5 rounded-full" style={{ background: `${accent}22`, color: accent }}>
-                    编辑中
+                    {isManga ? `${mangaContent?.segments.length} 段` : '编辑中'}
                   </span>
                 )}
               </SectionTitle>
-              {content ? (
-                <ContentEditor
-                  content={content}
-                  style={style}
-                  onChange={handleContentChange}
-                  onReset={() => { setContent(null); setNatureContent(null); setError(''); }}
-                />
+
+              {/* MANGA flow */}
+              {isManga ? (
+                mangaContent ? (
+                  <MangaContentEditor
+                    content={mangaContent}
+                    onChange={handleMangaContentChange}
+                    onReset={() => { setMangaContent(null); setMangaProgress(null); setContent(null); setError(''); }}
+                    onRegenerateImage={handleRegenerateImage}
+                    regeneratingIndexes={mangaRegeneratingIndexes}
+                  />
+                ) : mangaProgress ? (
+                  <MangaGenerationProgress progress={mangaProgress} />
+                ) : (
+                  <ContentForm
+                    style={style}
+                    onGenerate={handleGenerateManga}
+                    isLoading={isLoading}
+                    error={error}
+                  />
+                )
               ) : (
-                <ContentForm
-                  style={style}
-                  onGenerate={handleGenerate}
-                  isLoading={isLoading}
-                  error={error}
-                  onManual={handleManual}
-                />
+                /* Non-manga flow */
+                content ? (
+                  <ContentEditor
+                    content={content}
+                    style={style}
+                    onChange={handleContentChange}
+                    onReset={() => { setContent(null); setNatureContent(null); setError(''); }}
+                  />
+                ) : (
+                  <ContentForm
+                    style={style}
+                    onGenerate={handleGenerate}
+                    isLoading={isLoading}
+                    error={error}
+                    onManual={handleManual}
+                  />
+                )
               )}
             </section>
 
@@ -267,7 +407,7 @@ export default function Index() {
         {/* RIGHT: Live Preview */}
         <main className="flex-1 min-w-0 flex flex-col items-center justify-center p-6 overflow-hidden">
           <StudioCanvas
-            content={content}
+            content={canvasContent}
             style={style}
             coverIndex={coverIndex}
             chineseOptions={chineseOptions}
@@ -277,14 +417,16 @@ export default function Index() {
             subtitleOptions={subtitleOptions}
             accentOverride={accentOverrides[style]}
             cityOptions={cityOptions}
+            mangaContent={mangaContent ?? undefined}
+            mangaOptions={mangaOptions}
           />
         </main>
       </div>
 
       {/* ── Full-screen Recording Overlay ───────────────────────────────────── */}
-      {showRecorder && content && (
+      {showRecorder && hasRecordableContent && (
         <VideoGenerator
-          content={content}
+          content={canvasContent ?? MANGA_DUMMY_CONTENT}
           style={style}
           coverIndex={coverIndex}
           chineseOptions={chineseOptions}
@@ -294,6 +436,8 @@ export default function Index() {
           subtitleOptions={subtitleOptions}
           accentOverride={accentOverrides[style]}
           cityOptions={cityOptions}
+          mangaContent={mangaContent ?? undefined}
+          mangaOptions={mangaOptions}
         />
       )}
 

@@ -1,4 +1,4 @@
-export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation';
+export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
@@ -113,6 +113,30 @@ export interface TranslationOptions {
 export const DEFAULT_TRANSLATION_OPTIONS: TranslationOptions = {
   bgStyle: 'warm',
   highlightColor: '#ffe44d',
+};
+
+// ─── Manga style ──────────────────────────────────────────────────────────────
+export interface MangaSegment {
+  text: string;        // subtitle sentence (editable)
+  scene: string;       // English scene description for image gen (editable)
+  imageUrl: string;    // AI-generated image URL (filled after polling)
+}
+
+export interface MangaContent {
+  segments: MangaSegment[];
+  disclaimer: string;
+}
+
+export interface MangaOptions {
+  disclaimer: string;
+  subtitleFontSize: number;    // default 72
+  slideDurationMs: number;     // ms per segment, default 4000
+}
+
+export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
+  disclaimer: '仅代表个人观点，无任何不良导向',
+  subtitleFontSize: 72,
+  slideDurationMs: 4000,
 };
 
 // ─── Content / generator ──────────────────────────────────────────────────────

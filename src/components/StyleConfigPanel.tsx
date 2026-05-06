@@ -6,7 +6,7 @@ import { Plus, X } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
-  ColorScheme, AnimMode, PolyShape, CityOptions,
+  ColorScheme, AnimMode, PolyShape, CityOptions, MangaOptions,
 } from '../types/video';
 import CoverPicker from './CoverPicker';
 
@@ -24,6 +24,8 @@ interface Props {
   onSubtitleOptionsChange: (v: SubtitleOptions) => void;
   cityOptions: CityOptions;
   onCityOptionsChange: (v: CityOptions) => void;
+  mangaOptions: MangaOptions;
+  onMangaOptionsChange: (v: MangaOptions) => void;
   accentOverrides: Partial<Record<StyleType, string>>;
   onAccentOverrideChange: (sty: StyleType, color: string) => void;
 }
@@ -703,6 +705,45 @@ function SubtitlePanel({ opts, onChange, accentColor, onAccentColorChange }: {
   );
 }
 
+function MangaPanel({ opts, onChange }: {
+  opts: MangaOptions; onChange: (v: MangaOptions) => void;
+}) {
+  const u = (patch: Partial<MangaOptions>) => onChange({ ...opts, ...patch });
+  return (
+    <div className="space-y-4">
+      <Row>
+        <Label>免责声明文字（顶部）</Label>
+        <input
+          type="text"
+          value={opts.disclaimer}
+          onChange={e => u({ disclaimer: e.target.value })}
+          placeholder="仅代表个人观点，无任何不良导向"
+          className="w-full px-2.5 py-1.5 rounded-lg text-xs text-white placeholder-white/25 outline-none transition-all"
+          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}
+          onFocus={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.25)')}
+          onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
+        />
+      </Row>
+      <NumericSlider
+        label="字幕字号"
+        value={opts.subtitleFontSize}
+        min={48}
+        max={100}
+        onChange={v => u({ subtitleFontSize: v })}
+      />
+      <NumericSlider
+        label="每段停留时间"
+        value={opts.slideDurationMs / 1000}
+        min={2}
+        max={8}
+        step={0.5}
+        unit="s"
+        onChange={v => u({ slideDurationMs: Math.round(v * 1000) })}
+      />
+    </div>
+  );
+}
+
 function TranslationPanel({ accentColor, onAccentColorChange }: {
   accentColor: string; onAccentColorChange: (c: string) => void;
 }) {
@@ -724,6 +765,7 @@ export default function StyleConfigPanel({
   aiOptions, onAiOptionsChange,
   subtitleOptions, onSubtitleOptionsChange,
   cityOptions, onCityOptionsChange,
+  mangaOptions, onMangaOptionsChange,
   accentOverrides, onAccentOverrideChange,
 }: Props) {
   const ov = accentOverrides[style];
@@ -795,6 +837,9 @@ export default function StyleConfigPanel({
           onAccentColorChange={c => onAccentOverrideChange('translation', c)}
         />
       );
+
+    case 'manga':
+      return <MangaPanel opts={mangaOptions} onChange={onMangaOptionsChange} />;
 
     default:
       return null;

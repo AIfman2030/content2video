@@ -1,5 +1,5 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions } from '../types/video';
 import { getThemeConfig } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
@@ -21,6 +21,7 @@ import {
   drawTranslation, TR_TOTAL_MS,
   initTrParticles, type TrParticle,
 } from './engine/translation';
+import { drawMangaScene, mangaTotalMs } from './engine/manga';
 
 export { CW, CH };
 
@@ -46,6 +47,8 @@ export async function createAnimEngine(
   subtitleOptions?: SubtitleOptions,
   accentOverride?: string,
   cityOptions?: CityOptions,
+  mangaContent?: MangaContent,
+  mangaOptions?: MangaOptions,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
   // Allow per-style accent override (affects BG, title, overlays, shape decoration)
@@ -54,18 +57,34 @@ export async function createAnimEngine(
   const isNature      = style === 'nature';
   const isSubtitle    = style === 'subtitle';
   const isTranslation = style === 'translation';
+  const isManga       = style === 'manga';
 
   const rand = seededRandom(coverIndex * 31 + content.points.length * 17 + 7);
 
-  // Shape image not needed for nature, subtitle, or translation styles
+  // Shape image not needed for nature, subtitle, translation, or manga styles
   let shapeImg: HTMLImageElement | null = null;
-  if (!isNature && !isSubtitle && !isTranslation) {
+  if (!isNature && !isSubtitle && !isTranslation && !isManga) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     const shapeId = shapeList[coverIndex % shapeList.length]?.id ?? shapeList[0].id;
     const shapeColor = style === 'city' ? '#f5d87a' : accent;
     const lineWidth = style === 'chinese' ? (chineseOptions?.lineWidth ?? 2) : 1.5;
     shapeImg = await loadShapeImage(style, shapeId, shapeColor, lineWidth);
+  }
+
+  // Manga: pre-load all images
+  let mangaImages: HTMLImageElement[] = [];
+  if (isManga && mangaContent) {
+    mangaImages = await Promise.all(
+      mangaContent.segments.map(s => new Promise<HTMLImageElement>((resolve, reject) => {
+        if (!s.imageUrl) { resolve(new Image()); return; }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(new Image()); // resolve with empty on error
+        img.src = s.imageUrl;
+      }))
+    );
   }
 
   const chineseEffects = style === 'chinese'  ? initChineseEffects(rand) : null;
@@ -76,20 +95,24 @@ export async function createAnimEngine(
   const trPs: TrParticle[] | null = isTranslation
     ? initTrParticles(rand) : null;
 
+  const slideDurMs = mangaOptions?.slideDurationMs ?? 4000;
+
   const ctx = canvas.getContext('2d')!;
-  const total = isNature
-    ? natureTotalMs(
-        natureContent?.leftItems.length ?? 0,
-        natureContent?.rightItems.length ?? 0,
-        natureContent?.commonItems?.length ?? 0,
-      )
-    : isSubtitle
-      ? subtitleTotalMs(content, subtitleOptions)
-      : isTranslation
-        ? TR_TOTAL_MS
-        : style === 'city'
-          ? cityTotalMs(content.points.length)
-          : totalDuration(content.points.length);
+  const total = isManga
+    ? mangaTotalMs(mangaContent?.segments.length ?? 0, slideDurMs)
+    : isNature
+      ? natureTotalMs(
+          natureContent?.leftItems.length ?? 0,
+          natureContent?.rightItems.length ?? 0,
+          natureContent?.commonItems?.length ?? 0,
+        )
+      : isSubtitle
+        ? subtitleTotalMs(content, subtitleOptions)
+        : isTranslation
+          ? TR_TOTAL_MS
+          : style === 'city'
+            ? cityTotalMs(content.points.length)
+            : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
   let lastElapsed = 0;
@@ -97,6 +120,12 @@ export async function createAnimEngine(
 
   function render(elapsed: number) {
     ctx.clearRect(0, 0, CW, CH);
+
+    // ── Manga: fully self-contained pipeline ──
+    if (isManga && mangaContent && mangaOptions) {
+      drawMangaScene(ctx, elapsed, mangaContent, mangaOptions, mangaImages);
+      return;
+    }
 
     // ── Subtitle: fully self-contained pipeline ──
     if (isSubtitle && subtitlePs) {

@@ -55,6 +55,14 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
     bg: 'linear-gradient(135deg,#190404,#631414)',
     accent: '#ffe44d',
   },
+  {
+    key: 'manga',
+    name: '漫画字幕',
+    desc: 'AI插画 · 短视频字幕',
+    tag: 'Seedream 4.5 生成',
+    bg: 'linear-gradient(135deg,#1a0a2e,#2d1b4e)',
+    accent: '#f59e0b',
+  },
 ];
 
 export default function StyleSelector({ selected, onChange, compact = false }: Props) {

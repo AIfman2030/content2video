@@ -17,6 +17,7 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   nature:      '#4ade80',
   subtitle:    '#ffd700',
   translation: '#ffe44d',
+  manga:       '#f59e0b',
 };
 
 const PLACEHOLDER = `粘贴你的文章内容，或者直接输入任何文字…
@@ -64,8 +65,9 @@ export default function ContentForm({ style, onGenerate, isLoading, error, onMan
       {/* Text area */}
       <div className="space-y-2">
         <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          {style === 'subtitle'    ? '输入字幕内容（按序号分组）'
+          {style === 'subtitle'     ? '输入字幕内容（按序号分组）'
            : style === 'translation' ? '输入一句中文话语'
+           : style === 'manga'       ? '输入你的文案内容'
            : '粘贴文章内容'}
         </label>
         <div className="relative">
@@ -73,8 +75,9 @@ export default function ContentForm({ style, onGenerate, isLoading, error, onMan
             value={text}
             onChange={e => setText(e.target.value)}
             placeholder={
-              style === 'subtitle'    ? SUBTITLE_PLACEHOLDER
+              style === 'subtitle'     ? SUBTITLE_PLACEHOLDER
               : style === 'translation' ? TRANSLATION_PLACEHOLDER
+              : style === 'manga'       ? '输入你想要表达的内容，AI 会重写成短视频字幕脚本并为每段生成漫画插画…'
               : PLACEHOLDER
             }
             rows={7}
@@ -126,15 +129,17 @@ export default function ContentForm({ style, onGenerate, isLoading, error, onMan
         {isLoading ? (
           <>
             <Loader2 size={16} className="animate-spin" />
-            {style === 'subtitle'    ? '生成中…'
+            {style === 'subtitle'     ? '生成中…'
              : style === 'translation' ? '翻译中…'
+             : style === 'manga'       ? 'AI 生成脚本+插画…'
              : 'AI 提炼中…'}
           </>
         ) : (
           <>
             <Sparkles size={16} />
-            {style === 'subtitle'    ? '生成字幕视频'
+            {style === 'subtitle'     ? '生成字幕视频'
              : style === 'translation' ? '生成翻译视频'
+             : style === 'manga'       ? 'AI 生成漫画视频'
              : '生成视频'}
           </>
         )}

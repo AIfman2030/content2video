@@ -121,7 +121,36 @@ export async function extractNatureContent(text: string): Promise<NatureContent>
   return parsed;
 }
 
-const TRANSLATION_PROMPT = `将用户提供的中文句子翻译成自然流畅的英文。只返回英文翻译，不要标注、不要引号、不要任何其他内容。`;
+const MANGA_SCRIPT_PROMPT = `你是一个自媒体短视频文案专家。用户给你一段文字，你要优化成适合漫画短视频的字幕脚本。
+
+返回格式（严格JSON，不要任何多余文字）：
+{
+  "segments": [
+    {
+      "subtitle": "字幕台词（≤20字，口语化，有感染力）",
+      "scene": "anime manga style illustration, [brief scene in English], dramatic lighting, detailed character, cinematic"
+    }
+  ]
+}
+
+规则：
+- 生成 5~8 段
+- 每段字幕≤20字，口语化，连贯流畅，有情绪感
+- 每段的 scene 用简洁英文描述与字幕对应的画面，风格为 anime manga illustration
+- 场景描述要多样，不要重复（如：close-up face, two people talking, city background, indoor scene等）
+- 只返回JSON，不要任何其他文字`;
+
+export async function extractMangaScript(text: string): Promise<{ subtitle: string; scene: string }[]> {
+  if (text.length < 10) throw new Error('内容太短');
+  const raw = await callDeepSeek(MANGA_SCRIPT_PROMPT, text, 1000);
+  let parsed: { segments: { subtitle: string; scene: string }[] };
+  try { parsed = parseJsonFromAI(raw) as typeof parsed; }
+  catch { throw new Error('AI 返回格式错误，请重试'); }
+  if (!Array.isArray(parsed.segments) || parsed.segments.length === 0) {
+    throw new Error('AI 返回数据不完整，请重试');
+  }
+  return parsed.segments;
+}
 
 export async function translateSentence(text: string): Promise<string> {
   const raw = await callDeepSeek(TRANSLATION_PROMPT, text, 250);

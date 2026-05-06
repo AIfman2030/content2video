@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Video, Download, RotateCcw, Loader2 } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4 } from '../lib/mp4Converter';
 import { CoverPreview } from './CoverPreview';
@@ -16,6 +16,8 @@ interface Props {
   subtitleOptions?: SubtitleOptions;
   accentOverride?: string;
   cityOptions?: CityOptions;
+  mangaContent?: MangaContent;
+  mangaOptions?: MangaOptions;
 }
 
 const PREVIEW_W = 512;
@@ -24,7 +26,7 @@ type RecordState = 'idle' | 'recording' | 'converting' | 'done';
 
 export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
-  subtitleOptions, accentOverride, cityOptions,
+  subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<'cover' | 'video'>('cover');
@@ -51,7 +53,7 @@ export default function VideoGenerator({
   useEffect(() => {
     if (!canvasRef.current) return;
     setEngineReady(false); setInitError('');
-    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions)
+    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions)
       .then(engine => { engineRef.current = engine; setEngineReady(true); engine.start(); })
       .catch(err => setInitError(String(err)));
     return () => { engineRef.current?.stop(); };

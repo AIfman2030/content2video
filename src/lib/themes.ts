@@ -57,6 +57,15 @@ export function getThemeConfig(style: StyleType, chineseOptions?: ChineseOptions
       gridColor: '#c8303040',
     };
   }
+  if (style === 'manga') {
+    return {
+      bg: ['#0e0818', '#1a0a2e', '#2d1b4e'],
+      accent: '#f59e0b',
+      accent2: '#fde68a',
+      particle: '#f59e0b',
+      gridColor: '#f59e0b40',
+    };
+  }
   // aitech
   return {
     bg: ['#080c14', '#0f172a', '#1e1b4b'],
