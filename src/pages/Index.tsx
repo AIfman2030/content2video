@@ -211,11 +211,12 @@ export default function Index() {
         const { data: statusData } = await supabase.functions.invoke('manga-image-status', {
           body: { task_id: data.task_id },
         });
-        if (statusData?.status === 'succeed' && statusData?.images?.[0]?.url) {
-          url = statusData.images[0].url;
+        const status: string = statusData?.data?.status;
+        if (status === 'done' && statusData?.code === 10000) {
+          url = statusData?.data?.image_urls?.[0] ?? null;
           break;
         }
-        if (statusData?.status === 'failed') break;
+        if (status === 'done' || status === 'not_found' || status === 'expired') break;
       }
 
       if (url) {

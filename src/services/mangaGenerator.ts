@@ -43,12 +43,15 @@ async function pollImageTask(taskId: string): Promise<string | null> {
       const { data, error } = await supabase.functions.invoke('manga-image-status', {
         body: { task_id: taskId },
       });
-      if (error) continue;
-      if (data?.status === 'succeed' && data?.images?.[0]?.url) {
-        return data.images[0].url as string;
+      if (error) { console.warn('poll error:', error); continue; }
+      // Volcengine response: { code, data: { status, image_urls[] } }
+      const status: string = data?.data?.status;
+      if (status === 'done' && data?.code === 10000) {
+        return (data?.data?.image_urls?.[0] as string) ?? null;
       }
-      if (data?.status === 'failed') return null;
-    } catch {
+      if (status === 'done' || status === 'not_found' || status === 'expired') return null;
+    } catch (e) {
+      console.warn('poll exception:', e);
       continue;
     }
   }
