@@ -117,46 +117,5 @@ export function drawTitle(
   }
   ctx.shadowBlur = 0;
 
-  // ── Decorators (only for non-aitech styles) ────────────────────────────────
-  if (style !== 'aitech' && eased > 0.3) {
-    const lineAlpha = clamp((eased - 0.3) / 0.7, 0, 1);
-    const lineY = titleY + fontSize * 0.6;
-    const lineLen = 280 * lineAlpha;
-    const lg = ctx.createLinearGradient(CW / 2 - lineLen, lineY, CW / 2 + lineLen, lineY);
-    lg.addColorStop(0, 'rgba(0,0,0,0)');
-    lg.addColorStop(0.3, hex2rgba(accent, lineAlpha));
-    lg.addColorStop(0.7, hex2rgba(accent, lineAlpha));
-    lg.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.strokeStyle = lg; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(CW / 2 - lineLen, lineY); ctx.lineTo(CW / 2 + lineLen, lineY); ctx.stroke();
-    [-lineLen - 12, lineLen + 12].forEach(dx => {
-      ctx.save(); ctx.translate(CW / 2 + dx, lineY); ctx.rotate(Math.PI / 4);
-      ctx.strokeStyle = hex2rgba(accent2, lineAlpha * 0.8); ctx.lineWidth = 2;
-      ctx.strokeRect(-6, -6, 12, 12); ctx.restore();
-    });
-  }
-
-  // ── Tag line ───────────────────────────────────────────────────────────────
-  if (eased > 0.7) {
-    const tagAlpha = clamp((eased - 0.7) / 0.3, 0, 1);
-    if (style === 'aitech') {
-      // Tag below title, left-aligned in corner
-      const tagY = titleY + fontSize * 0.72;
-      ctx.font = `600 24px "Noto Sans SC", sans-serif`;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = hex2rgba(accent2, tagAlpha * 0.90);
-      ctx.fillText('> SYSTEM ANALYSIS', LEFT_PAD, tagY);
-    } else {
-      const tagY = titleY - fontSize * 0.8;
-      ctx.font = `600 30px "Noto Sans SC", sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = hex2rgba(accent, tagAlpha * 0.88);
-      ctx.fillText(
-        style === 'chinese' ? '✦  ✦' : style === 'city' ? '▸ INSIGHT REPORT' : '▸ NATURE INSIGHT',
-        CW / 2, tagY,
-      );
-    }
-  }
-
   ctx.restore();
 }
