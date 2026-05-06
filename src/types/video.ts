@@ -65,6 +65,13 @@ export interface CityOptions {
   accentColor: string;                     // warm highlight
   secondaryColor: string;                  // contrast (default red)
   animSpeed: 'slow' | 'normal' | 'fast';
+  // Text style overrides (optional — fall back to defaults when empty/undefined)
+  labelFontSize?: number;   // default 108
+  labelColor?: string;      // default '' = use accent
+  shortFontSize?: number;   // default 64
+  shortColor?: string;      // default '' = white
+  descFontSize?: number;    // default 40
+  descColor?: string;       // default '' = rgba(220,220,220,0.90)
 }
 
 export const DEFAULT_CITY_OPTIONS: CityOptions = {

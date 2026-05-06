@@ -6,7 +6,7 @@ import { Plus, X } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
-  ColorScheme, AnimMode, PolyShape,
+  ColorScheme, AnimMode, PolyShape, CityOptions,
 } from '../types/video';
 import CoverPicker from './CoverPicker';
 
@@ -14,19 +14,16 @@ import CoverPicker from './CoverPicker';
 interface Props {
   style: StyleType;
   accent: string;
-  // cover selection (chinese / city / aitech / nature)
   coverIndex: number;
   onCoverIndexChange: (v: number) => void;
-  // Chinese
   chineseOptions: ChineseOptions;
   onChineseOptionsChange: (v: ChineseOptions) => void;
-  // AI Tech polyShape (legacy, kept for VideoGenerator compat)
   aiOptions: AIOptions;
   onAiOptionsChange: (v: AIOptions) => void;
-  // Subtitle
   subtitleOptions: SubtitleOptions;
   onSubtitleOptionsChange: (v: SubtitleOptions) => void;
-  // Per-style accent colour override (city / aitech / nature / translation)
+  cityOptions: CityOptions;
+  onCityOptionsChange: (v: CityOptions) => void;
   accentOverrides: Partial<Record<StyleType, string>>;
   onAccentOverrideChange: (sty: StyleType, color: string) => void;
 }
@@ -389,11 +386,18 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
   );
 }
 
-function CityPanel({ coverIndex, onCoverIndexChange, accentColor, onAccentColorChange, style }: {
+function CityPanel({
+  coverIndex, onCoverIndexChange,
+  accentColor, onAccentColorChange,
+  style,
+  cityOptions, onCityOptionsChange,
+}: {
   coverIndex: number; onCoverIndexChange: (v: number) => void;
   accentColor: string; onAccentColorChange: (c: string) => void;
   style: StyleType;
+  cityOptions: CityOptions; onCityOptionsChange: (v: CityOptions) => void;
 }) {
+  const upd = (patch: Partial<CityOptions>) => onCityOptionsChange({ ...cityOptions, ...patch });
   return (
     <div className="space-y-4">
       <Row>
@@ -401,9 +405,18 @@ function CityPanel({ coverIndex, onCoverIndexChange, accentColor, onAccentColorC
         <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
       </Row>
       <ColorPicker label="强调色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
-      <div className="text-[10px] px-2 py-1.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.25)' }}>
-        强调色影响背景光效、标题装饰和形状颜色
-      </div>
+
+      <SectionDivider title="标题（数字+关键词）" />
+      <NumericSlider label="字号" value={cityOptions.labelFontSize ?? 108} min={60} max={140} onChange={v => upd({ labelFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=强调色）" value={cityOptions.labelColor ?? ''} placeholder="跟随强调色" onChange={c => upd({ labelColor: c })} accent={accentColor} />
+
+      <SectionDivider title="副标题" />
+      <NumericSlider label="字号" value={cityOptions.shortFontSize ?? 64} min={36} max={90} onChange={v => upd({ shortFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=白色）" value={cityOptions.shortColor ?? ''} placeholder="rgba(255,255,255,0.95)" onChange={c => upd({ shortColor: c })} accent={accentColor} />
+
+      <SectionDivider title="说明文字" />
+      <NumericSlider label="字号" value={cityOptions.descFontSize ?? 40} min={22} max={56} onChange={v => upd({ descFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=浅灰）" value={cityOptions.descColor ?? ''} placeholder="rgba(220,220,220,0.92)" onChange={c => upd({ descColor: c })} accent={accentColor} />
     </div>
   );
 }
@@ -710,6 +723,7 @@ export default function StyleConfigPanel({
   chineseOptions, onChineseOptionsChange,
   aiOptions, onAiOptionsChange,
   subtitleOptions, onSubtitleOptionsChange,
+  cityOptions, onCityOptionsChange,
   accentOverrides, onAccentOverrideChange,
 }: Props) {
   const ov = accentOverrides[style];
@@ -735,6 +749,8 @@ export default function StyleConfigPanel({
           accentColor={ov ?? '#ff8c00'}
           onAccentColorChange={c => onAccentOverrideChange('city', c)}
           style={style}
+          cityOptions={cityOptions}
+          onCityOptionsChange={onCityOptionsChange}
         />
       );
 

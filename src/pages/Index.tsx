@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Film, Key, Video } from 'lucide-react';
-import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, SubtitleOptions } from '../types/video';
-import { DEFAULT_SUBTITLE_OPTIONS } from '../types/video';
+import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent, SubtitleOptions, CityOptions } from '../types/video';
+import { DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
 import StyleConfigPanel from '../components/StyleConfigPanel';
@@ -82,6 +82,7 @@ export default function Index() {
   });
   const [aiOptions, setAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
   const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOptions>(DEFAULT_SUBTITLE_OPTIONS);
+  const [cityOptions, setCityOptions] = useState<CityOptions>(DEFAULT_CITY_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
 
   const accent = style === 'subtitle'
@@ -206,6 +207,8 @@ export default function Index() {
                 onAiOptionsChange={setAiOptions}
                 subtitleOptions={subtitleOptions}
                 onSubtitleOptionsChange={setSubtitleOptions}
+                cityOptions={cityOptions}
+                onCityOptionsChange={setCityOptions}
                 accentOverrides={accentOverrides}
                 onAccentOverrideChange={(sty, color) =>
                   setAccentOverrides(prev => ({ ...prev, [sty]: color }))
@@ -241,6 +244,7 @@ export default function Index() {
             accent={accent}
             subtitleOptions={subtitleOptions}
             accentOverride={accentOverrides[style]}
+            cityOptions={cityOptions}
           />
         </main>
       </div>
@@ -257,6 +261,7 @@ export default function Index() {
           onClose={() => setShowRecorder(false)}
           subtitleOptions={subtitleOptions}
           accentOverride={accentOverrides[style]}
+          cityOptions={cityOptions}
         />
       )}
 

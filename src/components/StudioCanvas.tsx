@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions } from '../types/video';
 import { createAnimEngine, CW, CH, type AnimEngine } from '../lib/canvasEngine';
 
 interface Props {
@@ -11,9 +11,9 @@ interface Props {
   aiOptions: AIOptions;
   natureContent: NatureContent | null;
   accent: string;
-  // ── New ──────────────────────────────────────────────────────────────────────
   subtitleOptions: SubtitleOptions;
-  accentOverride?: string;  // overrides theme accent for city/aitech/nature/translation
+  accentOverride?: string;
+  cityOptions?: CityOptions;
 }
 
 function fmtMs(ms: number): string {
@@ -24,7 +24,7 @@ function fmtMs(ms: number): string {
 
 export default function StudioCanvas({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, accent,
-  subtitleOptions, accentOverride,
+  subtitleOptions, accentOverride, cityOptions,
 }: Props) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const engineRef   = useRef<AnimEngine | null>(null);
@@ -63,9 +63,10 @@ export default function StudioCanvas({
     accOverride: string | undefined,
     onDone: (eng: AnimEngine) => void,
     onFail: (e: string) => void,
+    cito?: CityOptions,
   ) => {
     let cancelled = false;
-    createAnimEngine(canvas, c, sty, ci, cho, aio, nat ?? undefined, undefined, subOpts, accOverride)
+    createAnimEngine(canvas, c, sty, ci, cho, aio, nat ?? undefined, undefined, subOpts, accOverride, cito)
       .then(eng => { if (cancelled) { eng.stop(); return; } onDone(eng); })
       .catch(err => { if (!cancelled) onFail(String(err)); });
     return () => { cancelled = true; };
@@ -96,6 +97,7 @@ export default function StudioCanvas({
         startSync();
       },
       (err) => { setInitError(err); setRefreshing(false); },
+      cityOptions,
     );
     return cancel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,12 +130,13 @@ export default function StudioCanvas({
           startSync();
         },
         (err) => { setInitError(err); setRefreshing(false); },
+        cityOptions,
       );
     }, 400);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverIndex, chineseOptions, aiOptions, style, subtitleOptions, accentOverride]);
+  }, [coverIndex, chineseOptions, aiOptions, style, subtitleOptions, accentOverride, cityOptions]);
 
   // ── Play / Pause ───────────────────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {

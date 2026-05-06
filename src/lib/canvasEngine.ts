@@ -1,5 +1,5 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions } from '../types/video';
 import { getThemeConfig } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
@@ -45,6 +45,7 @@ export async function createAnimEngine(
   onComplete?: () => void,
   subtitleOptions?: SubtitleOptions,
   accentOverride?: string,
+  cityOptions?: CityOptions,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
   // Allow per-style accent override (affects BG, title, overlays, shape decoration)
@@ -128,7 +129,7 @@ export async function createAnimEngine(
 
     // Shape decoration removed — background is plain black
     drawTitle(ctx, elapsed, content, accent, accent2, style);
-    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex, chineseOptions);
+    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions);
 
     const outroStart = (style === 'city'
       ? cityTotalMs(content.points.length)

@@ -4,7 +4,7 @@
 // • 右侧：抽象动画图案（与内容语义对应）
 // • 背景：纯黑 + 透视网格
 
-import type { GeneratedContent } from '../../types/video';
+import type { GeneratedContent, CityOptions } from '../../types/video';
 import { CW, CH, clamp, easeOutCubic, easeInOutQuad, wrapText, T } from './helpers';
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
@@ -272,57 +272,89 @@ function drawLeftContent(
   title: string,
   accent: string,
   alpha: number,
+  cityOptions?: CityOptions,
 ) {
   if (alpha <= 0.01) return;
+
+  // ── Resolve configurable values ──────────────────────────────────────────
+  const labelFsz   = cityOptions?.labelFontSize ?? 108;
+  const labelCol   = (cityOptions?.labelColor && cityOptions.labelColor !== '') ? cityOptions.labelColor : accent;
+  const shortFsz   = cityOptions?.shortFontSize ?? 64;
+  const shortCol   = (cityOptions?.shortColor  && cityOptions.shortColor  !== '') ? cityOptions.shortColor  : 'rgba(255,255,255,0.95)';
+  const descFsz    = cityOptions?.descFontSize  ?? 40;
+  const descCol    = (cityOptions?.descColor    && cityOptions.descColor   !== '') ? cityOptions.descColor   : 'rgba(220,220,220,0.92)';
+
+  const labelLineH = labelFsz + 14;
+  const shortLineH = shortFsz + 10;
+  const descLineH  = descFsz  + 16;
+  const GAP_LS     = 28;  // label → short gap
+  const GAP_SD     = 26;  // short → desc gap
+
+  // ── Measure line counts (needed for centering) ────────────────────────────
+  const labelText = `${slideIdx + 1}. "${point.label || ''}"`;
+  ctx.font = `900 ${labelFsz}px "Noto Sans SC", sans-serif`;
+  const labelLines = wrapText(ctx, labelText, MAX_TEXT_W);
+  ctx.font = `500 ${shortFsz}px "Noto Sans SC", sans-serif`;
+  const shortLines = wrapText(ctx, point.short || '', MAX_TEXT_W);
+  ctx.font = `400 ${descFsz}px "Noto Sans SC", sans-serif`;
+  const descLines  = wrapText(ctx, point.desc  || '', MAX_TEXT_W).slice(0, 4);
+
+  // ── Compute total block height → center at CH/2 ───────────────────────────
+  const labelH  = labelLines.length * labelLineH;
+  const shortH  = shortLines.length > 0 ? shortLines.length * shortLineH : 0;
+  const descH   = descLines.length  > 0 ? descLines.length  * descLineH  : 0;
+  const totalH  = labelH
+    + (shortH > 0 ? GAP_LS + shortH : 0)
+    + (descH  > 0 ? GAP_SD + descH  : 0);
+  const blockTopY = Math.round(CH / 2 - totalH / 2);
+
+  // ── Entrance slide from left ───────────────────────────────────────────────
   const enterEase = easeOutCubic(clamp(slideElapsed / SLIDE_ENTER, 0, 1));
   const xOff = (1 - enterEase) * -130;
 
   ctx.save();
   ctx.globalAlpha = alpha;
   ctx.translate(xOff, 0);
-
-  // ① Topic title — small, dimmed
-  ctx.font = `400 30px "Noto Sans SC", sans-serif`;
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+
+  // Topic title (fixed at top)
+  ctx.font = `400 30px "Noto Sans SC", sans-serif`;
   ctx.fillStyle = 'rgba(200,200,200,0.50)';
   ctx.fillText(title || '', TEXT_X, 78);
 
-  // Vertical accent bar (fades in with enterEase)
+  // Vertical accent bar aligned with content block
   ctx.save();
   ctx.globalAlpha = alpha * 0.35 * enterEase;
-  ctx.strokeStyle = accent; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.moveTo(TEXT_X - 24, 200); ctx.lineTo(TEXT_X - 24, 840); ctx.stroke();
+  ctx.strokeStyle = labelCol; ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(TEXT_X - 24, blockTopY - 18);
+  ctx.lineTo(TEXT_X - 24, blockTopY + totalH + 18);
+  ctx.stroke();
   ctx.restore();
 
-  // ② Number + Label — large, accent colour
-  const labelFsz = 108;
-  const labelLineH = labelFsz + 14;
-  const labelText = `${slideIdx + 1}. "${point.label || ''}"`;
+  // ① Label — large, accent colour
+  const labelY = blockTopY;
   ctx.font = `900 ${labelFsz}px "Noto Sans SC", sans-serif`;
-  ctx.fillStyle = accent;
-  ctx.shadowColor = accent; ctx.shadowBlur = 16;
-  const labelLines = wrapText(ctx, labelText, MAX_TEXT_W);
-  const labelY = 230;
+  ctx.fillStyle = labelCol;
+  ctx.shadowColor = labelCol; ctx.shadowBlur = 16;
   labelLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, labelY + i * labelLineH));
   ctx.shadowBlur = 0;
 
-  // ③ Short — medium, white
-  const shortFsz = 64;
-  const shortLineH = shortFsz + 10;
-  const shortY = labelY + labelLines.length * labelLineH + 28;
-  ctx.font = `500 ${shortFsz}px "Noto Sans SC", sans-serif`;
-  ctx.fillStyle = 'rgba(255,255,255,0.95)';
-  const shortLines = wrapText(ctx, point.short || '', MAX_TEXT_W);
-  shortLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, shortY + i * shortLineH));
+  // ② Short — medium
+  if (shortLines.length > 0) {
+    const shortY = labelY + labelH + GAP_LS;
+    ctx.font = `500 ${shortFsz}px "Noto Sans SC", sans-serif`;
+    ctx.fillStyle = shortCol;
+    shortLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, shortY + i * shortLineH));
+  }
 
-  // ④ Desc — small, dimmer
-  const descFsz = 40;
-  const descLineH = descFsz + 16;
-  const descY = shortY + shortLines.length * shortLineH + 26;
-  ctx.font = `400 ${descFsz}px "Noto Sans SC", sans-serif`;
-  ctx.fillStyle = 'rgba(210,210,210,0.72)';
-  const descLines = wrapText(ctx, point.desc || '', MAX_TEXT_W).slice(0, 4);
-  descLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, descY + i * descLineH));
+  // ③ Desc — small
+  if (descLines.length > 0) {
+    const descY = blockTopY + labelH + (shortH > 0 ? GAP_LS + shortH : 0) + GAP_SD;
+    ctx.font = `400 ${descFsz}px "Noto Sans SC", sans-serif`;
+    ctx.fillStyle = descCol;
+    descLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, descY + i * descLineH));
+  }
 
   ctx.restore();
 }
@@ -336,6 +368,7 @@ export function drawCityCards(
   accent2: string,
   _shapeImg: HTMLImageElement,
   coverIndex: number,
+  cityOptions?: CityOptions,
 ) {
   void accent2; void coverIndex;
 
@@ -376,7 +409,7 @@ export function drawCityCards(
     (slideE > SLIDE_ENTER + SLIDE_HOLD
       ? 1 - clamp((slideE - SLIDE_ENTER - SLIDE_HOLD) / SLIDE_EXIT, 0, 1)
       : 1);
-  drawLeftContent(ctx, leftE, point, slideIdx, content.title || '', accent, leftA);
+  drawLeftContent(ctx, leftE, point, slideIdx, content.title || '', accent, leftA, cityOptions);
   void alpha;
 
   // Progress dots
