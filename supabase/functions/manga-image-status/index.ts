@@ -1,4 +1,5 @@
-// manga-image-status — Poll task status from 即梦AI (Volcengine cv service).
+// manga-image-status — Poll task status from 即梦AI 4.0 (Volcengine cv service).
+// Always returns HTTP 200.
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -29,9 +30,9 @@ async function buildVolcHeaders(
   const region  = "cn-north-1";
   const host    = "visual.volcengineapi.com";
 
-  const now          = new Date();
-  const dateStr      = now.toISOString().slice(0, 10).replace(/-/g, "");
-  const datetimeStr  = now.toISOString().replace(/[-:.]/g, "").slice(0, 15) + "Z";
+  const now         = new Date();
+  const dateStr     = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const datetimeStr = now.toISOString().replace(/[-:.]/g, "").slice(0, 15) + "Z";
 
   const queryStr         = `Action=${action}&Version=2022-08-31`;
   const payloadHash      = await sha256hex(bodyStr);
@@ -59,20 +60,20 @@ async function buildVolcHeaders(
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
+  const json = (body: unknown) =>
+    new Response(JSON.stringify(body), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+
   try {
     const AK = Deno.env.get("JIMENG_ACCESS_KEY");
     const SK = Deno.env.get("JIMENG_SECRET_KEY");
+
     if (!AK || !SK) {
-      return new Response(JSON.stringify({ success: false, message: "即梦API密钥未配置" }), {
-        status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+      return json({ code: -1, message: "即梦API密钥未配置" });
     }
 
     const { task_id } = await req.json();
     if (!task_id) {
-      return new Response(JSON.stringify({ success: false, message: "task_id is required" }), {
-        status: 400, headers: { ...CORS, "Content-Type": "application/json" },
-      });
+      return json({ code: -1, message: "task_id is required" });
     }
 
     const body = JSON.stringify({
@@ -90,18 +91,12 @@ Deno.serve(async (req) => {
     );
 
     const data = await resp.json();
-    console.log("jimeng status resp:", JSON.stringify(data));
+    console.log("[status] task_id:", task_id, "| code:", data?.code, "| status:", data?.data?.status);
 
-    // Pass through the whole response — client reads data.data.status and data.data.image_urls
-    return new Response(JSON.stringify(data), {
-      status: resp.ok ? 200 : resp.status,
-      headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    return json(data);
 
   } catch (e) {
-    console.error("manga-image-status error:", e);
-    return new Response(JSON.stringify({ success: false, message: String(e) }), {
-      status: 500, headers: { ...CORS, "Content-Type": "application/json" },
-    });
+    console.error("[status] exception:", String(e));
+    return json({ code: -1, message: String(e) });
   }
 });
