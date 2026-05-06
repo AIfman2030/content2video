@@ -4,6 +4,7 @@ import type { StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedCont
 import { DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
+import ContentEditor from '../components/ContentEditor';
 import StyleConfigPanel from '../components/StyleConfigPanel';
 import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
@@ -134,6 +135,20 @@ export default function Index() {
     }
   };
 
+  // ── Manual entry: create blank content skeleton ─────────────────────────
+  const handleManual = () => {
+    const blank: GeneratedContent = {
+      title: '',
+      points: [{ label: '', short: '', desc: '', formatted: '' }],
+    };
+    setContent(blank);
+    setNatureContent(null);
+    setError('');
+  };
+
+  // ── Live content editing (from ContentEditor) ────────────────────────────
+  const handleContentChange = (c: GeneratedContent) => setContent(c);
+
   return (
     <div className="flex flex-col h-screen overflow-hidden transition-all duration-700" style={{ background: bg }}>
 
@@ -220,13 +235,30 @@ export default function Index() {
 
             {/* ③ 内容输入 + 生成 */}
             <section className="space-y-2">
-              <SectionTitle>内容配置</SectionTitle>
-              <ContentForm
-                style={style}
-                onGenerate={handleGenerate}
-                isLoading={isLoading}
-                error={error}
-              />
+              <SectionTitle>
+                内容配置
+                {content && (
+                  <span className="ml-1.5 text-[9px] font-normal px-1.5 py-0.5 rounded-full" style={{ background: `${accent}22`, color: accent }}>
+                    编辑中
+                  </span>
+                )}
+              </SectionTitle>
+              {content ? (
+                <ContentEditor
+                  content={content}
+                  style={style}
+                  onChange={handleContentChange}
+                  onReset={() => { setContent(null); setNatureContent(null); setError(''); }}
+                />
+              ) : (
+                <ContentForm
+                  style={style}
+                  onGenerate={handleGenerate}
+                  isLoading={isLoading}
+                  error={error}
+                  onManual={handleManual}
+                />
+              )}
             </section>
 
           </div>

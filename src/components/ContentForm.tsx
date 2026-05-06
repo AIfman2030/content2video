@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles, PencilLine } from 'lucide-react';
 import type { StyleType } from '../types/video';
 
 interface Props {
@@ -7,6 +7,7 @@ interface Props {
   onGenerate: (text: string) => Promise<void>;
   isLoading: boolean;
   error?: string;
+  onManual?: () => void;
 }
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
@@ -45,7 +46,7 @@ const TRANSLATION_PLACEHOLDER = `输入一句中文话语，自动生成英文�
 示例：
 当着外人的面贬低你，实际上是在测试你的底线。`;
 
-export default function ContentForm({ style, onGenerate, isLoading, error }: Props) {
+export default function ContentForm({ style, onGenerate, isLoading, error, onManual }: Props) {
   const [text, setText] = useState('');
 
   const accent = ACCENT_BY_STYLE[style];
@@ -138,6 +139,18 @@ export default function ContentForm({ style, onGenerate, isLoading, error }: Pro
           </>
         )}
       </button>
+
+      {/* Manual entry link */}
+      {onManual && (
+        <button
+          onClick={onManual}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs transition-colors hover:bg-white/5"
+          style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid transparent' }}
+        >
+          <PencilLine size={12} />
+          手动填写内容
+        </button>
+      )}
     </div>
   );
 }
