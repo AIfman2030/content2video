@@ -31,8 +31,8 @@ async function buildVolcHeaders(
   const host    = "visual.volcengineapi.com";
 
   const now         = new Date();
-  const dateStr     = now.toISOString().slice(0, 10).replace(/-/g, "");           // YYYYMMDD
-  const datetimeStr = now.toISOString().replace(/[-:.]/g, "").slice(0, 15) + "Z"; // YYYYMMDDTHHmmssZ
+  const dateStr     = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const datetimeStr = now.toISOString().replace(/[-:.]/g, "").slice(0, 15) + "Z";
 
   const queryStr         = `Action=${action}&Version=2022-08-31`;
   const payloadHash      = await sha256hex(bodyStr);
@@ -57,6 +57,21 @@ async function buildVolcHeaders(
   };
 }
 
+/** Parse error from either Volcengine service-level or IAM-level response */
+function parseVolcError(data: Record<string, unknown>): string | null {
+  // Service-level: { code: 50400, message: "Access Denied" }
+  if (data.code !== undefined && data.code !== 10000) {
+    return `[${data.code}] ${data.message}`;
+  }
+  // IAM-level: { ResponseMetadata: { Error: { Code, Message } } }
+  const meta = data.ResponseMetadata as Record<string, unknown> | undefined;
+  if (meta?.Error) {
+    const err = meta.Error as Record<string, unknown>;
+    return `[IAM ${err.Code}] ${err.Message}`;
+  }
+  return null;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
@@ -64,10 +79,10 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(body), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
 
   try {
-    const AK = Deno.env.get("JIMENG_ACCESS_KEY");
-    const SK = Deno.env.get("JIMENG_SECRET_KEY");
+    const AK = Deno.env.get("JIMENG_ACCESS_KEY") ?? "";
+    const SK = Deno.env.get("JIMENG_SECRET_KEY") ?? "";
 
-    console.log("[submit] AK present:", !!AK, "| SK present:", !!SK);
+    console.log("[submit] AK present:", !!AK, "| SK present:", !!SK, "| AK prefix:", AK.slice(0, 8));
 
     if (!AK || !SK) {
       return json({ success: false, message: "即梦API密钥未配置 (AK/SK missing)" });
@@ -89,22 +104,33 @@ Deno.serve(async (req) => {
     const action  = "CVSync2AsyncSubmitTask";
     const headers = await buildVolcHeaders(AK, SK, action, body);
 
-    console.log("[submit] POST to Volcengine, action:", action);
-    console.log("[submit] prompt:", prompt.slice(0, 80));
-
     const resp = await fetch(
       `https://visual.volcengineapi.com?Action=${action}&Version=2022-08-31`,
       { method: "POST", headers, body },
     );
 
-    const data = await resp.json();
-    console.log("[submit] Volcengine response:", JSON.stringify(data));
+    const rawText = await resp.text();
+    console.log("[submit] HTTP status:", resp.status, "| body:", rawText.slice(0, 300));
 
-    if (data.code !== 10000) {
-      return json({ success: false, message: `Volcengine error ${data.code}: ${data.message}` });
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      return json({ success: false, message: `Non-JSON response (${resp.status}): ${rawText.slice(0, 200)}` });
     }
 
-    return json({ success: true, task_id: data.data?.task_id });
+    const volcErr = parseVolcError(data);
+    if (volcErr) {
+      return json({ success: false, message: volcErr });
+    }
+
+    const taskId = (data.data as Record<string, unknown>)?.task_id as string | undefined;
+    if (!taskId) {
+      return json({ success: false, message: "No task_id in response: " + rawText.slice(0, 200) });
+    }
+
+    console.log("[submit] task_id:", taskId);
+    return json({ success: true, task_id: taskId });
 
   } catch (e) {
     console.error("[submit] exception:", String(e));

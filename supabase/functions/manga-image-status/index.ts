@@ -64,17 +64,15 @@ Deno.serve(async (req) => {
     new Response(JSON.stringify(body), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
 
   try {
-    const AK = Deno.env.get("JIMENG_ACCESS_KEY");
-    const SK = Deno.env.get("JIMENG_SECRET_KEY");
+    const AK = Deno.env.get("JIMENG_ACCESS_KEY") ?? "";
+    const SK = Deno.env.get("JIMENG_SECRET_KEY") ?? "";
 
     if (!AK || !SK) {
       return json({ code: -1, message: "即梦API密钥未配置" });
     }
 
     const { task_id } = await req.json();
-    if (!task_id) {
-      return json({ code: -1, message: "task_id is required" });
-    }
+    if (!task_id) return json({ code: -1, message: "task_id is required" });
 
     const body = JSON.stringify({
       req_key: "jimeng_t2i_v40",
@@ -90,8 +88,15 @@ Deno.serve(async (req) => {
       { method: "POST", headers, body },
     );
 
-    const data = await resp.json();
-    console.log("[status] task_id:", task_id, "| code:", data?.code, "| status:", data?.data?.status);
+    const rawText = await resp.text();
+    console.log("[status] task_id:", task_id, "| HTTP:", resp.status, "| body:", rawText.slice(0, 200));
+
+    let data: Record<string, unknown>;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      return json({ code: -1, message: `Non-JSON: ${rawText.slice(0, 200)}` });
+    }
 
     return json(data);
 
