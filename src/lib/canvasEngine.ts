@@ -25,6 +25,37 @@ import { drawMangaScene, mangaTotalMs } from './engine/manga';
 
 export { CW, CH };
 
+// ── Image proxy: fetch via Supabase edge function → Blob URL (always origin-clean) ──
+const SUPABASE_URL = "https://spb-t4ngxi6xsx650369.supabase.opentrust.net";
+const SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNwYi10NG5neGk2eHN4NjUwMzY5IiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzY5MjgzNDAsImV4cCI6MjA5MjUwNDM0MH0.EHz1XRSbWC1AktqItCyzJ5uK5bTPVGEpsots4QJMHyI";
+
+async function loadCanvasImage(imageUrl: string): Promise<HTMLImageElement> {
+  const empty = new Image();
+  if (!imageUrl) return empty;
+  try {
+    const proxyUrl = `${SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    const resp = await fetch(proxyUrl, {
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (!resp.ok) return empty;
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    return await new Promise<HTMLImageElement>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(empty);
+      img.src = blobUrl; // Blob URLs are always origin-clean — no crossOrigin needed
+    });
+  } catch {
+    return empty;
+  }
+}
+
+export { CW, CH };
+
 export interface AnimEngine {
   start: () => void;
   stop: () => void;
@@ -72,17 +103,11 @@ export async function createAnimEngine(
     shapeImg = await loadShapeImage(style, shapeId, shapeColor, lineWidth);
   }
 
-  // Manga: pre-load all images
+  // Manga: pre-load all images via proxy → Blob URLs (origin-clean for canvas)
   let mangaImages: HTMLImageElement[] = [];
   if (isManga && mangaContent) {
     mangaImages = await Promise.all(
-      mangaContent.segments.map(s => new Promise<HTMLImageElement>((resolve, reject) => {
-        if (!s.imageUrl) { resolve(new Image()); return; }
-        const img = new Image();
-        img.onload = () => resolve(img);
-        img.onerror = () => resolve(new Image()); // resolve with empty on error
-        img.src = s.imageUrl;
-      }))
+      mangaContent.segments.map(s => loadCanvasImage(s.imageUrl ?? ''))
     );
   }
 
