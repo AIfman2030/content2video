@@ -22,7 +22,7 @@ import {
 import {
   generateMangaContent, type GenerationProgress,
 } from '../services/mangaGenerator';
-import { supabase } from '../integrations/supabase/client';
+import { generateArkImage } from '../services/ark';
 
 // ─── Subtitle: parse numbered items from raw text (no AI) ─────────────────────
 function parseSubtitleContent(text: string): GeneratedContent {
@@ -158,6 +158,7 @@ export default function Index() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
       if (msg === 'NO_API_KEY') setApiKeyOpen(true);
+      else if (msg === 'NO_ARK_KEY') setApiKeyOpen(true);
       else setError(msg);
     } finally {
       setIsLoading(false);
@@ -184,6 +185,7 @@ export default function Index() {
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '生成失败，请重试';
       if (msg === 'NO_API_KEY') setApiKeyOpen(true);
+      else if (msg === 'NO_ARK_KEY') setApiKeyOpen(true);
       else setError(msg);
       setMangaProgress(null);
     } finally {
@@ -199,26 +201,19 @@ export default function Index() {
 
     setMangaRegeneratingIndexes(prev => new Set(prev).add(index));
     try {
-      // Ark API is synchronous — returns image URL directly, no polling
-      const { data } = await supabase.functions.invoke('manga-image-submit', {
-        body: { prompt: seg.scene },
+      // Direct Ark API call from browser — no edge function, no timeout issues
+      const url = await generateArkImage(seg.scene);
+      setMangaContent(prev => {
+        if (!prev) return prev;
+        const segments = prev.segments.map((s, i2) =>
+          i2 === index ? { ...s, imageUrl: url } : s
+        );
+        return { ...prev, segments };
       });
-      const url: string | null = data?.success ? (data.imageUrl ?? null) : null;
-      if (!url) {
-        console.error('Regen failed:', data?.message);
-      }
-
-      if (url) {
-        setMangaContent(prev => {
-          if (!prev) return prev;
-          const segments = prev.segments.map((s, i2) =>
-            i2 === index ? { ...s, imageUrl: url! } : s
-          );
-          return { ...prev, segments };
-        });
-        // Trigger canvas rebuild
-        setContent(c => c ? { ...c } : MANGA_DUMMY_CONTENT);
-      }
+      // Trigger canvas rebuild
+      setContent(c => c ? { ...c } : MANGA_DUMMY_CONTENT);
+    } catch (e) {
+      console.error('Regen failed:', e instanceof Error ? e.message : e);
     } finally {
       setMangaRegeneratingIndexes(prev => {
         const next = new Set(prev);

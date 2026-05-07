@@ -1,8 +1,7 @@
-// mangaGenerator.ts
-// Orchestrates AI script generation + parallel image generation for manga style.
-// Uses Ark API (Doubao Seedream 4.5) — synchronous, no polling needed.
-import { supabase } from '../integrations/supabase/client';
+// mangaGenerator.ts — Orchestrates script + parallel image generation for manga style.
+// Images are generated via direct browser fetch to Ark API (no edge function needed).
 import { extractMangaScript } from './deepseek';
+import { generateArkImage } from './ark';
 import type { MangaContent, MangaSegment } from '../types/video';
 
 export type SegmentStatus = 'pending' | 'generating' | 'done' | 'error';
@@ -19,33 +18,12 @@ export interface GenerationProgress {
   }>;
 }
 
-/** Call Ark API via edge function — returns image URL directly (synchronous). */
-async function generateImage(prompt: string): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.functions.invoke('manga-image-submit', {
-      body: { prompt },
-    });
-    if (error) {
-      console.error('Edge function error:', error);
-      return null;
-    }
-    if (!data?.success || !data?.imageUrl) {
-      console.error('Image generation failed:', data?.message ?? 'unknown error');
-      return null;
-    }
-    return data.imageUrl as string;
-  } catch (e) {
-    console.error('generateImage exception:', e);
-    return null;
-  }
-}
-
 export async function generateMangaContent(
   inputText: string,
   onProgress: (p: GenerationProgress) => void,
   disclaimer = '仅代表个人观点，无任何不良导向',
 ): Promise<MangaContent> {
-  // ── Phase 1: Extract script ────────────────────────────────────────────────
+  // ── Phase 1: Extract subtitle script ──────────────────────────────────────
   onProgress({ phase: 'script', total: 0, done: 0, segments: [] });
   const rawSegments = await extractMangaScript(inputText);
 
@@ -63,7 +41,7 @@ export async function generateMangaContent(
     segments: [...progressSegments],
   });
 
-  // ── Phase 2: Generate all images in parallel (synchronous API, no polling) ─
+  // ── Phase 2: Generate all images in parallel (direct Ark API call) ─────────
   await Promise.all(
     rawSegments.map(async (s, i) => {
       progressSegments[i].status = 'generating';
@@ -74,9 +52,14 @@ export async function generateMangaContent(
         segments: [...progressSegments],
       });
 
-      const url = await generateImage(s.scene);
-      progressSegments[i].imageUrl = url ?? '';
-      progressSegments[i].status = url ? 'done' : 'error';
+      try {
+        const url = await generateArkImage(s.scene);
+        progressSegments[i].imageUrl = url;
+        progressSegments[i].status = 'done';
+      } catch (e) {
+        console.error(`Image ${i} failed:`, e instanceof Error ? e.message : e);
+        progressSegments[i].status = 'error';
+      }
 
       onProgress({
         phase: 'images',
@@ -87,7 +70,6 @@ export async function generateMangaContent(
     })
   );
 
-  // Build final MangaContent
   const segments: MangaSegment[] = progressSegments.map(s => ({
     text: s.text,
     scene: s.scene,
