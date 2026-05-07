@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Play, Video, Download, RotateCcw, Loader2 } from 'lucide-react';
+import { X, Play, Video, Download, RotateCcw, Loader2, Mic } from 'lucide-react';
 import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4 } from '../lib/mp4Converter';
 import { CoverPreview } from './CoverPreview';
+import { synthesize } from '../services/tts';
 
 interface Props {
   content: GeneratedContent;
@@ -22,7 +23,7 @@ interface Props {
 
 const PREVIEW_W = 512;
 const PREVIEW_H = Math.round(512 * CH / CW);
-type RecordState = 'idle' | 'recording' | 'converting' | 'done';
+type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'done';
 
 export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
@@ -33,23 +34,33 @@ export default function VideoGenerator({
   const [engineReady, setEngineReady] = useState(false);
   const [recordState, setRecordState] = useState<RecordState>('idle');
   const [progress, setProgress] = useState(0);
+  const [ttsStep, setTtsStep] = useState({ done: 0, total: 0 });
   const [downloadUrl, setDownloadUrl] = useState('');
   const [initError, setInitError] = useState('');
   const engineRef = useRef<Awaited<ReturnType<typeof createAnimEngine>> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
+  // Keep latest mangaOptions/mangaContent accessible in callbacks without re-creating them
+  const mangaOptionsRef = useRef(mangaOptions);
+  mangaOptionsRef.current = mangaOptions;
+  const mangaContentRef = useRef(mangaContent);
+  mangaContentRef.current = mangaContent;
+
+  const isGeneratingAudio = recordState === 'generating_audio';
   const isRecording = recordState === 'recording';
   const isConverting = recordState === 'converting';
   const isDone = recordState === 'done';
+  const isBusy = isGeneratingAudio || isRecording || isConverting;
   const aspect = CW / CH;
 
   const accent = style === 'chinese' ? '#e74c3c'
     : style === 'city' ? '#f5d87a'
     : style === 'nature' ? '#4ade80' : '#a855f7';
 
-  // Init engine once (pre-load even in cover phase so canvas is ready)
+  // Init engine once
   useEffect(() => {
     if (!canvasRef.current) return;
     setEngineReady(false); setInitError('');
@@ -62,7 +73,6 @@ export default function VideoGenerator({
 
   const handleContinue = useCallback(() => {
     setPhase('video');
-    // Restart preview animation
     engineRef.current?.restart();
   }, []);
 
@@ -74,29 +84,118 @@ export default function VideoGenerator({
   const handleRecord = useCallback(async () => {
     const canvas = canvasRef.current, engine = engineRef.current;
     if (!canvas || !engine) return;
-    setRecordState('recording'); setProgress(0); chunksRef.current = [];
+
+    const opts = mangaOptionsRef.current;
+    const mc = mangaContentRef.current;
+    const isMangaTts = style === 'manga' && opts?.ttsEnabled && mc?.segments?.length;
+
+    chunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
-    const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType });
+
+    // ── Phase A: Pre-generate TTS audio ────────────────────────────────────
+    let audioCtx: AudioContext | null = null;
+    let audioDest: MediaStreamAudioDestinationNode | null = null;
+    const audioBuffers: (AudioBuffer | null)[] = [];
+
+    if (isMangaTts) {
+      const segments = mc!.segments;
+      const voice = opts!.ttsVoice ?? 'zh-CN-XiaoxiaoNeural';
+
+      setRecordState('generating_audio');
+      setTtsStep({ done: 0, total: segments.length });
+      setProgress(0);
+
+      audioCtx = new AudioContext();
+      audioDest = audioCtx.createMediaStreamDestination();
+      audioCtxRef.current = audioCtx;
+
+      for (let i = 0; i < segments.length; i++) {
+        try {
+          const ab = await synthesize(segments[i].text, voice);
+          const decoded = await audioCtx.decodeAudioData(ab.slice(0));
+          audioBuffers.push(decoded);
+        } catch (e) {
+          console.warn(`TTS segment ${i} failed:`, e);
+          audioBuffers.push(null);
+        }
+        setTtsStep({ done: i + 1, total: segments.length });
+        setProgress(Math.round((i + 1) / segments.length * 100));
+      }
+    }
+
+    // ── Phase B: Start MediaRecorder with combined stream ──────────────────
+    setRecordState('recording');
+    setProgress(0);
+
+    const videoStream = canvas.captureStream(30);
+    const recordStream = (audioCtx && audioDest)
+      ? new MediaStream([...videoStream.getTracks(), ...audioDest.stream.getTracks()])
+      : videoStream;
+
+    const recorder = new MediaRecorder(recordStream, { mimeType });
     recorderRef.current = recorder;
+
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = async () => {
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      audioCtxRef.current?.close();
+      audioCtxRef.current = null;
       setRecordState('converting'); setProgress(0);
       try {
         const mp4 = await webmToMp4(new Blob(chunksRef.current, { type: mimeType }), r => setProgress(Math.round(r * 100)));
         setDownloadUrl(URL.createObjectURL(mp4)); setProgress(100); setRecordState('done');
       } catch {
-        // FFmpeg failed — fall back to raw WebM with correct extension
         const webmBlob = new Blob(chunksRef.current, { type: 'video/webm' });
         setDownloadUrl(URL.createObjectURL(webmBlob) + '#webm');
         setProgress(100); setRecordState('done');
       }
     };
+
     recorder.start(100);
-    const total = engine.getTotalMs(), t0 = performance.now();
-    progressTimerRef.current = setInterval(() => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100);
-    engine.restart(() => { setTimeout(() => { recorder.stop(); if (progressTimerRef.current) clearInterval(progressTimerRef.current); }, 500); });
-  }, []);
+
+    const total = engine.getTotalMs();
+
+    // ── Phase C: Schedule audio + start engine (synchronized) ─────────────
+    if (audioCtx && audioDest && audioBuffers.length > 0) {
+      const slideSec = (opts!.slideDurationMs ?? 4000) / 1000;
+      // Schedule audio to start 200ms from now; engine also starts after 200ms
+      const startAt = audioCtx.currentTime + 0.2;
+      audioBuffers.forEach((buf, i) => {
+        if (!buf || !audioDest) return;
+        const src = audioCtx!.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioDest);
+        src.start(startAt + i * slideSec);
+      });
+
+      // Start engine 200ms later (in sync with audio)
+      setTimeout(() => {
+        const t0 = performance.now();
+        progressTimerRef.current = setInterval(
+          () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100
+        );
+        engine.restart(() => {
+          setTimeout(() => {
+            recorder.stop();
+            if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+          }, 500);
+        });
+      }, 200);
+    } else {
+      // No TTS — original flow
+      const t0 = performance.now();
+      progressTimerRef.current = setInterval(
+        () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100
+      );
+      engine.restart(() => {
+        setTimeout(() => {
+          recorder.stop();
+          if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+        }, 500);
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [style]);
 
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
@@ -106,15 +205,15 @@ export default function VideoGenerator({
     const a = document.createElement('a'); a.href = url; a.download = `${content.title.slice(0, 12)}${ext}`; a.click();
   }, [downloadUrl, content.title]);
 
-  const showControls = !isRecording && !isConverting;
+  const showControls = !isBusy;
 
   return (
-    <div className="fixed inset-0" style={{ zIndex: isRecording || isConverting ? 100 : 50 }}>
+    <div className="fixed inset-0" style={{ zIndex: isBusy ? 100 : 50 }}>
       {/* Overlay background */}
       <div className="absolute inset-0 transition-all duration-500"
         style={{ background: isRecording ? '#000' : 'rgba(0,0,0,0.88)', backdropFilter: isRecording ? 'none' : 'blur(6px)' }} />
 
-      {/* Cover phase — shown over everything */}
+      {/* Cover phase */}
       {phase === 'cover' && (
         <div className="absolute inset-0 flex items-center justify-center overflow-y-auto py-8" style={{ zIndex: 10 }}>
           <div className="w-full max-w-sm px-4">
@@ -135,7 +234,7 @@ export default function VideoGenerator({
         </div>
       )}
 
-      {/* Animation canvas — always in DOM, hidden during cover phase */}
+      {/* Animation canvas */}
       <div className="absolute inset-0 flex items-center justify-center overflow-hidden"
         style={{ zIndex: 1, visibility: phase === 'video' ? 'visible' : 'hidden' }}>
         <div style={isRecording ? {
@@ -162,6 +261,7 @@ export default function VideoGenerator({
             width: isRecording ? `max(100vw, calc(100vh * ${aspect}))` : PREVIEW_W,
             height: isRecording ? `max(100vh, calc(100vw / ${aspect}))` : PREVIEW_H,
           }} />
+          {/* REC indicator (only during actual recording) */}
           <div style={{ display: isRecording ? 'block' : 'none' }}>
             <div className="absolute top-5 right-6 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
@@ -173,6 +273,24 @@ export default function VideoGenerator({
           </div>
         </div>
       </div>
+
+      {/* Generating audio overlay */}
+      {isGeneratingAudio && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ zIndex: 2 }}>
+          <div className="flex items-center justify-center w-14 h-14 rounded-full"
+            style={{ background: `${accent}22`, border: `1.5px solid ${accent}55` }}>
+            <Mic size={24} style={{ color: accent }} className="animate-pulse" />
+          </div>
+          <p className="text-white/90 text-base font-medium">正在生成语音…</p>
+          <p className="text-white/40 text-sm tabular-nums">
+            {ttsStep.done} / {ttsStep.total} 段
+          </p>
+          <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
+          </div>
+          <p className="text-xs text-white/25">语音生成完成后自动开始录制</p>
+        </div>
+      )}
 
       {/* Converting overlay */}
       {isConverting && (
@@ -186,7 +304,7 @@ export default function VideoGenerator({
         </div>
       )}
 
-      {/* Controls (video phase only, hidden while recording/converting) */}
+      {/* Controls (video phase, hidden while busy) */}
       {phase === 'video' && (
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-10 pointer-events-none"
           style={{ zIndex: 2, display: showControls ? 'flex' : 'none' }}>
@@ -204,7 +322,8 @@ export default function VideoGenerator({
               <button onClick={handleRecord} disabled={!engineReady}
                 className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
                 style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, color: '#fff', boxShadow: `0 4px 24px ${accent}55` }}>
-                <Video size={15} />全屏录制视频
+                {style === 'manga' && mangaOptions?.ttsEnabled ? <Mic size={15} /> : <Video size={15} />}
+                {style === 'manga' && mangaOptions?.ttsEnabled ? '配音录制视频' : '全屏录制视频'}
               </button>
             ) : (
               <>
@@ -221,7 +340,9 @@ export default function VideoGenerator({
             )}
           </div>
           <p className="mt-3 text-xs text-white/25 pointer-events-none">
-            点击「全屏录制」画面自动全屏并开始录制 · 完成后自动转换为 MP4
+            {style === 'manga' && mangaOptions?.ttsEnabled
+              ? '录制前自动生成语音 · 完成后合并为带音频的 MP4'
+              : '点击「全屏录制」画面自动全屏并开始录制 · 完成后自动转换为 MP4'}
           </p>
         </div>
       )}

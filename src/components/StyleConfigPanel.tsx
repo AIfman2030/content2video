@@ -2,7 +2,8 @@
 // Per-style live configuration panel with colour pickers, selectors, and sliders.
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Mic, MicOff } from 'lucide-react';
+import { TTS_VOICES } from '../services/tts';
 import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
@@ -740,6 +741,56 @@ function MangaPanel({ opts, onChange }: {
         unit="s"
         onChange={v => u({ slideDurationMs: Math.round(v * 1000) })}
       />
+
+      {/* TTS voice narration toggle */}
+      <Row>
+        <div
+          className="flex items-center justify-between cursor-pointer select-none"
+          onClick={() => u({ ttsEnabled: !opts.ttsEnabled })}
+        >
+          <div className="flex items-center gap-2">
+            {opts.ttsEnabled
+              ? <Mic size={13} style={{ color: '#a855f7' }} />
+              : <MicOff size={13} style={{ color: 'rgba(255,255,255,0.3)' }} />
+            }
+            <Label>配音朗读</Label>
+          </div>
+          {/* Toggle pill */}
+          <div
+            className="relative w-9 h-5 rounded-full transition-colors"
+            style={{ background: opts.ttsEnabled ? '#a855f7' : 'rgba(255,255,255,0.12)' }}
+          >
+            <div
+              className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+              style={{ left: opts.ttsEnabled ? '1.25rem' : '0.125rem' }}
+            />
+          </div>
+        </div>
+
+        {opts.ttsEnabled && (
+          <>
+            <div className="flex flex-wrap gap-1.5 mt-2.5">
+              {TTS_VOICES.map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => u({ ttsVoice: v.id })}
+                  className="px-2.5 py-1 rounded-full text-[11px] transition-all"
+                  style={{
+                    background: opts.ttsVoice === v.id ? 'rgba(168,85,247,0.25)' : 'rgba(255,255,255,0.06)',
+                    border: `1px solid ${opts.ttsVoice === v.id ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                    color: opts.ttsVoice === v.id ? '#d8b4fe' : 'rgba(255,255,255,0.5)',
+                  }}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
+              录制时自动生成语音并混入视频（免费·无需 API Key）
+            </p>
+          </>
+        )}
+      </Row>
     </div>
   );
 }

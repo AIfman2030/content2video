@@ -131,12 +131,16 @@ export interface MangaOptions {
   disclaimer: string;
   subtitleFontSize: number;    // default 72
   slideDurationMs: number;     // ms per segment, default 4000
+  ttsEnabled: boolean;         // enable voice narration during recording
+  ttsVoice: string;            // Edge TTS voice ID
 }
 
 export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
   disclaimer: '仅代表个人观点，无任何不良导向',
   subtitleFontSize: 72,
   slideDurationMs: 4000,
+  ttsEnabled: false,
+  ttsVoice: 'zh-CN-XiaoxiaoNeural',
 };
 
 // ─── Content / generator ──────────────────────────────────────────────────────
