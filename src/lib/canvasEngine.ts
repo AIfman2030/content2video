@@ -23,8 +23,6 @@ import {
 } from './engine/translation';
 import { drawMangaScene, mangaTotalMs } from './engine/manga';
 
-export { CW, CH };
-
 // ── Image proxy: fetch via Supabase edge function → Blob URL (always origin-clean) ──
 const SUPABASE_URL = "https://spb-t4ngxi6xsx650369.supabase.opentrust.net";
 const SUPABASE_ANON_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNwYi10NG5neGk2eHN4NjUwMzY5IiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzY5MjgzNDAsImV4cCI6MjA5MjUwNDM0MH0.EHz1XRSbWC1AktqItCyzJ5uK5bTPVGEpsots4QJMHyI";
