@@ -1,5 +1,6 @@
 // mangaGenerator.ts
 // Orchestrates AI script generation + parallel image generation for manga style.
+// Uses Ark API (Doubao Seedream 4.5) — synchronous, no polling needed.
 import { supabase } from '../integrations/supabase/client';
 import { extractMangaScript } from './deepseek';
 import type { MangaContent, MangaSegment } from '../types/video';
@@ -18,44 +19,25 @@ export interface GenerationProgress {
   }>;
 }
 
-const POLL_INTERVAL_MS = 2500;
-const MAX_POLLS = 60; // 2.5s * 60 = 2.5 min max
-
-async function submitImageTask(prompt: string): Promise<string | null> {
+/** Call Ark API via edge function — returns image URL directly (synchronous). */
+async function generateImage(prompt: string): Promise<string | null> {
   try {
     const { data, error } = await supabase.functions.invoke('manga-image-submit', {
       body: { prompt },
     });
-    if (error || !data?.success || !data?.task_id) {
-      console.error('Image submit failed:', error || data?.message);
+    if (error) {
+      console.error('Edge function error:', error);
       return null;
     }
-    return data.task_id as string;
-  } catch {
+    if (!data?.success || !data?.imageUrl) {
+      console.error('Image generation failed:', data?.message ?? 'unknown error');
+      return null;
+    }
+    return data.imageUrl as string;
+  } catch (e) {
+    console.error('generateImage exception:', e);
     return null;
   }
-}
-
-async function pollImageTask(taskId: string): Promise<string | null> {
-  for (let i = 0; i < MAX_POLLS; i++) {
-    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-    try {
-      const { data, error } = await supabase.functions.invoke('manga-image-status', {
-        body: { task_id: taskId },
-      });
-      if (error) { console.warn('poll error:', error); continue; }
-      // Volcengine response: { code, data: { status, image_urls[] } }
-      const status: string = data?.data?.status;
-      if (status === 'done' && data?.code === 10000) {
-        return (data?.data?.image_urls?.[0] as string) ?? null;
-      }
-      if (status === 'done' || status === 'not_found' || status === 'expired') return null;
-    } catch (e) {
-      console.warn('poll exception:', e);
-      continue;
-    }
-  }
-  return null;
 }
 
 export async function generateMangaContent(
@@ -81,28 +63,21 @@ export async function generateMangaContent(
     segments: [...progressSegments],
   });
 
-  // ── Phase 2: Submit all image tasks in parallel ───────────────────────────
-  const taskIds: (string | null)[] = await Promise.all(
+  // ── Phase 2: Generate all images in parallel (synchronous API, no polling) ─
+  await Promise.all(
     rawSegments.map(async (s, i) => {
-      const taskId = await submitImageTask(s.scene);
-      progressSegments[i].status = taskId ? 'generating' : 'error';
+      progressSegments[i].status = 'generating';
       onProgress({
         phase: 'images',
         total: rawSegments.length,
         done: progressSegments.filter(x => x.status === 'done').length,
         segments: [...progressSegments],
       });
-      return taskId;
-    })
-  );
 
-  // ── Phase 3: Poll all tasks (each resolves independently) ─────────────────
-  await Promise.all(
-    taskIds.map(async (taskId, i) => {
-      if (!taskId) return;
-      const url = await pollImageTask(taskId);
+      const url = await generateImage(s.scene);
       progressSegments[i].imageUrl = url ?? '';
       progressSegments[i].status = url ? 'done' : 'error';
+
       onProgress({
         phase: 'images',
         total: rawSegments.length,

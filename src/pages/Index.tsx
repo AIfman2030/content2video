@@ -199,24 +199,13 @@ export default function Index() {
 
     setMangaRegeneratingIndexes(prev => new Set(prev).add(index));
     try {
+      // Ark API is synchronous — returns image URL directly, no polling
       const { data } = await supabase.functions.invoke('manga-image-submit', {
         body: { prompt: seg.scene },
       });
-      if (!data?.task_id) return;
-
-      // Poll for result
-      let url: string | null = null;
-      for (let i = 0; i < 60; i++) {
-        await new Promise(r => setTimeout(r, 2500));
-        const { data: statusData } = await supabase.functions.invoke('manga-image-status', {
-          body: { task_id: data.task_id },
-        });
-        const status: string = statusData?.data?.status;
-        if (status === 'done' && statusData?.code === 10000) {
-          url = statusData?.data?.image_urls?.[0] ?? null;
-          break;
-        }
-        if (status === 'done' || status === 'not_found' || status === 'expired') break;
+      const url: string | null = data?.success ? (data.imageUrl ?? null) : null;
+      if (!url) {
+        console.error('Regen failed:', data?.message);
       }
 
       if (url) {
