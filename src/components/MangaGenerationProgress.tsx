@@ -75,7 +75,6 @@ export default function MangaGenerationProgress({ progress }: Props) {
                     <img
                       src={seg.imageUrl}
                       alt=""
-                      crossOrigin="anonymous"
                       className="w-8 h-5 object-cover rounded"
                       style={{ border: '1px solid rgba(255,255,255,0.1)' }}
                     />

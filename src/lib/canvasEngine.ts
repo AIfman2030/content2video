@@ -79,7 +79,6 @@ export async function createAnimEngine(
       mangaContent.segments.map(s => new Promise<HTMLImageElement>((resolve, reject) => {
         if (!s.imageUrl) { resolve(new Image()); return; }
         const img = new Image();
-        img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
         img.onerror = () => resolve(new Image()); // resolve with empty on error
         img.src = s.imageUrl;

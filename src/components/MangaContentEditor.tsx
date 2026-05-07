@@ -91,7 +91,6 @@ function SegmentCard({
             <img
               src={segment.imageUrl}
               alt={`segment ${index + 1}`}
-              crossOrigin="anonymous"
               className="w-full h-full object-cover"
             />
           ) : (
