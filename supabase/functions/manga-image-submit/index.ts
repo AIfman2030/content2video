@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
             prompt,
             sequential_image_generation: "disabled",
             response_format: "url",
-            size: "1080p",
+            size: "2k",
             stream: false,
             watermark: false,
           }),
@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
       const err = data.error as Record<string, unknown>;
       return ok({ success: false, message: `API错误 [${err.code}]: ${err.message}` });
     }
-    if (!rawText || httpStatus >= 400) {
+    if (httpStatus >= 400) {
       return ok({ success: false, message: `HTTP ${httpStatus}: ${rawText.slice(0, 200)}` });
     }
 
