@@ -23,6 +23,11 @@ async function loadFFmpeg(): Promise<FFmpeg> {
   return ff;
 }
 
+function resetInstance() {
+  ffmpegInstance = null;
+  loadPromise = null;
+}
+
 export async function webmToMp4(
   webmBlob: Blob,
   onProgress?: (ratio: number) => void,
@@ -36,22 +41,43 @@ export async function webmToMp4(
   const inputData = await fetchFile(webmBlob);
   await ff.writeFile('input.webm', inputData);
 
-  // H.264 video + AAC audio → universally compatible MP4
-  // (pix_fmt yuv420p required for iOS; faststart puts moov at front for streaming)
-  await ff.exec([
+  // Try H.264 + AAC (handles both video-only and video+audio WebM)
+  let exitCode = await ff.exec([
     '-i', 'input.webm',
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-crf', '18',
-    '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac',             // encode audio as AAC if present, skip if none
-    '-movflags', '+faststart',
+    '-pix_fmt', 'yuv420p',    // required for iOS / most platforms
+    '-c:a', 'aac',            // encode audio as AAC if audio stream present
+    '-movflags', '+faststart', // moov atom at front → streaming compatible
     'output.mp4',
   ]);
 
+  // If audio encoding failed, retry without audio track
+  if (exitCode !== 0) {
+    try { await ff.deleteFile('output.mp4'); } catch { /* may not exist */ }
+    exitCode = await ff.exec([
+      '-i', 'input.webm',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '18',
+      '-pix_fmt', 'yuv420p',
+      '-an',
+      '-movflags', '+faststart',
+      'output.mp4',
+    ]);
+  }
+
+  if (exitCode !== 0) {
+    try { await ff.deleteFile('input.webm'); } catch { /* ignore */ }
+    try { await ff.deleteFile('output.mp4'); } catch { /* ignore */ }
+    resetInstance(); // reset so next call gets a fresh FFmpeg instance
+    throw new Error(`FFmpeg conversion failed (exit code ${exitCode})`);
+  }
+
   const data = await ff.readFile('output.mp4');
-  await ff.deleteFile('input.webm');
-  await ff.deleteFile('output.mp4');
+  try { await ff.deleteFile('input.webm'); } catch { /* ignore */ }
+  try { await ff.deleteFile('output.mp4'); } catch { /* ignore */ }
 
   return new Blob([data], { type: 'video/mp4' });
 }

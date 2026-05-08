@@ -140,9 +140,22 @@ export default function VideoGenerator({
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
       audioCtxRef.current?.close();
       audioCtxRef.current = null;
-      setRecordState('converting'); setProgress(0);
-      const mp4 = await webmToMp4(new Blob(chunksRef.current, { type: mimeType }), r => setProgress(Math.round(r * 100)));
-      setDownloadUrl(URL.createObjectURL(mp4)); setProgress(100); setRecordState('done');
+      setRecordState('converting');
+      setProgress(0);
+      try {
+        const mp4 = await webmToMp4(
+          new Blob(chunksRef.current, { type: mimeType }),
+          r => setProgress(Math.round(r * 100)),
+        );
+        setDownloadUrl(URL.createObjectURL(mp4));
+        setProgress(100);
+        setRecordState('done');
+      } catch (err) {
+        console.error('MP4 conversion failed:', err);
+        setInitError(`视频转换失败: ${err instanceof Error ? err.message : String(err)}`);
+        setRecordState('idle');
+        setProgress(0);
+      }
     };
 
     recorder.start(100);
@@ -188,7 +201,6 @@ export default function VideoGenerator({
         }, 500);
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [style]);
 
   const handleDownload = useCallback(() => {
