@@ -141,14 +141,8 @@ export default function VideoGenerator({
       audioCtxRef.current?.close();
       audioCtxRef.current = null;
       setRecordState('converting'); setProgress(0);
-      try {
-        const mp4 = await webmToMp4(new Blob(chunksRef.current, { type: mimeType }), r => setProgress(Math.round(r * 100)));
-        setDownloadUrl(URL.createObjectURL(mp4)); setProgress(100); setRecordState('done');
-      } catch {
-        const webmBlob = new Blob(chunksRef.current, { type: 'video/webm' });
-        setDownloadUrl(URL.createObjectURL(webmBlob) + '#webm');
-        setProgress(100); setRecordState('done');
-      }
+      const mp4 = await webmToMp4(new Blob(chunksRef.current, { type: mimeType }), r => setProgress(Math.round(r * 100)));
+      setDownloadUrl(URL.createObjectURL(mp4)); setProgress(100); setRecordState('done');
     };
 
     recorder.start(100);
@@ -199,10 +193,10 @@ export default function VideoGenerator({
 
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
-    const isWebmFallback = downloadUrl.endsWith('#webm');
-    const url = isWebmFallback ? downloadUrl.slice(0, -5) : downloadUrl;
-    const ext = isWebmFallback ? '.webm' : '.mp4';
-    const a = document.createElement('a'); a.href = url; a.download = `${content.title.slice(0, 12)}${ext}`; a.click();
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = `${content.title.slice(0, 12)}.mp4`;
+    a.click();
   }, [downloadUrl, content.title]);
 
   const showControls = !isBusy;

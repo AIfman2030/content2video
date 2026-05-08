@@ -36,16 +36,16 @@ export async function webmToMp4(
   const inputData = await fetchFile(webmBlob);
   await ff.writeFile('input.webm', inputData);
 
-  // Re-encode to H.264 + movflags faststart for maximum platform compatibility
-  // (VP9-in-MP4 is not accepted by most social media platforms; H.264 is universal)
+  // H.264 video + AAC audio → universally compatible MP4
+  // (pix_fmt yuv420p required for iOS; faststart puts moov at front for streaming)
   await ff.exec([
     '-i', 'input.webm',
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-crf', '18',
-    '-pix_fmt', 'yuv420p',   // required for iOS / most platforms
-    '-movflags', '+faststart', // moov atom at front → streaming & upload compatible
-    '-an',                    // no audio track (canvas has no audio)
+    '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac',             // encode audio as AAC if present, skip if none
+    '-movflags', '+faststart',
     'output.mp4',
   ]);
 
