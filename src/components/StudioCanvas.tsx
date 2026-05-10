@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions } from '../types/video';
 import { createAnimEngine, CW, CH, type AnimEngine } from '../lib/canvasEngine';
 
 interface Props {
@@ -16,6 +16,7 @@ interface Props {
   cityOptions?: CityOptions;
   mangaContent?: MangaContent;
   mangaOptions?: MangaOptions;
+  aitechOptions?: AItechOptions;
 }
 
 function fmtMs(ms: number): string {
@@ -26,7 +27,7 @@ function fmtMs(ms: number): string {
 
 export default function StudioCanvas({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, accent,
-  subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions,
+  subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions,
 }: Props) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const engineRef   = useRef<AnimEngine | null>(null);
@@ -68,9 +69,10 @@ export default function StudioCanvas({
     cito?: CityOptions,
     mangaCnt?: MangaContent,
     mangaOpts?: MangaOptions,
+    aitechOpts?: AItechOptions,
   ) => {
     let cancelled = false;
-    createAnimEngine(canvas, c, sty, ci, cho, aio, nat ?? undefined, undefined, subOpts, accOverride, cito, mangaCnt, mangaOpts)
+    createAnimEngine(canvas, c, sty, ci, cho, aio, nat ?? undefined, undefined, subOpts, accOverride, cito, mangaCnt, mangaOpts, aitechOpts)
       .then(eng => { if (cancelled) { eng.stop(); return; } onDone(eng); })
       .catch(err => { if (!cancelled) onFail(String(err)); });
     return () => { cancelled = true; };
@@ -101,7 +103,7 @@ export default function StudioCanvas({
         startSync();
       },
       (err) => { setInitError(err); setRefreshing(false); },
-      cityOptions, mangaContent, mangaOptions,
+      cityOptions, mangaContent, mangaOptions, aitechOptions,
     );
     return cancel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -134,13 +136,13 @@ export default function StudioCanvas({
           startSync();
         },
         (err) => { setInitError(err); setRefreshing(false); },
-        cityOptions, mangaContent, mangaOptions,
+        cityOptions, mangaContent, mangaOptions, aitechOptions,
       );
     }, 400);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverIndex, chineseOptions, aiOptions, style, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions]);
+  }, [coverIndex, chineseOptions, aiOptions, style, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions]);
 
   // ── Play / Pause ───────────────────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {

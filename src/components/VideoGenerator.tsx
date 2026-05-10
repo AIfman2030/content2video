@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Video, Download, RotateCcw, Loader2, Mic } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4 } from '../lib/mp4Converter';
 import { CoverPreview } from './CoverPreview';
@@ -19,6 +19,7 @@ interface Props {
   cityOptions?: CityOptions;
   mangaContent?: MangaContent;
   mangaOptions?: MangaOptions;
+  aitechOptions?: AItechOptions;
 }
 
 const PREVIEW_W = 512;
@@ -27,7 +28,7 @@ type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'd
 
 export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
-  subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions,
+  subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<'cover' | 'video'>('cover');
@@ -64,7 +65,7 @@ export default function VideoGenerator({
   useEffect(() => {
     if (!canvasRef.current) return;
     setEngineReady(false); setInitError('');
-    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions)
+    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions)
       .then(engine => { engineRef.current = engine; setEngineReady(true); engine.start(); })
       .catch(err => setInitError(String(err)));
     return () => { engineRef.current?.stop(); };

@@ -85,6 +85,13 @@ export interface AItechOptions {
   polyShape: PolyShape;
   accentColor: string;
   glowIntensity: 'off' | 'subtle' | 'normal' | 'strong';
+  // ── Text style overrides (undefined = use theme defaults) ────────────────
+  labelFontSize?: number;   // default 70 — big title inside card (golden)
+  labelColor?: string;      // default '' = '#ffe655'
+  shortFontSize?: number;   // default 48 — sub-title inside card
+  shortColor?: string;      // default '' = rgba(255,255,255,0.98) (white)
+  descFontSize?: number;    // default 42 — description outside card
+  descColor?: string;       // default '' = rgba(255,168,48,0.97) (amber)
 }
 
 export const DEFAULT_AITECH_OPTIONS: AItechOptions = {

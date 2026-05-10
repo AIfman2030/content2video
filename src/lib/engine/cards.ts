@@ -1,4 +1,4 @@
-import type { GeneratedContent, StyleType, PolyShape, ChineseOptions, CityOptions } from '../../types/video';
+import type { GeneratedContent, StyleType, PolyShape, ChineseOptions, CityOptions, AItechOptions } from '../../types/video';
 import { CW, CH, clamp, easeOutBack, hex2rgba, roundRect, wrapText, T, PAGE_SIZE, PAGE_HOLD, PAGE_TRANS } from './helpers';
 import { drawCityCards } from './cards-city';
 import { drawAITechCards } from './cards-aitech';
@@ -15,9 +15,10 @@ export function drawCards(
   coverIndex = 0,
   chineseOptions?: ChineseOptions,
   cityOptions?: CityOptions,
+  aitechOptions?: AItechOptions,
 ) {
   if (style === 'city') { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex, cityOptions); return; }
-  if (style === 'aitech') { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon'); return; }
+  if (style === 'aitech') { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon', aitechOptions); return; }
 
   // ── Chinese style: rectangular card grid with auto-pagination ──
   if (elapsed < T.cardBase) return;

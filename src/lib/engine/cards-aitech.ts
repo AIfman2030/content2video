@@ -1,4 +1,4 @@
-import type { GeneratedContent, PolyShape } from '../../types/video';
+import type { GeneratedContent, PolyShape, AItechOptions } from '../../types/video';
 import { CW, CH, clamp, easeOutBack, easeOutCubic, hex2rgba, wrapText, T,
   drawPolygon, drawStar } from './helpers';
 
@@ -21,6 +21,7 @@ export function drawAITechCards(
   accent: string,
   accent2: string,
   polyShape: PolyShape,
+  aitechOpts?: AItechOptions,
 ): void {
   const n        = content.points.length;
   const displayN = Math.min(n, 10);
@@ -30,12 +31,17 @@ export function drawAITechCards(
   const CARD_W   = Math.round(340 * scale);
   // CARD_H is computed per-card (adaptive) — see loop below
   const POLY_R   = Math.round(145 * scale);
-  const lFsz     = Math.round(70 * scale);    // main label (yellow)
-  const sFsz     = Math.round(48 * scale);    // short subtitle
-  const dFsz     = Math.round(42 * scale);    // desc beside/below card (reduced 10px)
+  const lFsz     = Math.round((aitechOpts?.labelFontSize ?? 70) * scale);   // main label
+  const sFsz     = Math.round((aitechOpts?.shortFontSize ?? 48) * scale);   // short subtitle
+  const dFsz     = Math.round((aitechOpts?.descFontSize  ?? 42) * scale);   // desc beside/below card
   const dLineH   = Math.round(64 * scale);    // desc line height
   const cr       = Math.round(14 * scale);
   const sides    = polyShape === 'star5' ? 5 : POLY_SIDES[polyShape] ?? 6;
+
+  // ── Resolved colors ───────────────────────────────────────────────────────
+  const labelClr = aitechOpts?.labelColor || '#ffe655';
+  const shortClr = aitechOpts?.shortColor || 'rgba(255,255,255,0.98)';
+  const descClr  = aitechOpts?.descColor  || 'rgba(255,168,48,0.97)';
 
   // ── Background rings ─────────────────────────────────────────────────────
   if (elapsed > 200) {
@@ -137,19 +143,19 @@ export function drawAITechCards(
     ctx.shadowBlur = 0;
     ctx.restore(); // end scale-in
 
-    // ── Label (大标题 — YELLOW) ────────────────────────────────────────────
-    ctx.shadowColor = '#ffd700'; ctx.shadowBlur = 28;
+    // ── Label (大标题) ─────────────────────────────────────────────────────
+    ctx.shadowColor = labelClr; ctx.shadowBlur = 28;
     ctx.font = `900 ${lFsz}px "Noto Sans SC", sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffe655';
+    ctx.fillStyle = labelClr;
     ctx.fillText(point.label, dcx, labelY);
     ctx.shadowBlur = 0;
 
-    // ── Short (副标题 — white + accent glow) ───────────────────────────────
+    // ── Short (副标题) ─────────────────────────────────────────────────────
     if (shortLines.length > 0) {
       ctx.shadowColor = accent2; ctx.shadowBlur = 22;
       ctx.font = `700 ${sFsz}px "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.98)';
+      ctx.fillStyle = shortClr;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       shortLines.forEach((line, li) => {
         ctx.fillText(line, dcx, shortStartY + li * shortLineH);
@@ -192,7 +198,7 @@ export function drawAITechCards(
           ctx.beginPath();
           ctx.roundRect(textX - lw - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
-          ctx.fillStyle = 'rgba(255,168,48,0.97)';
+          ctx.fillStyle = descClr;
           ctx.fillText(line, textX, lineY);
 
         } else if (isRight) {
@@ -205,7 +211,7 @@ export function drawAITechCards(
           ctx.beginPath();
           ctx.roundRect(textX - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
-          ctx.fillStyle = 'rgba(255,168,48,0.97)';
+          ctx.fillStyle = descClr;
           ctx.fillText(line, textX, lineY);
 
         } else if (isBottom) {
@@ -219,7 +225,7 @@ export function drawAITechCards(
           ctx.beginPath();
           ctx.roundRect(dcx - lw / 2 - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
-          ctx.fillStyle = 'rgba(255,168,48,0.97)';
+          ctx.fillStyle = descClr;
           ctx.fillText(line, dcx, lineY);
 
         } else {
@@ -233,7 +239,7 @@ export function drawAITechCards(
           ctx.beginPath();
           ctx.roundRect(dcx - lw / 2 - 14, lineY - dFsz / 2 - 5, lw + 28, dFsz + 10, 8);
           ctx.fill(); ctx.restore();
-          ctx.fillStyle = 'rgba(255,168,48,0.97)';
+          ctx.fillStyle = descClr;
           ctx.fillText(line, dcx, lineY);
         }
       });

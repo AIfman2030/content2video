@@ -2,10 +2,10 @@ import { useState, type ReactNode } from 'react';
 import { Film, Key, Video } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
-  SubtitleOptions, CityOptions, MangaContent, MangaOptions,
+  SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions,
 } from '../types/video';
 import {
-  DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS,
+  DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS, DEFAULT_AITECH_OPTIONS,
 } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
@@ -109,6 +109,7 @@ export default function Index() {
     colorScheme: 'cinnabar', borderWidth: 2, lineWidth: 2, animMode: 'single',
   });
   const [aiOptions, setAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
+  const [aitechOptions, setAitechOptions] = useState<AItechOptions>(DEFAULT_AITECH_OPTIONS);
   const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOptions>(DEFAULT_SUBTITLE_OPTIONS);
   const [cityOptions, setCityOptions] = useState<CityOptions>(DEFAULT_CITY_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
@@ -319,6 +320,8 @@ export default function Index() {
                 onChineseOptionsChange={setChineseOptions}
                 aiOptions={aiOptions}
                 onAiOptionsChange={setAiOptions}
+                aitechOptions={aitechOptions}
+                onAitechOptionsChange={setAitechOptions}
                 subtitleOptions={subtitleOptions}
                 onSubtitleOptionsChange={setSubtitleOptions}
                 cityOptions={cityOptions}
@@ -404,6 +407,7 @@ export default function Index() {
             cityOptions={cityOptions}
             mangaContent={mangaContent ?? undefined}
             mangaOptions={mangaOptions}
+            aitechOptions={aitechOptions}
           />
         </main>
       </div>
@@ -423,6 +427,7 @@ export default function Index() {
           cityOptions={cityOptions}
           mangaContent={mangaContent ?? undefined}
           mangaOptions={mangaOptions}
+          aitechOptions={aitechOptions}
         />
       )}
 

@@ -7,7 +7,7 @@ import { TTS_VOICES } from '../services/tts';
 import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
-  ColorScheme, AnimMode, PolyShape, CityOptions, MangaOptions,
+  ColorScheme, AnimMode, PolyShape, CityOptions, MangaOptions, AItechOptions,
 } from '../types/video';
 import CoverPicker from './CoverPicker';
 
@@ -21,6 +21,8 @@ interface Props {
   onChineseOptionsChange: (v: ChineseOptions) => void;
   aiOptions: AIOptions;
   onAiOptionsChange: (v: AIOptions) => void;
+  aitechOptions: AItechOptions;
+  onAitechOptionsChange: (v: AItechOptions) => void;
   subtitleOptions: SubtitleOptions;
   onSubtitleOptionsChange: (v: SubtitleOptions) => void;
   cityOptions: CityOptions;
@@ -424,12 +426,14 @@ function CityPanel({
   );
 }
 
-function AItechPanel({ coverIndex, onCoverIndexChange, aiOptions, onAiOptionsChange, accentColor, onAccentColorChange, style }: {
+function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOptionsChange, accentColor, onAccentColorChange, style }: {
   coverIndex: number; onCoverIndexChange: (v: number) => void;
-  aiOptions: AIOptions; onAiOptionsChange: (v: AIOptions) => void;
+  aitechOptions: AItechOptions; onAitechOptionsChange: (v: AItechOptions) => void;
   accentColor: string; onAccentColorChange: (c: string) => void;
   style: StyleType;
 }) {
+  const upd = (patch: Partial<AItechOptions>) => onAitechOptionsChange({ ...aitechOptions, ...patch });
+
   const SHAPES: { value: PolyShape; label: string }[] = [
     { value: 'triangle',  label: '三角' },
     { value: 'quad',      label: '四边' },
@@ -445,8 +449,35 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aiOptions, onAiOptionsCha
         <Label>封面图案</Label>
         <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
       </Row>
-      <PillSelect label="几何形状" value={aiOptions.polyShape} onChange={ps => onAiOptionsChange({ ...aiOptions, polyShape: ps as PolyShape })} options={SHAPES} />
+      <PillSelect label="几何形状" value={aitechOptions.polyShape} onChange={ps => upd({ polyShape: ps as PolyShape })} options={SHAPES} />
       <ColorPicker label="科技主色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
+
+      {/* ── 大标题（Label）样式 ─────────────────────────────────────────── */}
+      <SectionDivider title="大标题样式（卡片内数字/关键词）" />
+      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.35)' }}>
+        字号&nbsp;<b style={{ color: 'rgba(255,255,255,0.55)' }}>{aitechOptions.labelFontSize ?? 70}px</b>
+        &nbsp;·&nbsp;颜色&nbsp;<b style={{ color: aitechOptions.labelColor || '#ffe655' }}>{aitechOptions.labelColor || '金黄色（默认）'}</b>
+      </div>
+      <NumericSlider label="大标题字号" value={aitechOptions.labelFontSize ?? 70} min={40} max={110} onChange={v => upd({ labelFontSize: v })} />
+      <OptionalColorPicker label="大标题颜色（空=金黄）" value={aitechOptions.labelColor ?? ''} placeholder="#ffe655" onChange={c => upd({ labelColor: c })} accent={accentColor} />
+
+      {/* ── 副标题（Short）样式 ────────────────────────────────────────── */}
+      <SectionDivider title="副标题样式（卡片内说明词）" />
+      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.35)' }}>
+        字号&nbsp;<b style={{ color: 'rgba(255,255,255,0.55)' }}>{aitechOptions.shortFontSize ?? 48}px</b>
+        &nbsp;·&nbsp;颜色&nbsp;<b style={{ color: aitechOptions.shortColor || 'rgba(255,255,255,0.98)' }}>{aitechOptions.shortColor || '白色（默认）'}</b>
+      </div>
+      <NumericSlider label="副标题字号" value={aitechOptions.shortFontSize ?? 48} min={28} max={80} onChange={v => upd({ shortFontSize: v })} />
+      <OptionalColorPicker label="副标题颜色（空=白色）" value={aitechOptions.shortColor ?? ''} placeholder="rgba(255,255,255,0.98)" onChange={c => upd({ shortColor: c })} accent={accentColor} />
+
+      {/* ── 描述文字（Desc）样式 ───────────────────────────────────────── */}
+      <SectionDivider title="描述文字样式（卡片外补充说明）" />
+      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.35)' }}>
+        字号&nbsp;<b style={{ color: 'rgba(255,255,255,0.55)' }}>{aitechOptions.descFontSize ?? 42}px</b>
+        &nbsp;·&nbsp;颜色&nbsp;<b style={{ color: aitechOptions.descColor || 'rgba(255,168,48,0.97)' }}>{aitechOptions.descColor || '琥珀色（默认）'}</b>
+      </div>
+      <NumericSlider label="描述字号" value={aitechOptions.descFontSize ?? 42} min={24} max={68} onChange={v => upd({ descFontSize: v })} />
+      <OptionalColorPicker label="描述颜色（空=琥珀色）" value={aitechOptions.descColor ?? ''} placeholder="rgba(255,168,48,0.97)" onChange={c => upd({ descColor: c })} accent={accentColor} />
     </div>
   );
 }
@@ -814,6 +845,7 @@ export default function StyleConfigPanel({
   coverIndex, onCoverIndexChange,
   chineseOptions, onChineseOptionsChange,
   aiOptions, onAiOptionsChange,
+  aitechOptions, onAitechOptionsChange,
   subtitleOptions, onSubtitleOptionsChange,
   cityOptions, onCityOptionsChange,
   mangaOptions, onMangaOptionsChange,
@@ -852,9 +884,13 @@ export default function StyleConfigPanel({
         <AItechPanel
           coverIndex={coverIndex}
           onCoverIndexChange={onCoverIndexChange}
-          aiOptions={aiOptions}
-          onAiOptionsChange={onAiOptionsChange}
-          accentColor={ov ?? '#a855f7'}
+          aitechOptions={aitechOptions}
+          onAitechOptionsChange={(opts) => {
+            // Keep legacy aiOptions.polyShape in sync for backward compat
+            onAiOptionsChange({ ...aiOptions, polyShape: opts.polyShape });
+            onAitechOptionsChange(opts);
+          }}
+          accentColor={accentOverrides['aitech'] ?? '#a855f7'}
           onAccentColorChange={c => onAccentOverrideChange('aitech', c)}
           style={style}
         />
