@@ -20,6 +20,9 @@ function drawImageKenBurns(
   panDir: number,     // +1 or -1 horizontal pan direction
   alpha = 1,
 ) {
+  // Guard: skip images that failed to load
+  if (!img || !img.naturalWidth || !img.naturalHeight) return;
+
   ctx.save();
   ctx.globalAlpha = alpha;
 

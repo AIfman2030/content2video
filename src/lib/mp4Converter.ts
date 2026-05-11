@@ -41,9 +41,12 @@ export async function webmToMp4(
   const inputData = await fetchFile(webmBlob);
   await ff.writeFile('input.webm', inputData);
 
-  // Try H.264 + AAC (handles both video-only and video+audio WebM)
+  // Try H.264 + AAC. Use optional audio map (0:a:0?) so it doesn't fail
+  // when the WebM has no audio track (e.g. video-only recording).
   let exitCode = await ff.exec([
     '-i', 'input.webm',
+    '-map', '0:v:0',          // always include video
+    '-map', '0:a:0?',         // include audio ONLY if present (? = optional)
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
     '-crf', '18',

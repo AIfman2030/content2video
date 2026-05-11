@@ -48,8 +48,8 @@ export function synthesize(
       if (settled) return;
       settled = true;
       ws.close();
-      reject(new Error('TTS timeout (15s)'));
-    }, 15_000);
+      reject(new Error('TTS timeout (8s)'));
+    }, 8_000);
 
     const done = (val: ArrayBuffer | Error) => {
       if (settled) return;

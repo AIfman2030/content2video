@@ -93,7 +93,7 @@ export default function VideoGenerator({
     chunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
 
-    // ── Phase A: Pre-generate TTS audio ────────────────────────────────────
+    // ── Phase A: Pre-generate TTS audio (parallel) ─────────────────────────
     let audioCtx: AudioContext | null = null;
     let audioDest: MediaStreamAudioDestinationNode | null = null;
     const audioBuffers: (AudioBuffer | null)[] = [];
@@ -110,21 +110,38 @@ export default function VideoGenerator({
       audioDest = audioCtx.createMediaStreamDestination();
       audioCtxRef.current = audioCtx;
 
-      for (let i = 0; i < segments.length; i++) {
-        try {
-          const ab = await synthesize(segments[i].text, voice);
-          const decoded = await audioCtx.decodeAudioData(ab.slice(0));
-          audioBuffers.push(decoded);
-        } catch (e) {
-          console.warn(`TTS segment ${i} failed:`, e);
-          audioBuffers.push(null);
-        }
-        setTtsStep({ done: i + 1, total: segments.length });
-        setProgress(Math.round((i + 1) / segments.length * 100));
+      // Generate all segments in parallel — much faster than sequential
+      let doneCount = 0;
+      const results = await Promise.all(
+        segments.map(async (seg, i) => {
+          try {
+            const ab = await synthesize(seg.text, voice);
+            const decoded = await audioCtx!.decodeAudioData(ab.slice(0));
+            doneCount++;
+            setTtsStep({ done: doneCount, total: segments.length });
+            setProgress(Math.round((doneCount / segments.length) * 100));
+            return decoded;
+          } catch (e) {
+            console.warn(`TTS segment ${i} failed:`, e);
+            doneCount++;
+            setTtsStep({ done: doneCount, total: segments.length });
+            return null;
+          }
+        })
+      );
+      audioBuffers.push(...results);
+
+      // If ALL segments failed, skip audio entirely to avoid silent-track confusion
+      const hasAny = audioBuffers.some(b => b !== null);
+      if (!hasAny) {
+        audioCtx.close();
+        audioCtx = null;
+        audioDest = null;
+        audioCtxRef.current = null;
       }
     }
 
-    // ── Phase B: Start MediaRecorder with combined stream ──────────────────
+    // ── Phase B: Set up MediaRecorder stream ───────────────────────────────
     setRecordState('recording');
     setProgress(0);
 
@@ -159,15 +176,30 @@ export default function VideoGenerator({
       }
     };
 
-    recorder.start(100);
-
     const total = engine.getTotalMs();
 
-    // ── Phase C: Schedule audio + start engine (synchronized) ─────────────
-    if (audioCtx && audioDest && audioBuffers.length > 0) {
+    const startRecording = () => {
+      const t0 = performance.now();
+      progressTimerRef.current = setInterval(
+        () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100,
+      );
+      // Start recorder and engine simultaneously
+      recorder.start(100);
+      engine.restart(() => {
+        setTimeout(() => {
+          recorder.stop();
+          if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+        }, 500);
+      });
+    };
+
+    // ── Phase C: Schedule audio then start recorder + engine together ──────
+    if (audioCtx && audioDest && audioBuffers.some(b => b !== null)) {
       const slideSec = (opts!.slideDurationMs ?? 4000) / 1000;
-      // Schedule audio to start 200ms from now; engine also starts after 200ms
-      const startAt = audioCtx.currentTime + 0.2;
+      // Give a tiny gap so scheduling happens before playback starts
+      const SYNC_DELAY_MS = 100;
+      const startAt = audioCtx.currentTime + SYNC_DELAY_MS / 1000;
+
       audioBuffers.forEach((buf, i) => {
         if (!buf || !audioDest) return;
         const src = audioCtx!.createBufferSource();
@@ -176,31 +208,11 @@ export default function VideoGenerator({
         src.start(startAt + i * slideSec);
       });
 
-      // Start engine 200ms later (in sync with audio)
-      setTimeout(() => {
-        const t0 = performance.now();
-        progressTimerRef.current = setInterval(
-          () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100
-        );
-        engine.restart(() => {
-          setTimeout(() => {
-            recorder.stop();
-            if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-          }, 500);
-        });
-      }, 200);
+      // Start recorder + engine after the same delay so audio & video are locked together
+      setTimeout(startRecording, SYNC_DELAY_MS);
     } else {
-      // No TTS — original flow
-      const t0 = performance.now();
-      progressTimerRef.current = setInterval(
-        () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100
-      );
-      engine.restart(() => {
-        setTimeout(() => {
-          recorder.stop();
-          if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-        }, 500);
-      });
+      // No TTS — start immediately
+      startRecording();
     }
   }, [style]);
 
