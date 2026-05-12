@@ -79,19 +79,20 @@ export default function VideoGenerator({
 
   const handlePreview = useCallback(() => {
     engineRef.current?.stop(); engineRef.current?.start();
-    setRecordState('idle'); setProgress(0);
+    setRecordState('idle'); setProgress(0); setInitError('');
   }, []);
 
   const handleRecord = useCallback(async () => {
     const canvas = canvasRef.current, engine = engineRef.current;
     if (!canvas || !engine) return;
 
+    setInitError(''); // clear previous errors
+
     const opts = mangaOptionsRef.current;
     const mc = mangaContentRef.current;
     const isMangaTts = style === 'manga' && opts?.ttsEnabled && mc?.segments?.length;
 
     chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
 
     // ── Phase A: Pre-generate TTS audio (parallel) ─────────────────────────
     let audioCtx: AudioContext | null = null;
@@ -106,7 +107,10 @@ export default function VideoGenerator({
       setTtsStep({ done: 0, total: segments.length });
       setProgress(0);
 
+      // Create AudioContext synchronously (still within user-gesture call stack)
       audioCtx = new AudioContext();
+      // Resume in case browser auto-suspended it (autoplay policy)
+      await audioCtx.resume();
       audioDest = audioCtx.createMediaStreamDestination();
       audioCtxRef.current = audioCtx;
 
@@ -131,13 +135,20 @@ export default function VideoGenerator({
       );
       audioBuffers.push(...results);
 
-      // If ALL segments failed, skip audio entirely to avoid silent-track confusion
+      // Resume again after async work — autoplay policy can re-suspend
+      await audioCtx.resume();
+
+      // If ALL segments failed, show error and abort
       const hasAny = audioBuffers.some(b => b !== null);
       if (!hasAny) {
         audioCtx.close();
         audioCtx = null;
         audioDest = null;
         audioCtxRef.current = null;
+        setInitError('语音生成失败：无法连接到语音服务，请检查网络后重试，或关闭配音开关直接录制视频。');
+        setRecordState('idle');
+        setProgress(0);
+        return;
       }
     }
 
@@ -146,8 +157,19 @@ export default function VideoGenerator({
     setProgress(0);
 
     const videoStream = canvas.captureStream(30);
-    const recordStream = (audioCtx && audioDest)
-      ? new MediaStream([...videoStream.getTracks(), ...audioDest.stream.getTracks()])
+
+    // When audio is present, explicitly request vp9+opus so the audio track is preserved
+    const hasAudio = audioCtx !== null && audioDest !== null;
+    const withAudioMime = 'video/webm;codecs=vp9,opus';
+    const videoOnlyMime = 'video/webm;codecs=vp9';
+    const mimeType = hasAudio
+      ? (MediaRecorder.isTypeSupported(withAudioMime) ? withAudioMime
+        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus'
+        : 'video/webm')
+      : (MediaRecorder.isTypeSupported(videoOnlyMime) ? videoOnlyMime : 'video/webm');
+
+    const recordStream = hasAudio
+      ? new MediaStream([...videoStream.getTracks(), ...audioDest!.stream.getTracks()])
       : videoStream;
 
     const recorder = new MediaRecorder(recordStream, { mimeType });
@@ -183,7 +205,7 @@ export default function VideoGenerator({
       progressTimerRef.current = setInterval(
         () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100,
       );
-      // Start recorder and engine simultaneously
+      // Start recorder and engine simultaneously for frame-accurate sync
       recorder.start(100);
       engine.restart(() => {
         setTimeout(() => {
@@ -196,8 +218,8 @@ export default function VideoGenerator({
     // ── Phase C: Schedule audio then start recorder + engine together ──────
     if (audioCtx && audioDest && audioBuffers.some(b => b !== null)) {
       const slideSec = (opts!.slideDurationMs ?? 4000) / 1000;
-      // Give a tiny gap so scheduling happens before playback starts
-      const SYNC_DELAY_MS = 100;
+      // Small delay so AudioContext clock has time to stabilise after resume()
+      const SYNC_DELAY_MS = 150;
       const startAt = audioCtx.currentTime + SYNC_DELAY_MS / 1000;
 
       audioBuffers.forEach((buf, i) => {
@@ -208,7 +230,7 @@ export default function VideoGenerator({
         src.start(startAt + i * slideSec);
       });
 
-      // Start recorder + engine after the same delay so audio & video are locked together
+      // Start recorder + engine after the same delay so audio & video start together
       setTimeout(startRecording, SYNC_DELAY_MS);
     } else {
       // No TTS — start immediately
@@ -271,8 +293,15 @@ export default function VideoGenerator({
             </div>
           )}
           {initError && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-10 p-4">
-              <span className="text-sm text-red-400 text-center">{initError}</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 z-10 p-4 gap-3">
+              <span className="text-sm text-red-400 text-center leading-relaxed">{initError}</span>
+              <button
+                onClick={() => setInitError('')}
+                className="px-4 py-1.5 rounded-full text-xs font-medium transition-all"
+                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)' }}
+              >
+                关闭
+              </button>
             </div>
           )}
           <canvas ref={canvasRef} width={CW} height={CH} style={{

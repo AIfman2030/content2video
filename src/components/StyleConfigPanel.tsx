@@ -1,9 +1,9 @@
 // StyleConfigPanel.tsx
 // Per-style live configuration panel with colour pickers, selectors, and sliders.
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Plus, X, Mic, MicOff } from 'lucide-react';
-import { TTS_VOICES } from '../services/tts';
+import { Plus, X, Mic, MicOff, Play, Square, Loader2 } from 'lucide-react';
+import { TTS_VOICES, synthesize } from '../services/tts';
 import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
@@ -741,6 +741,44 @@ function MangaPanel({ opts, onChange }: {
   opts: MangaOptions; onChange: (v: MangaOptions) => void;
 }) {
   const u = (patch: Partial<MangaOptions>) => onChange({ ...opts, ...patch });
+
+  // ── Voice preview state ─────────────────────────────────────────────────
+  const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
+  const [loadingVoice, setLoadingVoice] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const previewVoice = async (voiceId: string) => {
+    // Stop any currently playing preview
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (previewingVoice === voiceId) {
+      setPreviewingVoice(null);
+      return;
+    }
+    setLoadingVoice(voiceId);
+    try {
+      const ab = await synthesize('你好，大家好，欢迎使用漫画字幕配音', voiceId);
+      const blob = new Blob([ab], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      setLoadingVoice(null);
+      setPreviewingVoice(voiceId);
+      await audio.play();
+      audio.onended = () => {
+        URL.revokeObjectURL(url);
+        setPreviewingVoice(null);
+        audioRef.current = null;
+      };
+    } catch (e) {
+      console.warn('Voice preview failed:', e);
+      setLoadingVoice(null);
+      setPreviewingVoice(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <Row>
@@ -800,21 +838,57 @@ function MangaPanel({ opts, onChange }: {
 
         {opts.ttsEnabled && (
           <>
-            <div className="flex flex-wrap gap-1.5 mt-2.5">
-              {TTS_VOICES.map(v => (
-                <button
-                  key={v.id}
-                  onClick={() => u({ ttsVoice: v.id })}
-                  className="px-2.5 py-1 rounded-full text-[11px] transition-all"
-                  style={{
-                    background: opts.ttsVoice === v.id ? 'rgba(168,85,247,0.25)' : 'rgba(255,255,255,0.06)',
-                    border: `1px solid ${opts.ttsVoice === v.id ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
-                    color: opts.ttsVoice === v.id ? '#d8b4fe' : 'rgba(255,255,255,0.5)',
-                  }}
-                >
-                  {v.label}
-                </button>
-              ))}
+            <p className="mt-2 mb-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+              选择音色 · 点击
+              <span className="inline-flex items-center mx-1 px-1 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.2)', color: '#d8b4fe' }}>
+                <Play size={8} className="mr-0.5" />试听
+              </span>
+              按钮可预览音色
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {TTS_VOICES.map(v => {
+                const isSelected = opts.ttsVoice === v.id;
+                const isLoading  = loadingVoice === v.id;
+                const isPlaying  = previewingVoice === v.id;
+                return (
+                  <div key={v.id} className="flex items-center gap-1.5">
+                    {/* Voice selector */}
+                    <button
+                      onClick={() => u({ ttsVoice: v.id })}
+                      className="flex-1 px-2.5 py-1.5 rounded-lg text-[11px] text-left transition-all"
+                      style={{
+                        background: isSelected ? 'rgba(168,85,247,0.25)' : 'rgba(255,255,255,0.06)',
+                        border: `1px solid ${isSelected ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                        color: isSelected ? '#d8b4fe' : 'rgba(255,255,255,0.5)',
+                      }}
+                    >
+                      <span className="font-medium">{v.label}</span>
+                    </button>
+
+                    {/* Preview button */}
+                    <button
+                      onClick={() => previewVoice(v.id)}
+                      disabled={isLoading || (!!loadingVoice && !isLoading)}
+                      title={isPlaying ? '停止试听' : '试听音色'}
+                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all disabled:opacity-40"
+                      style={{
+                        background: isPlaying
+                          ? 'rgba(168,85,247,0.35)'
+                          : 'rgba(255,255,255,0.07)',
+                        border: `1px solid ${isPlaying ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                      }}
+                    >
+                      {isLoading ? (
+                        <Loader2 size={11} className="animate-spin" style={{ color: '#a855f7' }} />
+                      ) : isPlaying ? (
+                        <Square size={10} style={{ color: '#d8b4fe' }} />
+                      ) : (
+                        <Play size={10} style={{ color: 'rgba(255,255,255,0.45)' }} />
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             <p className="mt-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
               录制时自动生成语音并混入视频（免费·无需 API Key）
