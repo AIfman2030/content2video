@@ -1,108 +1,64 @@
-# Plan: Manga Subtitle Style — Audio Narration Feature
+# Chinese Title Entrance Animation — "dropsFromSky" + Config
 
 ## Context
-User wants AI-voiced audio commentary synced to each manga subtitle segment,
-and the final recorded MP4 must contain both video and audio.
+User wants the Chinese-style title entrance to be configurable. The new default animation should be "从天而降" (drops from sky): the title falls from off-screen, slams into the screen center with a big font + impact effects, then quickly flies up to the header position. The current typewriter animation should remain available as an option.
 
-**Why browser SpeechSynthesis won't work**: outputs to OS audio device,
-cannot be routed through AudioContext, so MediaRecorder cannot capture it.
+## Key findings from codebase
+- `src/lib/engine/title.ts`: `drawTitle(ctx, elapsed, content, accent, accent2, style)` — handles all styles
+  - Non-aitech: typewriter (chars appear via `visibleChars`), then lerp from centerY (CH*0.38) → headerY=78, font 108→72
+  - `chineseOptions` is NOT currently passed to drawTitle (only `style` is passed)
+- `src/lib/canvasEngine.ts` line 183: `drawTitle(ctx, elapsed, content, accent, accent2, style)` — needs 1 new arg
+- `src/types/video.ts`: `ChineseOptions` has `titleFontSize?` (for cards), NOT for the title.ts font
+- `src/lib/engine/helpers.ts`: has `easeOutBack`, `easeOutCubic`, `lerp`, `clamp` — reuse these
 
-**Solution**: Microsoft Edge TTS (free, no API key needed, neural voices) via
-a Supabase Edge Function WebSocket proxy. Frontend decodes the returned MP3
-bytes via AudioContext, schedules playback per-segment, and mixes the audio
-stream into MediaRecorder alongside the canvas video stream.
+## Changes (4 files)
 
----
+### 1. `src/types/video.ts`
+Add to `ChineseOptions`:
+```typescript
+titleEntranceAnim?: 'dropsFromSky' | 'typewriter';  // default 'dropsFromSky'
+```
 
-## TTS Technology: Microsoft Edge TTS
+### 2. `src/lib/engine/title.ts`
+Add `chineseOptions?: ChineseOptions` as last parameter to `drawTitle`.
 
-- Free, no API key required
-- WebSocket endpoint (same one Edge browser uses for Read Aloud)
-- Returns MP3 audio data in binary WebSocket frames
-- Chinese voices (user-selectable):
-  - zh-CN-XiaoxiaoNeural — 晓晓（女，温暖自然）← default
-  - zh-CN-YunxiNeural    — 云希（男，开朗活泼）
-  - zh-CN-XiaoyiNeural   — 晓伊（女，活泼）
-  - zh-CN-YunjianNeural  — 云健（男，有力）
+**New `dropsFromSky` branch** (only when `style === 'chinese'` and `titleEntranceAnim !== 'typewriter'`):
 
----
+| Phase | te range | titleY | fontSize | Effect |
+|-------|----------|--------|----------|--------|
+| Drop  | 0 → 500ms | -300 → CH*0.48 via easeOutBack | 180 | — |
+| Impact hold | 500 → 900ms | CH*0.48 | 180 | screen flash, expanding rings, glow |
+| Fly up | 900 → 1500ms | CH*0.48 → 78 via t⁴ (fast end) | 180 → 72 | — |
 
-## Recording Architecture
+- **Screen flash**: full-width semi-transparent accent overlay, alpha = `max(0, 1 - impactT*3) * 0.35`
+- **Expanding rings**: 3 rings, `radius = impactT * 700`, `alpha = (1-impactT) * 0.7`
+- During drop/impact: show full title text immediately (no typewriter) at CW/2 centered
+- `easeInQuart` for fly-up: `t * t * t * t` (inline, no helper change)
+- `easeOutBack` already in helpers.ts for drop landing bounce
 
-  User clicks 录制
-    → (if ttsEnabled) fetch all TTS audio via Edge Function (one per segment)
-    → decode each ArrayBuffer via audioCtx.decodeAudioData()
-    → create AudioContext + createMediaStreamDestination()
-    → schedule AudioBufferSourceNodes staggered by slideDurationMs
-    → combinedStream = canvas.captureStream(30) + audioDest.stream
-    → MediaRecorder records combinedStream
-    → webmToMp4() (existing) → download
+### 3. `src/lib/canvasEngine.ts`
+Line 183 — add `chineseOptions` to `drawTitle` call:
+```typescript
+drawTitle(ctx, elapsed, content, accent, accent2, style, chineseOptions);
+```
 
----
+### 4. `src/components/StyleConfigPanel.tsx`
+In `ChinesePanel`, add at the top of the "主题 · 布局" section:
 
-## Files to Create / Modify
-
-### 1. NEW: supabase/functions/manga-tts/index.ts
-Edge Function that:
-- Accepts POST { text, voice? }
-- Opens WebSocket to Edge TTS service
-- Sends SSML synthesis request
-- Collects all binary audio frames, concatenates to ArrayBuffer
-- Returns MP3 bytes with Content-Type: audio/mpeg
-- Always returns HTTP 200; errors return JSON { error: string }
-
-### 2. NEW: src/services/tts.ts
-- Exports TTS_VOICES array (id + label for UI)
-- Exports synthesize(text, voice) -> Promise<ArrayBuffer>
-  - Calls supabase.functions.invoke('manga-tts', { body: { text, voice } })
-  - Returns raw audio ArrayBuffer (data is Blob from Supabase SDK)
-
-### 3. MODIFY: src/components/VideoGenerator.tsx
-New props: ttsEnabled?: boolean, ttsVoice?: string
-
-New state: ttsPhase: 'idle' | 'generating' | 'recording'
-
-handleRecord() changes:
-  - If ttsEnabled && isManga:
-      - Show "正在生成语音 (0/N)" progress UI
-      - Call synthesize() for each segment sequentially (to avoid rate limiting)
-      - Decode each to AudioBuffer via audioCtx.decodeAudioData()
-      - Create AudioContext + createMediaStreamDestination()
-      - Schedule each AudioBufferSourceNode at i * slideDurationMs / 1000 seconds
-      - combinedStream = new MediaStream([...canvas.captureStream(30).getTracks(),
-                                          ...audioDest.stream.getTracks()])
-      - Start MediaRecorder with combinedStream
-  - Else (no TTS): existing flow unchanged (canvas.captureStream only)
-
-### 4. MODIFY: src/types/video.ts
-Add to MangaOptions interface:
-  ttsEnabled?: boolean;
-  ttsVoice?: string;
-Update DEFAULT_MANGA_OPTIONS: ttsEnabled: false, ttsVoice: 'zh-CN-XiaoxiaoNeural'
-
-### 5. MODIFY: src/components/StyleConfigPanel.tsx
-In manga options section, add:
-- Switch row: "配音朗读" (ttsEnabled toggle)
-- When enabled: voice select dropdown (晓晓/云希/晓伊/云健)
-- Caption: "录制时自动合成语音并混入视频"
-
-### 6. MODIFY: src/pages/Index.tsx
-Pass ttsEnabled and ttsVoice from mangaOptions to VideoGenerator props.
-Add ttsEnabled/ttsVoice to the VideoGenerator props interface pass-through.
-
----
-
-## Files NOT changed
-- src/lib/engine/manga.ts
-- src/lib/canvasEngine.ts
-- src/services/ark.ts
-- src/components/MangaContentEditor.tsx
-
----
+```tsx
+<PillSelect
+  label="标题入场动画"
+  value={options.titleEntranceAnim ?? 'dropsFromSky'}
+  onChange={v => upd({ titleEntranceAnim: v as 'dropsFromSky' | 'typewriter' })}
+  options={[
+    { value: 'dropsFromSky', label: '从天而降' },
+    { value: 'typewriter',   label: '打字机' },
+  ]}
+/>
+```
 
 ## Verification
-1. Select manga style, enable 配音朗读, choose a voice
-2. Generate manga content, open VideoGenerator
-3. Click 录制 → see "正在生成语音 (1/N)..." progress
-4. Recording starts automatically after TTS is ready
-5. Download MP4 → each segment has spoken audio in sync with the slide
+- Open Chinese style → see title slam down from top, sit at center momentarily, fly up
+- Change selector to "打字机" → original typewriter animation
+- Change back to "从天而降" → new animation resumes
+- Impact flash and rings visible during ~500-900ms after title entrance
