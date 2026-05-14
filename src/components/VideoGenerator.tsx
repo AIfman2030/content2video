@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Video, Download, RotateCcw, Loader2, Mic } from 'lucide-react';
 import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
-import { webmToMp4 } from '../lib/mp4Converter';
+import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
 import { CoverPreview } from './CoverPreview';
 import { synthesize } from '../services/tts';
 
@@ -42,7 +42,6 @@ export default function VideoGenerator({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
 
   // Keep latest mangaOptions/mangaContent accessible in callbacks without re-creating them
   const mangaOptionsRef = useRef(mangaOptions);
@@ -86,18 +85,18 @@ export default function VideoGenerator({
     const canvas = canvasRef.current, engine = engineRef.current;
     if (!canvas || !engine) return;
 
-    setInitError(''); // clear previous errors
+    setInitError('');
+    chunksRef.current = [];
 
     const opts = mangaOptionsRef.current;
     const mc = mangaContentRef.current;
     const isMangaTts = style === 'manga' && opts?.ttsEnabled && mc?.segments?.length;
 
-    chunksRef.current = [];
-
-    // ── Phase A: Pre-generate TTS audio (parallel) ─────────────────────────
-    let audioCtx: AudioContext | null = null;
-    let audioDest: MediaStreamAudioDestinationNode | null = null;
-    const audioBuffers: (AudioBuffer | null)[] = [];
+    // ── Phase A: Pre-generate TTS audio (collect raw MP3 bytes) ───────────
+    // We store raw MP3 ArrayBuffers here and let FFmpeg do the muxing later.
+    // This completely avoids browser AudioContext / autoplay-policy issues.
+    const rawMp3s: (ArrayBuffer | null)[] = [];
+    let hasTtsAudio = false;
 
     if (isMangaTts) {
       const segments = mc!.segments;
@@ -107,24 +106,15 @@ export default function VideoGenerator({
       setTtsStep({ done: 0, total: segments.length });
       setProgress(0);
 
-      // Create AudioContext synchronously (still within user-gesture call stack)
-      audioCtx = new AudioContext();
-      // Resume in case browser auto-suspended it (autoplay policy)
-      await audioCtx.resume();
-      audioDest = audioCtx.createMediaStreamDestination();
-      audioCtxRef.current = audioCtx;
-
-      // Generate all segments in parallel — much faster than sequential
       let doneCount = 0;
       const results = await Promise.all(
         segments.map(async (seg, i) => {
           try {
             const ab = await synthesize(seg.text, voice);
-            const decoded = await audioCtx!.decodeAudioData(ab.slice(0));
             doneCount++;
             setTtsStep({ done: doneCount, total: segments.length });
             setProgress(Math.round((doneCount / segments.length) * 100));
-            return decoded;
+            return ab;
           } catch (e) {
             console.warn(`TTS segment ${i} failed:`, e);
             doneCount++;
@@ -133,18 +123,10 @@ export default function VideoGenerator({
           }
         })
       );
-      audioBuffers.push(...results);
+      rawMp3s.push(...results);
+      hasTtsAudio = rawMp3s.some(b => b !== null);
 
-      // Resume again after async work — autoplay policy can re-suspend
-      await audioCtx.resume();
-
-      // If ALL segments failed, show error and abort
-      const hasAny = audioBuffers.some(b => b !== null);
-      if (!hasAny) {
-        audioCtx.close();
-        audioCtx = null;
-        audioDest = null;
-        audioCtxRef.current = null;
+      if (!hasTtsAudio) {
         setInitError('语音生成失败：无法连接到语音服务，请检查网络后重试，或关闭配音开关直接录制视频。');
         setRecordState('idle');
         setProgress(0);
@@ -152,41 +134,39 @@ export default function VideoGenerator({
       }
     }
 
-    // ── Phase B: Set up MediaRecorder stream ───────────────────────────────
+    // ── Phase B: Record canvas video-only stream ───────────────────────────
+    // No AudioContext needed — audio will be merged by FFmpeg after recording.
     setRecordState('recording');
     setProgress(0);
 
     const videoStream = canvas.captureStream(30);
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? 'video/webm;codecs=vp9'
+      : 'video/webm';
 
-    // When audio is present, explicitly request vp9+opus so the audio track is preserved
-    const hasAudio = audioCtx !== null && audioDest !== null;
-    const withAudioMime = 'video/webm;codecs=vp9,opus';
-    const videoOnlyMime = 'video/webm;codecs=vp9';
-    const mimeType = hasAudio
-      ? (MediaRecorder.isTypeSupported(withAudioMime) ? withAudioMime
-        : MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus'
-        : 'video/webm')
-      : (MediaRecorder.isTypeSupported(videoOnlyMime) ? videoOnlyMime : 'video/webm');
-
-    const recordStream = hasAudio
-      ? new MediaStream([...videoStream.getTracks(), ...audioDest!.stream.getTracks()])
-      : videoStream;
-
-    const recorder = new MediaRecorder(recordStream, { mimeType });
+    const recorder = new MediaRecorder(videoStream, { mimeType });
     recorderRef.current = recorder;
 
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = async () => {
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-      audioCtxRef.current?.close();
-      audioCtxRef.current = null;
       setRecordState('converting');
       setProgress(0);
+      const videoBlob = new Blob(chunksRef.current, { type: mimeType });
       try {
-        const mp4 = await webmToMp4(
-          new Blob(chunksRef.current, { type: mimeType }),
-          r => setProgress(Math.round(r * 100)),
-        );
+        let mp4: Blob;
+        if (hasTtsAudio) {
+          // ── FFmpeg audio merge: each MP3 segment time-shifted by i * slideDurationMs
+          const slideDurationMs = opts!.slideDurationMs ?? 4000;
+          const audioSegments = rawMp3s.map((mp3, i) =>
+            mp3 ? { mp3, startMs: i * slideDurationMs } : null,
+          );
+          mp4 = await webmToMp4WithAudio(
+            videoBlob, audioSegments, r => setProgress(Math.round(r * 100)),
+          );
+        } else {
+          mp4 = await webmToMp4(videoBlob, r => setProgress(Math.round(r * 100)));
+        }
         setDownloadUrl(URL.createObjectURL(mp4));
         setProgress(100);
         setRecordState('done');
@@ -199,13 +179,11 @@ export default function VideoGenerator({
     };
 
     const total = engine.getTotalMs();
-
     const startRecording = () => {
       const t0 = performance.now();
       progressTimerRef.current = setInterval(
         () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100,
       );
-      // Start recorder and engine simultaneously for frame-accurate sync
       recorder.start(100);
       engine.restart(() => {
         setTimeout(() => {
@@ -215,27 +193,7 @@ export default function VideoGenerator({
       });
     };
 
-    // ── Phase C: Schedule audio then start recorder + engine together ──────
-    if (audioCtx && audioDest && audioBuffers.some(b => b !== null)) {
-      const slideSec = (opts!.slideDurationMs ?? 4000) / 1000;
-      // Small delay so AudioContext clock has time to stabilise after resume()
-      const SYNC_DELAY_MS = 150;
-      const startAt = audioCtx.currentTime + SYNC_DELAY_MS / 1000;
-
-      audioBuffers.forEach((buf, i) => {
-        if (!buf || !audioDest) return;
-        const src = audioCtx!.createBufferSource();
-        src.buffer = buf;
-        src.connect(audioDest);
-        src.start(startAt + i * slideSec);
-      });
-
-      // Start recorder + engine after the same delay so audio & video start together
-      setTimeout(startRecording, SYNC_DELAY_MS);
-    } else {
-      // No TTS — start immediately
-      startRecording();
-    }
+    startRecording();
   }, [style]);
 
   const handleDownload = useCallback(() => {
