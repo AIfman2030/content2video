@@ -350,6 +350,15 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
 
       {/* ── Theme & Layout ────────────────────────────────────────────────── */}
       <SectionDivider title="主题 · 布局" />
+      <PillSelect
+        label="标题入场动画"
+        value={options.titleEntranceAnim ?? 'dropsFromSky'}
+        onChange={v => upd({ titleEntranceAnim: v as 'dropsFromSky' | 'typewriter' })}
+        options={[
+          { value: 'dropsFromSky', label: '从天而降' },
+          { value: 'typewriter',   label: '打字机' },
+        ]}
+      />
       <PillSelect label="配色方案" value={options.colorScheme} onChange={cs => upd({ colorScheme: cs as ColorScheme })} options={COLOR_SCHEMES} />
       <StepSlider label="边框宽度" value={options.borderWidth} min={1} max={4} onChange={v => upd({ borderWidth: v as 1|2|3|4 })} />
       <StepSlider label="线条宽度" value={options.lineWidth}   min={1} max={4} onChange={v => upd({ lineWidth:   v as 1|2|3|4 })} />

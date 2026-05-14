@@ -13,6 +13,7 @@ export interface ChineseOptions {
   borderWidth: 1 | 2 | 3 | 4;
   lineWidth: 1 | 2 | 3 | 4;
   animMode: AnimMode;
+  titleEntranceAnim?: 'dropsFromSky' | 'typewriter';  // default 'dropsFromSky'
   // ── Optional text style overrides (undefined = use theme defaults) ──────
   titleFontSize?: number;    // default 68
   titleColor?: string;       // default '' = use accent

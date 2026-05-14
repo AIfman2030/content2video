@@ -180,7 +180,7 @@ export async function createAnimEngine(
     }
 
     // Shape decoration removed — background is plain black
-    drawTitle(ctx, elapsed, content, accent, accent2, style);
+    drawTitle(ctx, elapsed, content, accent, accent2, style, chineseOptions);
     drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions);
 
     const outroStart = (style === 'city'
