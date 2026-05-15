@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Video, Download, RotateCcw, Loader2, Mic } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, PetCoverConfig } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
 import { CoverPreview } from './CoverPreview';
@@ -20,6 +20,7 @@ interface Props {
   mangaContent?: MangaContent;
   mangaOptions?: MangaOptions;
   aitechOptions?: AItechOptions;
+  petCoverConfig?: PetCoverConfig;
 }
 
 const PREVIEW_W = 512;
@@ -29,6 +30,7 @@ type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'd
 export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
   subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions,
+  petCoverConfig,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<'cover' | 'video'>('cover');
@@ -222,6 +224,7 @@ export default function VideoGenerator({
               style={style}
               coverIndex={coverIndex}
               chineseOptions={chineseOptions}
+              petCoverConfig={petCoverConfig}
               onContinue={handleContinue}
               onBack={onClose}
             />

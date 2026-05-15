@@ -9,7 +9,8 @@ import './cover/aitech-cover';
 import './cover/nature-cover';
 
 import { COVER_REGISTRY, COVER_W, COVER_H, CoverOpts } from './cover/registry';
-import type { StyleType, GeneratedContent, NatureContent, ChineseOptions } from '../types/video';
+import { drawPetCover } from './cover/pet-cover';
+import type { StyleType, GeneratedContent, NatureContent, ChineseOptions, PetCoverConfig } from '../types/video';
 import { getThemeConfig } from './themes';
 
 export { COVER_W, COVER_H };
@@ -21,10 +22,11 @@ export interface DrawCoverParams {
   natureContent: NatureContent | null;
   coverIndex: number;
   chineseOptions?: ChineseOptions;
+  petCoverConfig?: PetCoverConfig;
 }
 
 export async function drawCover(params: DrawCoverParams): Promise<void> {
-  const { canvas, style, content, natureContent, coverIndex, chineseOptions } = params;
+  const { canvas, style, content, natureContent, coverIndex, chineseOptions, petCoverConfig } = params;
 
   canvas.width  = COVER_W;
   canvas.height = COVER_H;
@@ -35,6 +37,18 @@ export async function drawCover(params: DrawCoverParams): Promise<void> {
   ctx.clearRect(0, 0, COVER_W, COVER_H);
 
   const theme = getThemeConfig(style, chineseOptions);
+
+  // ── Pet cover path ──────────────────────────────────────────────────────
+  if (petCoverConfig?.enabled) {
+    const title = (style === 'nature' ? natureContent?.title : content?.title) ?? '精彩内容';
+    await drawPetCover(ctx, {
+      title,
+      accent: theme.accent,
+      accent2: theme.accent2,
+      petConfig: petCoverConfig,
+    });
+    return;
+  }
 
   // Build opts from whichever content model is active
   const opts: CoverOpts = {

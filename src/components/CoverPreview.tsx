@@ -8,7 +8,7 @@ interface CoverPreviewProps extends Omit<DrawCoverParams, 'canvas'> {
 }
 
 export const CoverPreview: React.FC<CoverPreviewProps> = ({
-  onContinue, onBack, style, coverIndex, content, natureContent, chineseOptions,
+  onContinue, onBack, style, coverIndex, content, natureContent, chineseOptions, petCoverConfig,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [loading, setLoading] = useState(true);
@@ -18,11 +18,11 @@ export const CoverPreview: React.FC<CoverPreviewProps> = ({
     if (!canvasRef.current) return;
     setLoading(true);
     setError(null);
-    drawCover({ canvas: canvasRef.current, style, coverIndex, content, natureContent: natureContent ?? null, chineseOptions })
+    drawCover({ canvas: canvasRef.current, style, coverIndex, content, natureContent: natureContent ?? null, chineseOptions, petCoverConfig })
       .then(() => setLoading(false))
       .catch(e => { setError('封面生成失败'); setLoading(false); console.error(e); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [style, coverIndex, content, natureContent]);
+  }, [style, coverIndex, content, natureContent, petCoverConfig]);
 
   const handleDownload = () => {
     if (!canvasRef.current) return;

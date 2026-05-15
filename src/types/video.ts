@@ -82,6 +82,19 @@ export const DEFAULT_CITY_OPTIONS: CityOptions = {
 };
 
 // ─── AI Tech style options ─────────────────────────────────────────────────────
+export interface PetCoverConfig {
+  enabled: boolean;
+  position: 'bottom' | 'center' | 'full';
+  imageUrl: string;
+}
+
+export const DEFAULT_PET_COVER_CONFIG: PetCoverConfig = {
+  enabled: false,
+  position: 'bottom',
+  imageUrl: '',
+};
+
+// ─── AI Tech style options ─────────────────────────────────────────────────────
 export interface AItechOptions {
   polyShape: PolyShape;
   accentColor: string;

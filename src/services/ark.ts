@@ -15,7 +15,10 @@ export function setStoredArkKey(key: string) {
   catch { /* ignore */ }
 }
 
-export async function generateArkImage(prompt: string): Promise<string> {
+export async function generateArkImage(
+  prompt: string,
+  size = '2K',
+): Promise<string> {
   const apiKey = getStoredArkKey();
   if (!apiKey) throw new Error('NO_ARK_KEY');
 
@@ -30,7 +33,7 @@ export async function generateArkImage(prompt: string): Promise<string> {
       prompt,
       sequential_image_generation: 'disabled',
       response_format: 'url',
-      size: '2K',
+      size,
       stream: false,
       watermark: false,
     }),
@@ -49,4 +52,19 @@ export async function generateArkImage(prompt: string): Promise<string> {
   const url: string | undefined = (data?.data as Array<{ url: string }>)?.[0]?.url;
   if (!url) throw new Error('API 未返回图片 URL');
   return url;
+}
+
+/**
+ * Build a prompt for the AI pet-character cover.
+ * The Shiba Inu character's outfit and pose adapt to match the video title's theme.
+ */
+export function buildPetCoverPrompt(title: string): string {
+  return (
+    `An anthropomorphic Shiba Inu dog character wearing thematic costume that matches the topic "${title}", ` +
+    `highly detailed 3D anime render, cinematic dramatic side-backlit lighting, ` +
+    `character positioned in the lower 60% of frame, looking upward with confident cheerful expression, ` +
+    `upper 40% of the image is clean atmospheric gradient sky with soft bokeh out-of-focus background, ` +
+    `empty space at the top intentionally left for title text overlay, ` +
+    `vibrant rich colors, sharp detailed fur texture, professional digital art, portrait 9:16`
+  );
 }

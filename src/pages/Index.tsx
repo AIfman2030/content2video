@@ -6,6 +6,7 @@ import type {
 } from '../types/video';
 import {
   DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS, DEFAULT_AITECH_OPTIONS,
+  DEFAULT_PET_COVER_CONFIG, type PetCoverConfig,
 } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
@@ -113,6 +114,7 @@ export default function Index() {
   const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOptions>(DEFAULT_SUBTITLE_OPTIONS);
   const [cityOptions, setCityOptions] = useState<CityOptions>(DEFAULT_CITY_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
+  const [petCoverConfig, setPetCoverConfig] = useState<PetCoverConfig>(DEFAULT_PET_COVER_CONFIG);
 
   const accent = style === 'subtitle'
     ? subtitleOptions.accentColor
@@ -332,6 +334,13 @@ export default function Index() {
                 onAccentOverrideChange={(sty, color) =>
                   setAccentOverrides(prev => ({ ...prev, [sty]: color }))
                 }
+                petCoverConfig={petCoverConfig}
+                onPetCoverConfigChange={setPetCoverConfig}
+                titleForPetCover={
+                  style === 'nature'
+                    ? (natureContent?.title ?? '')
+                    : (canvasContent?.title ?? '')
+                }
               />
             </section>
 
@@ -428,6 +437,7 @@ export default function Index() {
           mangaContent={mangaContent ?? undefined}
           mangaOptions={mangaOptions}
           aitechOptions={aitechOptions}
+          petCoverConfig={petCoverConfig}
         />
       )}
 

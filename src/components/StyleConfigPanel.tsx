@@ -2,12 +2,14 @@
 // Per-style live configuration panel with colour pickers, selectors, and sliders.
 import { useState, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { Plus, X, Mic, MicOff, Play, Square, Loader2 } from 'lucide-react';
+import { Plus, X, Mic, MicOff, Play, Square, Loader2, RefreshCw, PawPrint } from 'lucide-react';
 import { TTS_VOICES, synthesize } from '../services/tts';
+import { generateArkImage, buildPetCoverPrompt } from '../services/ark';
 import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
   ColorScheme, AnimMode, PolyShape, CityOptions, MangaOptions, AItechOptions,
+  PetCoverConfig,
 } from '../types/video';
 import CoverPicker from './CoverPicker';
 
@@ -31,6 +33,10 @@ interface Props {
   onMangaOptionsChange: (v: MangaOptions) => void;
   accentOverrides: Partial<Record<StyleType, string>>;
   onAccentOverrideChange: (sty: StyleType, color: string) => void;
+  // ── Pet cover ──────────────────────────────────────────────────────────────
+  petCoverConfig: PetCoverConfig;
+  onPetCoverConfigChange: (c: PetCoverConfig) => void;
+  titleForPetCover: string;
 }
 
 // ─── Shared colour presets ─────────────────────────────────────────────────────
@@ -321,10 +327,127 @@ function SectionDivider({ title }: { title: string }) {
   );
 }
 
-function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChange, style }: {
+// ─── PetCoverSection ───────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://spb-t4ngxi6xsx650369.supabase.opentrust.net';
+function petProxy(url: string) {
+  return `${SUPABASE_URL}/functions/v1/image-proxy?url=${encodeURIComponent(url)}`;
+}
+
+function PetCoverSection({ config, onChange, titleForGen }: {
+  config: PetCoverConfig;
+  onChange: (c: PetCoverConfig) => void;
+  titleForGen: string;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [genError, setGenError] = useState('');
+
+  const handleGenerate = async () => {
+    if (!titleForGen) { setGenError('请先填写视频标题'); return; }
+    setLoading(true);
+    setGenError('');
+    try {
+      const prompt = buildPetCoverPrompt(titleForGen);
+      const url = await generateArkImage(prompt, '9:16');
+      onChange({ ...config, enabled: true, imageUrl: url });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg === 'NO_ARK_KEY') setGenError('请先配置即梦 API Key');
+      else setGenError(`生成失败: ${msg.slice(0, 60)}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2.5">
+      <SectionDivider title="宠物封面" />
+
+      {/* Toggle */}
+      <div
+        className="flex items-center justify-between cursor-pointer select-none"
+        onClick={() => onChange({ ...config, enabled: !config.enabled })}
+      >
+        <div className="flex items-center gap-2">
+          <PawPrint size={13} style={{ color: config.enabled ? '#f97316' : 'rgba(255,255,255,0.3)' }} />
+          <Label>宠物封面</Label>
+        </div>
+        <div
+          className="relative w-9 h-5 rounded-full transition-colors"
+          style={{ background: config.enabled ? '#f97316' : 'rgba(255,255,255,0.12)' }}
+        >
+          <div
+            className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all"
+            style={{ left: config.enabled ? '1.25rem' : '0.125rem' }}
+          />
+        </div>
+      </div>
+
+      {config.enabled && (
+        <div className="space-y-2.5">
+          {/* Position selector */}
+          <PillSelect
+            label="宠物位置"
+            value={config.position}
+            onChange={v => onChange({ ...config, position: v as PetCoverConfig['position'] })}
+            options={[
+              { value: 'bottom', label: '下半部分' },
+              { value: 'center', label: '居中偏下' },
+              { value: 'full', label: '全屏展示' },
+            ]}
+          />
+
+          {/* Generate button */}
+          <button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-50"
+            style={{
+              background: 'linear-gradient(135deg, #f97316, #ea580c)',
+              color: '#fff',
+              border: 'none',
+            }}
+          >
+            {loading
+              ? <><Loader2 size={13} className="animate-spin" />AI 生成中…</>
+              : <><RefreshCw size={13} />{config.imageUrl ? '重新生成宠物' : '生成宠物形象'}</>
+            }
+          </button>
+
+          {/* Preview thumbnail */}
+          {config.imageUrl && !loading && (
+            <div className="relative overflow-hidden rounded-lg" style={{ aspectRatio: '9/16', background: '#111' }}>
+              <img
+                src={petProxy(config.imageUrl)}
+                crossOrigin="anonymous"
+                className="w-full h-full object-cover"
+                alt="宠物封面预览"
+              />
+              <div className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-semibold"
+                style={{ background: 'rgba(0,0,0,0.6)', color: '#f97316' }}>
+                已生成
+              </div>
+            </div>
+          )}
+
+          {genError && (
+            <p className="text-[10px] text-red-400">{genError}</p>
+          )}
+
+          <p className="text-[9px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            使用即梦 AI 根据标题自动生成匹配气质的柴犬宠物形象封面
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover }: {
   options: ChineseOptions; onChange: (v: ChineseOptions) => void;
   accent: string; coverIndex: number; onCoverIndexChange: (v: number) => void;
   style: StyleType;
+  petCoverConfig: PetCoverConfig; onPetCoverConfigChange: (c: PetCoverConfig) => void;
+  titleForPetCover: string;
 }) {
   const upd = (patch: Partial<ChineseOptions>) => onChange({ ...options, ...patch });
 
@@ -343,10 +466,13 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
   return (
     <div className="space-y-4">
       {/* ── Cover ─────────────────────────────────────────────────────────── */}
-      <Row>
-        <Label>封面图案</Label>
-        <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
-      </Row>
+      {!petCoverConfig.enabled && (
+        <Row>
+          <Label>封面图案</Label>
+          <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
+        </Row>
+      )}
+      <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
 
       {/* ── Theme & Layout ────────────────────────────────────────────────── */}
       <SectionDivider title="主题 · 布局" />
@@ -405,19 +531,25 @@ function CityPanel({
   accentColor, onAccentColorChange,
   style,
   cityOptions, onCityOptionsChange,
+  petCoverConfig, onPetCoverConfigChange, titleForPetCover,
 }: {
   coverIndex: number; onCoverIndexChange: (v: number) => void;
   accentColor: string; onAccentColorChange: (c: string) => void;
   style: StyleType;
   cityOptions: CityOptions; onCityOptionsChange: (v: CityOptions) => void;
+  petCoverConfig: PetCoverConfig; onPetCoverConfigChange: (c: PetCoverConfig) => void;
+  titleForPetCover: string;
 }) {
   const upd = (patch: Partial<CityOptions>) => onCityOptionsChange({ ...cityOptions, ...patch });
   return (
     <div className="space-y-4">
-      <Row>
-        <Label>封面图案</Label>
-        <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
-      </Row>
+      {!petCoverConfig.enabled && (
+        <Row>
+          <Label>封面图案</Label>
+          <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
+        </Row>
+      )}
+      <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
       <ColorPicker label="强调色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
 
       <SectionDivider title="标题（数字+关键词）" />
@@ -435,11 +567,13 @@ function CityPanel({
   );
 }
 
-function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOptionsChange, accentColor, onAccentColorChange, style }: {
+function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOptionsChange, accentColor, onAccentColorChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover }: {
   coverIndex: number; onCoverIndexChange: (v: number) => void;
   aitechOptions: AItechOptions; onAitechOptionsChange: (v: AItechOptions) => void;
   accentColor: string; onAccentColorChange: (c: string) => void;
   style: StyleType;
+  petCoverConfig: PetCoverConfig; onPetCoverConfigChange: (c: PetCoverConfig) => void;
+  titleForPetCover: string;
 }) {
   const upd = (patch: Partial<AItechOptions>) => onAitechOptionsChange({ ...aitechOptions, ...patch });
 
@@ -454,10 +588,13 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOp
   ];
   return (
     <div className="space-y-4">
-      <Row>
-        <Label>封面图案</Label>
-        <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
-      </Row>
+      {!petCoverConfig.enabled && (
+        <Row>
+          <Label>封面图案</Label>
+          <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
+        </Row>
+      )}
+      <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
       <PillSelect label="几何形状" value={aitechOptions.polyShape} onChange={ps => upd({ polyShape: ps as PolyShape })} options={SHAPES} />
       <ColorPicker label="科技主色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
 
@@ -491,17 +628,22 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOp
   );
 }
 
-function NaturePanel({ coverIndex, onCoverIndexChange, accentColor, onAccentColorChange, style }: {
+function NaturePanel({ coverIndex, onCoverIndexChange, accentColor, onAccentColorChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover }: {
   coverIndex: number; onCoverIndexChange: (v: number) => void;
   accentColor: string; onAccentColorChange: (c: string) => void;
   style: StyleType;
+  petCoverConfig: PetCoverConfig; onPetCoverConfigChange: (c: PetCoverConfig) => void;
+  titleForPetCover: string;
 }) {
   return (
     <div className="space-y-4">
-      <Row>
-        <Label>场景选择</Label>
-        <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
-      </Row>
+      {!petCoverConfig.enabled && (
+        <Row>
+          <Label>场景选择</Label>
+          <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
+        </Row>
+      )}
+      <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
       <ColorPicker label="强调色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
     </div>
   );
@@ -933,6 +1075,7 @@ export default function StyleConfigPanel({
   cityOptions, onCityOptionsChange,
   mangaOptions, onMangaOptionsChange,
   accentOverrides, onAccentOverrideChange,
+  petCoverConfig, onPetCoverConfigChange, titleForPetCover,
 }: Props) {
   const ov = accentOverrides[style];
 
@@ -946,6 +1089,9 @@ export default function StyleConfigPanel({
           coverIndex={coverIndex}
           onCoverIndexChange={onCoverIndexChange}
           style={style}
+          petCoverConfig={petCoverConfig}
+          onPetCoverConfigChange={onPetCoverConfigChange}
+          titleForPetCover={titleForPetCover}
         />
       );
 
@@ -959,6 +1105,9 @@ export default function StyleConfigPanel({
           style={style}
           cityOptions={cityOptions}
           onCityOptionsChange={onCityOptionsChange}
+          petCoverConfig={petCoverConfig}
+          onPetCoverConfigChange={onPetCoverConfigChange}
+          titleForPetCover={titleForPetCover}
         />
       );
 
@@ -976,6 +1125,9 @@ export default function StyleConfigPanel({
           accentColor={accentOverrides['aitech'] ?? '#a855f7'}
           onAccentColorChange={c => onAccentOverrideChange('aitech', c)}
           style={style}
+          petCoverConfig={petCoverConfig}
+          onPetCoverConfigChange={onPetCoverConfigChange}
+          titleForPetCover={titleForPetCover}
         />
       );
 
@@ -987,6 +1139,9 @@ export default function StyleConfigPanel({
           accentColor={ov ?? '#4ade80'}
           onAccentColorChange={c => onAccentOverrideChange('nature', c)}
           style={style}
+          petCoverConfig={petCoverConfig}
+          onPetCoverConfigChange={onPetCoverConfigChange}
+          titleForPetCover={titleForPetCover}
         />
       );
 
