@@ -347,7 +347,7 @@ function PetCoverSection({ config, onChange, titleForGen }: {
     setGenError('');
     try {
       const prompt = buildPetCoverPrompt(titleForGen);
-      const url = await generateArkImage(prompt, '9:16');
+      const url = await generateArkImage(prompt, '720x1280');
       onChange({ ...config, enabled: true, imageUrl: url });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -896,37 +896,61 @@ function MangaPanel({ opts, onChange }: {
   // ── Voice preview state ─────────────────────────────────────────────────
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
   const [loadingVoice, setLoadingVoice] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [previewError, setPreviewError] = useState<string>('');
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const sourceRef   = useRef<AudioBufferSourceNode | null>(null);
+
+  const stopPreview = () => {
+    try { sourceRef.current?.stop(); } catch { /* already stopped */ }
+    sourceRef.current = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+    setPreviewingVoice(null);
+  };
 
   const previewVoice = async (voiceId: string) => {
     // Stop any currently playing preview
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    if (previewingVoice === voiceId) {
-      setPreviewingVoice(null);
-      return;
-    }
+    stopPreview();
+    if (previewingVoice === voiceId) return; // second click = stop (already stopped above)
+
     setLoadingVoice(voiceId);
+    setPreviewError('');
+
+    // ① Create + resume AudioContext IMMEDIATELY while user gesture is fresh
+    const ctx = new AudioContext();
+    audioCtxRef.current = ctx;
+    try {
+      await ctx.resume();
+    } catch { /* some browsers don't need this */ }
+
     try {
       const ab = await synthesize('你好，大家好，欢迎使用漫画字幕配音', voiceId);
-      const blob = new Blob([ab], { type: 'audio/mpeg' });
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
-      audioRef.current = audio;
+
+      // ② Decode MP3 via the already-unlocked AudioContext
+      const decoded = await ctx.decodeAudioData(ab.slice(0));
+
+      const source = ctx.createBufferSource();
+      source.buffer = decoded;
+      source.connect(ctx.destination);
+      sourceRef.current = source;
+
       setLoadingVoice(null);
       setPreviewingVoice(voiceId);
-      await audio.play();
-      audio.onended = () => {
-        URL.revokeObjectURL(url);
+
+      source.start(0);
+      source.onended = () => {
+        sourceRef.current = null;
+        ctx.close().catch(() => {});
+        audioCtxRef.current = null;
         setPreviewingVoice(null);
-        audioRef.current = null;
       };
     } catch (e) {
-      console.warn('Voice preview failed:', e);
+      ctx.close().catch(() => {});
+      audioCtxRef.current = null;
       setLoadingVoice(null);
       setPreviewingVoice(null);
+      const msg = e instanceof Error ? e.message : String(e);
+      setPreviewError(msg.slice(0, 40));
     }
   };
 
@@ -1041,6 +1065,9 @@ function MangaPanel({ opts, onChange }: {
                 );
               })}
             </div>
+            {previewError && (
+              <p className="mt-1 text-[10px] text-red-400">试听失败: {previewError}</p>
+            )}
             <p className="mt-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
               录制时自动生成语音并混入视频（免费·无需 API Key）
             </p>
