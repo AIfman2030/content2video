@@ -347,7 +347,7 @@ function PetCoverSection({ config, onChange, titleForGen }: {
     setGenError('');
     try {
       const prompt = buildPetCoverPrompt(titleForGen);
-      const url = await generateArkImage(prompt, '720x1280');
+      const url = await generateArkImage(prompt, '1440x2560');
       onChange({ ...config, enabled: true, imageUrl: url });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
