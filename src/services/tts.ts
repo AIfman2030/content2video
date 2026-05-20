@@ -2,8 +2,9 @@
 // The browser makes a plain HTTP POST; the Edge Function opens the WebSocket
 // to speech.platform.bing.com on the server side, avoiding browser CSP blocks.
 
-const TTS_FUNCTION_URL =
-  'https://spb-t4ngxi6xsx650369.supabase.opentrust.net/functions/v1/manga-tts';
+const SUPABASE_URL = 'https://spb-t4ngxi6xsx650369.supabase.opentrust.net';
+const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNwYi10NG5neGk2eHN4NjUwMzY5IiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzY5MjgzNDAsImV4cCI6MjA5MjUwNDM0MH0.EHz1XRSbWC1AktqItCyzJ5uK5bTPVGEpsots4QJMHyI';
+const TTS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/manga-tts`;
 
 export const TTS_VOICES = [
   { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓（女·温暖）' },
@@ -28,7 +29,11 @@ export async function synthesize(
 ): Promise<ArrayBuffer> {
   const res = await fetch(TTS_FUNCTION_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      'apikey': SUPABASE_ANON_KEY,
+    },
     body: JSON.stringify({ text, voice, rate, pitch }),
   });
 
@@ -39,9 +44,8 @@ export async function synthesize(
 
   const contentType = res.headers.get('Content-Type') ?? '';
   if (contentType.includes('application/json')) {
-    // Edge Function returned an error in JSON format
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { error?: string }).error ?? 'TTS failed');
+    const err = await res.json().catch(() => ({})) as Record<string, string>;
+    throw new Error(err.error ?? err.msg ?? 'TTS failed');
   }
 
   return res.arrayBuffer();
