@@ -121,6 +121,11 @@ export async function extractNatureContent(text: string): Promise<NatureContent>
   return parsed;
 }
 
+const TRANSLATION_PROMPT = `你是一个中英互译专家。用户给你一句中文，你直接返回对应的英文翻译，要求：
+- 简洁自然，符合英文表达习惯
+- 不超过20个单词
+- 只返回英文翻译，不要任何解释、引号或其他文字`;
+
 const MANGA_SCRIPT_PROMPT = `你是一个自媒体短视频文案专家。用户给你一段文字，你要优化成适合漫画短视频的字幕脚本。
 
 返回格式（严格JSON，不要任何多余文字）：
