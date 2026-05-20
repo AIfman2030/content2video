@@ -1,64 +1,113 @@
-# Chinese Title Entrance Animation — "dropsFromSky" + Config
+# 漫画字幕 TTS 升级：阿里百炼 CosyVoice + 完整音色配置
 
-## Context
-User wants the Chinese-style title entrance to be configurable. The new default animation should be "从天而降" (drops from sky): the title falls from off-screen, slams into the screen center with a big font + impact effects, then quickly flies up to the header position. The current typewriter animation should remain available as an option.
+## 背景
 
-## Key findings from codebase
-- `src/lib/engine/title.ts`: `drawTitle(ctx, elapsed, content, accent, accent2, style)` — handles all styles
-  - Non-aitech: typewriter (chars appear via `visibleChars`), then lerp from centerY (CH*0.38) → headerY=78, font 108→72
-  - `chineseOptions` is NOT currently passed to drawTitle (only `style` is passed)
-- `src/lib/canvasEngine.ts` line 183: `drawTitle(ctx, elapsed, content, accent, accent2, style)` — needs 1 new arg
-- `src/types/video.ts`: `ChineseOptions` has `titleFontSize?` (for cards), NOT for the title.ts font
-- `src/lib/engine/helpers.ts`: has `easeOutBack`, `easeOutCubic`, `lerp`, `clamp` — reuse these
+技能路径 `~/.qclaw/skills/tts-aifman/` 不存在，基于用户需求直接实现：
+- 切换 TTS 服务商：ByteDance Ark → 阿里百炼 DashScope CosyVoice
+- 阿里百炼 API Key 在 UI 界面配置（不写入代码）
+- 预设音色列表 + 支持自定义音色 ID
+- 语速（语速倍率）可调
+- 音量可调（FFmpeg 混流时应用）
 
-## Changes (4 files)
+---
+
+## API 技术方案
+
+### 阿里百炼 TTS（DashScope OpenAI 兼容接口）
+
+```
+POST https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech
+Authorization: Bearer {API_KEY}
+Content-Type: application/json
+
+Body:
+{
+  "model": "cosyvoice-v1",
+  "input": "文字内容",
+  "voice": "longxiaochun",
+  "response_format": "mp3",
+  "speed": 1.0          // 0.5 ~ 2.0
+}
+```
+
+- **HTTP REST**，无 WebSocket（从 Edge Function 调用无 CORS 问题）
+- 返回直接二进制 MP3 数据（同 OpenAI TTS 格式）
+- 保留 Google TTS 作为 fallback（API Key 无效时）
+
+### CosyVoice 预设音色（`cosyvoice-v1`）
+
+| ID | 说明 |
+|---|---|
+| `longxiaochun` | 龙小淳（女·温暖亲切） |
+| `longwan` | 龙婉（女·温柔知性） |
+| `longcheng` | 龙橙（男·磁性低沉） |
+| `longshu` | 龙书（男·沉稳播报） |
+| `longfei` | 龙飞（男·活泼热情） |
+
+用户还可以手动输入任意音色 ID（如 `longxiaobai` 等）
+
+---
+
+## 文件变更清单
 
 ### 1. `src/types/video.ts`
-Add to `ChineseOptions`:
-```typescript
-titleEntranceAnim?: 'dropsFromSky' | 'typewriter';  // default 'dropsFromSky'
-```
+- 在 `MangaOptions` 中新增字段：
+  - `ttsRate: number` — 语速，默认 `1.0`，范围 `0.5 ~ 2.0`
+  - `ttsVolume: number` — 音量，默认 `80`，范围 `0 ~ 100`
+  - `ttsCustomVoice: string` — 自定义音色 ID，非空时覆盖 `ttsVoice`
+- 更新 `DEFAULT_MANGA_OPTIONS` 补充三个默认值
 
-### 2. `src/lib/engine/title.ts`
-Add `chineseOptions?: ChineseOptions` as last parameter to `drawTitle`.
+### 2. `src/services/tts.ts`
+- 新增 Bailian Key 存储（`bailian_api_key` key in localStorage）：
+  - `getStoredBailianKey() / setStoredBailianKey()`
+- 替换 `TTS_VOICES` 为 5 个 CosyVoice 音色
+- 更新 `DEFAULT_TTS_VOICE = 'longxiaochun'`
+- `synthesize()` 新增可选参数 `{ rate?: number }` 并透传到 Edge Function
 
-**New `dropsFromSky` branch** (only when `style === 'chinese'` and `titleEntranceAnim !== 'typewriter'`):
+### 3. `supabase/functions/manga-tts/index.ts`
+- 替换 `arkTTS()` 为 `bailianTTS(text, voice, apiKey, rate)`
+- 调用 `https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech`
+- 接收新参数 `rate`，映射到请求体 `speed`
+- 保留 `googleTTS()` fallback
 
-| Phase | te range | titleY | fontSize | Effect |
-|-------|----------|--------|----------|--------|
-| Drop  | 0 → 500ms | -300 → CH*0.48 via easeOutBack | 180 | — |
-| Impact hold | 500 → 900ms | CH*0.48 | 180 | screen flash, expanding rings, glow |
-| Fly up | 900 → 1500ms | CH*0.48 → 78 via t⁴ (fast end) | 180 → 72 | — |
+### 4. `src/components/StyleConfigPanel.tsx` — `MangaPanel` 组件
+新增控件（在"配音朗读"开关打开后显示）：
 
-- **Screen flash**: full-width semi-transparent accent overlay, alpha = `max(0, 1 - impactT*3) * 0.35`
-- **Expanding rings**: 3 rings, `radius = impactT * 700`, `alpha = (1-impactT) * 0.7`
-- During drop/impact: show full title text immediately (no typewriter) at CW/2 centered
-- `easeInQuart` for fly-up: `t * t * t * t` (inline, no helper change)
-- `easeOutBack` already in helpers.ts for drop landing bounce
+**新增 API Key 输入框**（顶部）
+- `<input type="password">` 输入框，保存到 `bailian_api_key` localStorage
+- 提示文字："阿里百炼 API Key（不提交代码）"
 
-### 3. `src/lib/canvasEngine.ts`
-Line 183 — add `chineseOptions` to `drawTitle` call:
-```typescript
-drawTitle(ctx, elapsed, content, accent, accent2, style, chineseOptions);
-```
+**预设音色列表**（现有 UI 复用，更新音色数据）
 
-### 4. `src/components/StyleConfigPanel.tsx`
-In `ChinesePanel`, add at the top of the "主题 · 布局" section:
+**自定义音色 ID 输入框**（音色列表下方）
+- placeholder: "自定义音色 ID（如 longxiaobai）"
+- 非空时覆盖预设音色选择
 
-```tsx
-<PillSelect
-  label="标题入场动画"
-  value={options.titleEntranceAnim ?? 'dropsFromSky'}
-  onChange={v => upd({ titleEntranceAnim: v as 'dropsFromSky' | 'typewriter' })}
-  options={[
-    { value: 'dropsFromSky', label: '从天而降' },
-    { value: 'typewriter',   label: '打字机' },
-  ]}
-/>
-```
+**语速滑块**
+- 使用已有 `NumericSlider` 组件
+- 范围：0.5 ~ 2.0，步长 0.1，单位 "x"，默认 1.0
 
-## Verification
-- Open Chinese style → see title slam down from top, sit at center momentarily, fly up
-- Change selector to "打字机" → original typewriter animation
-- Change back to "从天而降" → new animation resumes
-- Impact flash and rings visible during ~500-900ms after title entrance
+**音量滑块**
+- 使用已有 `NumericSlider` 组件
+- 范围：0 ~ 100，步长 5，单位 "%"，默认 80
+
+### 5. `src/components/VideoGenerator.tsx`
+- 读取 `opts.ttsRate / ttsVolume / ttsCustomVoice`
+- 实际音色 = `ttsCustomVoice.trim() || ttsVoice`
+- `synthesize(text, voice, { rate: ttsRate })` 传递语速
+- `webmToMp4WithAudio(..., volume)` 传递音量
+
+### 6. `src/lib/mp4Converter.ts`
+- `webmToMp4WithAudio()` 新增可选参数 `volume = 80`（0~100）
+- 在 FFmpeg 滤镜中追加 `volume=X.XX` 效果（单/多段均适用）
+
+---
+
+## 验证点
+
+1. 配置 Bailian API Key → 开启配音 → 选/自定义音色 → 试听有效
+2. 调整语速（0.5x / 2.0x）→ 录制后视频语速正确
+3. 调整音量（低/高）→ 录制后视频音量变化
+4. API Key 未配置 → fallback Google TTS 无声
+5. 自定义音色 ID 非空 → 覆盖预设选择
+6. 页面刷新后 API Key 自动恢复
