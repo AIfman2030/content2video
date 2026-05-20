@@ -1,51 +1,94 @@
-// tts.ts — Edge TTS via Supabase Edge Function (server-side WebSocket proxy)
-// The browser makes a plain HTTP POST; the Edge Function opens the WebSocket
-// to speech.platform.bing.com on the server side, avoiding browser CSP blocks.
+// tts.ts — TTS via ByteDance Ark HTTP API (same domain as image generation, no WebSocket)
+// Uses the user's stored Ark API key — same key as image generation.
 
-const SUPABASE_URL = 'https://spb-t4ngxi6xsx650369.supabase.opentrust.net';
-const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNwYi10NG5neGk2eHN4NjUwMzY5IiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzY5MjgzNDAsImV4cCI6MjA5MjUwNDM0MH0.EHz1XRSbWC1AktqItCyzJ5uK5bTPVGEpsots4QJMHyI';
-const TTS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/manga-tts`;
+import { getStoredArkKey } from './ark';
+
+const ARK_TTS_URL = 'https://ark.cn-beijing.volces.com/api/v3/audio/speech';
+const ARK_TTS_MODEL = 'doubao-tts';
 
 export const TTS_VOICES = [
-  { id: 'zh-CN-XiaoxiaoNeural', label: '晓晓（女·温暖）' },
-  { id: 'zh-CN-YunxiNeural',    label: '云希（男·活泼）' },
-  { id: 'zh-CN-XiaoyiNeural',   label: '晓伊（女·少女）' },
-  { id: 'zh-CN-YunjianNeural',  label: '云健（男·有力）' },
-  { id: 'zh-CN-XiaohanNeural',  label: '晓涵（女·沉稳）' },
+  {
+    id: 'xiao_xiao',
+    label: '晓晓（女·温暖）',
+    arkVoice: 'zh_female_wanwanxiaohe_moon_bigtts',
+    previewRate: 0.95,
+    previewPitch: 1.1,
+  },
+  {
+    id: 'yun_xi',
+    label: '云希（男·活泼）',
+    arkVoice: 'zh_male_M392_conversation_wvae_bigtts',
+    previewRate: 1.1,
+    previewPitch: 0.7,
+  },
+  {
+    id: 'xiao_yi',
+    label: '晓伊（女·少女）',
+    arkVoice: 'zh_female_qingxin_moon_bigtts',
+    previewRate: 1.05,
+    previewPitch: 1.35,
+  },
+  {
+    id: 'yun_jian',
+    label: '云健（男·有力）',
+    arkVoice: 'zh_male_guonan_moon_bigtts',
+    previewRate: 0.88,
+    previewPitch: 0.6,
+  },
+  {
+    id: 'xiao_han',
+    label: '晓涵（女·沉稳）',
+    arkVoice: 'zh_female_cangjingkong_moon_bigtts',
+    previewRate: 0.85,
+    previewPitch: 1.0,
+  },
 ] as const;
 
-export type TtsVoiceId = (typeof TTS_VOICES)[number]['id'];
-export const DEFAULT_TTS_VOICE: TtsVoiceId = 'zh-CN-XiaoxiaoNeural';
+export type TtsVoice = (typeof TTS_VOICES)[number];
+export type TtsVoiceId = TtsVoice['id'];
+export const DEFAULT_TTS_VOICE: TtsVoiceId = 'xiao_xiao';
+
+export function getVoiceConfig(voiceId: string): TtsVoice {
+  return (TTS_VOICES.find(v => v.id === voiceId) ?? TTS_VOICES[0]) as TtsVoice;
+}
 
 /**
- * Synthesize text via the manga-tts Edge Function.
+ * Synthesize text via ByteDance Ark HTTP TTS API.
+ * Uses the same API key as image generation — no WebSocket, pure HTTP.
  * Returns raw MP3 bytes as ArrayBuffer. Rejects on error.
  */
 export async function synthesize(
   text: string,
-  voice: string = DEFAULT_TTS_VOICE,
-  rate = '+0%',
-  pitch = '+0Hz',
+  voiceId: string = DEFAULT_TTS_VOICE,
 ): Promise<ArrayBuffer> {
-  const res = await fetch(TTS_FUNCTION_URL, {
+  const apiKey = getStoredArkKey();
+  if (!apiKey) throw new Error('未配置 API Key，请先在设置中配置 Ark API Key');
+
+  const voice = getVoiceConfig(voiceId);
+
+  const res = await fetch(ARK_TTS_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ text, voice, rate, pitch }),
+    body: JSON.stringify({
+      model: ARK_TTS_MODEL,
+      input: text,
+      voice: voice.arkVoice,
+      response_format: 'mp3',
+    }),
   });
 
-  if (!res.ok) {
-    const msg = await res.text().catch(() => `HTTP ${res.status}`);
-    throw new Error(msg.slice(0, 120));
-  }
-
+  // If API returns JSON it's an error response
   const contentType = res.headers.get('Content-Type') ?? '';
-  if (contentType.includes('application/json')) {
-    const err = await res.json().catch(() => ({})) as Record<string, string>;
-    throw new Error(err.error ?? err.msg ?? 'TTS failed');
+  if (!res.ok || contentType.includes('application/json')) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const err = await res.json();
+      msg = err?.error?.message ?? err?.message ?? err?.error ?? msg;
+    } catch { /* ignore */ }
+    throw new Error(String(msg).slice(0, 120));
   }
 
   return res.arrayBuffer();

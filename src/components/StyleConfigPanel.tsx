@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, X, Mic, MicOff, Play, Square, Loader2, RefreshCw, PawPrint } from 'lucide-react';
-import { TTS_VOICES } from '../services/tts';
+import { TTS_VOICES, getVoiceConfig } from '../services/tts';
 import { generateArkImage, buildPetCoverPrompt } from '../services/ark';
 import type {
   StyleType, ChineseOptions, AIOptions,
@@ -915,10 +915,11 @@ function MangaPanel({ opts, onChange }: {
       return;
     }
     setPreviewingVoice(voiceId);
+    const cfg = getVoiceConfig(voiceId);
     const utt = new SpeechSynthesisUtterance('你好，大家好，欢迎使用漫画字幕配音。');
     utt.lang = 'zh-CN';
-    utt.rate = 1.0;
-    utt.pitch = 1.0;
+    utt.rate = cfg.previewRate;
+    utt.pitch = cfg.previewPitch;
     // Pick a Chinese voice if available
     const voices = window.speechSynthesis.getVoices();
     const zhVoice = voices.find(v => v.lang.startsWith('zh-CN')) ?? voices.find(v => v.lang.startsWith('zh'));
@@ -1044,7 +1045,7 @@ function MangaPanel({ opts, onChange }: {
               <p className="mt-1 text-[10px] text-red-400">试听失败: {previewError}</p>
             )}
             <p className="mt-1.5 text-[10px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
-              录制时自动生成语音并混入视频（免费·无需 API Key）
+              录制时自动生成语音并混入视频（使用即梦 API Key）
             </p>
           </>
         )}

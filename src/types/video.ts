@@ -153,7 +153,7 @@ export interface MangaOptions {
   subtitleFontSize: number;    // default 72
   slideDurationMs: number;     // ms per segment, default 4000
   ttsEnabled: boolean;         // enable voice narration during recording
-  ttsVoice: string;            // Edge TTS voice ID
+  ttsVoice: string;            // Ark TTS voice ID (tts.ts TtsVoiceId)
 }
 
 export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
@@ -161,7 +161,7 @@ export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
   subtitleFontSize: 72,
   slideDurationMs: 4000,
   ttsEnabled: false,
-  ttsVoice: 'zh-CN-XiaoxiaoNeural',
+  ttsVoice: 'xiao_xiao',
 };
 
 // ─── Content / generator ──────────────────────────────────────────────────────
