@@ -1,9 +1,9 @@
 // StyleConfigPanel.tsx
 // Per-style live configuration panel with colour pickers, selectors, and sliders.
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, X, Mic, MicOff, Play, Square, Loader2, RefreshCw, PawPrint, KeyRound } from 'lucide-react';
-import { TTS_VOICES, getVoiceConfig, getStoredBailianKey, setStoredBailianKey } from '../services/tts';
+import { TTS_VOICES, getVoiceConfig, getStoredBailianKey, setStoredBailianKey, synthesize } from '../services/tts';
 import { generateArkImage, buildPetCoverPrompt } from '../services/ark';
 import type {
   StyleType, ChineseOptions, AIOptions,
@@ -900,23 +900,56 @@ function MangaPanel({ opts, onChange }: {
     setStoredBailianKey(val);
   };
 
-  // ── Voice preview state (uses browser speechSynthesis — no network needed) ──
+  // ── Voice preview: use real Bailian TTS (MP3) if key set, else browser TTS ──
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
-  const [previewError, setPreviewError] = useState<string>('');
+  const [loadingVoice, setLoadingVoice]       = useState<string | null>(null);
+  const [previewError, setPreviewError]        = useState<string>('');
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
 
   const stopPreview = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+      audioRef.current = null;
+    }
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
     if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setPreviewingVoice(null);
+    setLoadingVoice(null);
   };
 
-  const previewVoice = (voiceId: string) => {
+  const previewVoice = async (voiceId: string) => {
     setPreviewError('');
-    if (previewingVoice === voiceId) { stopPreview(); return; }
+    if (previewingVoice === voiceId || loadingVoice === voiceId) { stopPreview(); return; }
     stopPreview();
-    if (!('speechSynthesis' in window)) {
-      setPreviewError('浏览器不支持语音试听');
+
+    // ── If Bailian key set: fetch real MP3 from Edge Function ──────────────
+    if (bailianKey) {
+      setLoadingVoice(voiceId);
+      try {
+        const ab = await synthesize('你好，大家好，欢迎使用漫画字幕配音功能。', voiceId, { rate: opts.ttsRate ?? 1.0 });
+        const url = URL.createObjectURL(new Blob([ab], { type: 'audio/mpeg' }));
+        blobUrlRef.current = url;
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => { setPreviewingVoice(null); };
+        audio.onerror = () => { setPreviewError('播放失败，请检查 API Key 或网络'); setPreviewingVoice(null); };
+        await audio.play();
+        setLoadingVoice(null);
+        setPreviewingVoice(voiceId);
+      } catch (e) {
+        setLoadingVoice(null);
+        setPreviewError(`试听失败: ${e instanceof Error ? e.message : String(e)}`);
+      }
       return;
     }
+
+    // ── Fallback: browser speechSynthesis (all voices sound similar) ───────
+    if (!('speechSynthesis' in window)) { setPreviewError('浏览器不支持语音试听'); return; }
     setPreviewingVoice(voiceId);
     const cfg = getVoiceConfig(voiceId);
     const utt = new SpeechSynthesisUtterance('你好，大家好，欢迎使用漫画字幕配音。');
@@ -1028,12 +1061,13 @@ function MangaPanel({ opts, onChange }: {
                   style={{ background: 'rgba(168,85,247,0.2)', color: '#d8b4fe' }}>
                   <Play size={8} className="mr-0.5" />试听
                 </span>
-                可预览（本地 TTS）
+                {bailianKey ? '可播放真实百炼语音' : '（配置 API Key 后可试听真实音色）'}
               </p>
               <div className="flex flex-col gap-1.5">
                 {TTS_VOICES.map(v => {
                   const isSelected = effectiveVoice === v.id && !opts.ttsCustomVoice?.trim();
                   const isPlaying  = previewingVoice === v.id;
+                  const isLoading  = loadingVoice === v.id;
                   return (
                     <div key={v.id} className="flex items-center gap-1.5">
                       <button
@@ -1049,16 +1083,24 @@ function MangaPanel({ opts, onChange }: {
                       </button>
                       <button
                         onClick={() => previewVoice(v.id)}
-                        title={isPlaying ? '停止试听' : '试听音色'}
+                        disabled={isLoading}
+                        title={isPlaying ? '停止试听' : isLoading ? '加载中…' : '试听音色'}
                         className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all"
                         style={{
-                          background: isPlaying ? 'rgba(168,85,247,0.35)' : 'rgba(255,255,255,0.07)',
-                          border: `1px solid ${isPlaying ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                          background: (isPlaying || isLoading)
+                            ? 'rgba(168,85,247,0.35)'
+                            : 'rgba(255,255,255,0.07)',
+                          border: `1px solid ${(isPlaying || isLoading) ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                          opacity: isLoading ? 0.8 : 1,
                         }}
                       >
-                        {isPlaying
-                          ? <Square size={10} style={{ color: '#d8b4fe' }} />
-                          : <Play size={10} style={{ color: 'rgba(255,255,255,0.45)' }} />}
+                        {isLoading ? (
+                          <Loader2 size={10} className="animate-spin" style={{ color: '#d8b4fe' }} />
+                        ) : isPlaying ? (
+                          <Square size={10} style={{ color: '#d8b4fe' }} />
+                        ) : (
+                          <Play size={10} style={{ color: 'rgba(255,255,255,0.45)' }} />
+                        )}
                       </button>
                     </div>
                   );
@@ -1074,15 +1116,38 @@ function MangaPanel({ opts, onChange }: {
               <p className="mb-1 text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
                 自定义音色 ID（非空时覆盖上方选择）
               </p>
-              <input
-                type="text"
-                value={opts.ttsCustomVoice ?? ''}
-                onChange={e => u({ ttsCustomVoice: e.target.value })}
-                placeholder="例如 longxiaobai、longtong …"
-                className="w-full px-2.5 py-1.5 rounded-lg text-xs text-white placeholder-white/20 outline-none transition-all font-mono"
-                style={inputStyle}
-                onFocus={inputFocus} onBlur={inputBlur}
-              />
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={opts.ttsCustomVoice ?? ''}
+                  onChange={e => u({ ttsCustomVoice: e.target.value })}
+                  placeholder="例如 longxiaobai、longtong …"
+                  className="flex-1 px-2.5 py-1.5 rounded-lg text-xs text-white placeholder-white/20 outline-none transition-all font-mono"
+                  style={inputStyle}
+                  onFocus={inputFocus} onBlur={inputBlur}
+                />
+                {opts.ttsCustomVoice?.trim() && (
+                  <button
+                    onClick={() => previewVoice(opts.ttsCustomVoice!.trim())}
+                    disabled={loadingVoice === opts.ttsCustomVoice?.trim()}
+                    title="试听自定义音色"
+                    className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all"
+                    style={{
+                      background: (previewingVoice === opts.ttsCustomVoice?.trim() || loadingVoice === opts.ttsCustomVoice?.trim())
+                        ? 'rgba(168,85,247,0.35)' : 'rgba(255,255,255,0.07)',
+                      border: `1px solid ${(previewingVoice === opts.ttsCustomVoice?.trim() || loadingVoice === opts.ttsCustomVoice?.trim()) ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
+                    }}
+                  >
+                    {loadingVoice === opts.ttsCustomVoice?.trim() ? (
+                      <Loader2 size={10} className="animate-spin" style={{ color: '#d8b4fe' }} />
+                    ) : previewingVoice === opts.ttsCustomVoice?.trim() ? (
+                      <Square size={10} style={{ color: '#d8b4fe' }} />
+                    ) : (
+                      <Play size={10} style={{ color: 'rgba(255,255,255,0.45)' }} />
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* ── Speech rate ── */}
