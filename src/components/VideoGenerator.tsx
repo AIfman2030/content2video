@@ -129,10 +129,8 @@ export default function VideoGenerator({
       hasTtsAudio = rawMp3s.some(b => b !== null);
 
       if (!hasTtsAudio) {
-        setInitError('语音生成失败：无法连接到语音服务，请检查网络后重试，或关闭配音开关直接录制视频。');
-        setRecordState('idle');
-        setProgress(0);
-        return;
+        // Show warning but still proceed with video-only recording as fallback
+        setInitError('语音合成失败，将录制无声视频。');
       }
     }
 
