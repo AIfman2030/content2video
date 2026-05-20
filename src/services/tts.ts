@@ -63,19 +63,35 @@ export function getVoiceConfig(voiceId: string): TtsVoice {
 
 export interface SynthesizeOptions {
   rate?: number;   // speed multiplier 0.5 ~ 2.0, default 1.0
+  throwOnFallback?: boolean; // if true, throw when falling back to Google TTS
+}
+
+export interface SynthesizeResult {
+  data: ArrayBuffer;
+  source: string;  // 'cosyvoice', 'sambert', 'google-fallback'
+  errors?: string; // error detail if fallback was used
 }
 
 /**
- * Synthesize text via Edge Function → Bailian DashScope CosyVoice.
- * Returns raw MP3 bytes as ArrayBuffer. Rejects on error.
+ * Synthesize text via Edge Function → Bailian DashScope.
+ * Returns SynthesizeResult. Throws on HTTP error.
+ * If throwOnFallback=true, throws when Google TTS fallback is used.
  */
 export async function synthesize(
   text: string,
   voiceId: string = DEFAULT_TTS_VOICE,
   options: SynthesizeOptions = {},
 ): Promise<ArrayBuffer> {
+  const result = await synthesizeFull(text, voiceId, options);
+  return result.data;
+}
+
+export async function synthesizeFull(
+  text: string,
+  voiceId: string = DEFAULT_TTS_VOICE,
+  options: SynthesizeOptions = {},
+): Promise<SynthesizeResult> {
   const apiKey = getStoredBailianKey();
-  // API key is optional — Edge Function falls back to Google TTS if not provided
 
   const res = await fetch(TTS_FUNCTION_URL, {
     method: 'POST',
@@ -93,14 +109,23 @@ export async function synthesize(
   });
 
   const contentType = res.headers.get('Content-Type') ?? '';
+  const source = res.headers.get('X-Tts-Source') ?? 'unknown';
+  const errors = res.headers.get('X-Tts-Errors') ?? '';
+
   if (!res.ok || contentType.includes('application/json')) {
     let msg = `HTTP ${res.status}`;
     try {
       const err = await res.json() as Record<string, string>;
       msg = err.error ?? err.message ?? err.msg ?? msg;
     } catch { /* ignore */ }
-    throw new Error(String(msg).slice(0, 120));
+    throw new Error(String(msg).slice(0, 200));
   }
 
-  return res.arrayBuffer();
+  const data = await res.arrayBuffer();
+
+  if (options.throwOnFallback && source === 'google-fallback') {
+    throw new Error(`API 调用失败，已使用备用语音。错误：${errors || '未知'}`);
+  }
+
+  return { data, source, errors: errors || undefined };
 }

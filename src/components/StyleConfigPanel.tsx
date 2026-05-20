@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, X, Mic, MicOff, Play, Square, Loader2, RefreshCw, PawPrint, KeyRound } from 'lucide-react';
-import { TTS_VOICES, getVoiceConfig, getStoredBailianKey, setStoredBailianKey, synthesize } from '../services/tts';
+import { TTS_VOICES, getVoiceConfig, getStoredBailianKey, setStoredBailianKey, synthesizeFull } from '../services/tts';
 import { generateArkImage, buildPetCoverPrompt } from '../services/ark';
 import type {
   StyleType, ChineseOptions, AIOptions,
@@ -931,8 +931,12 @@ function MangaPanel({ opts, onChange }: {
     if (bailianKey) {
       setLoadingVoice(voiceId);
       try {
-        const ab = await synthesize('你好，大家好，欢迎使用漫画字幕配音功能。', voiceId, { rate: opts.ttsRate ?? 1.0 });
-        const url = URL.createObjectURL(new Blob([ab], { type: 'audio/mpeg' }));
+        const result = await synthesizeFull('你好，大家好，欢迎使用漫画字幕配音功能。', voiceId, { rate: opts.ttsRate ?? 1.0 });
+        // Show warning if falling back to Google TTS (API key not working)
+        if (result.source === 'google-fallback') {
+          setPreviewError(`API未生效，使用备用语音。错误：${result.errors ?? '请确认API Key是否已开通TTS模型'}`);
+        }
+        const url = URL.createObjectURL(new Blob([result.data], { type: 'audio/mpeg' }));
         blobUrlRef.current = url;
         const audio = new Audio(url);
         audioRef.current = audio;
