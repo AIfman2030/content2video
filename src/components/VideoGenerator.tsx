@@ -99,10 +99,14 @@ export default function VideoGenerator({
     // This completely avoids browser AudioContext / autoplay-policy issues.
     const rawMp3s: (ArrayBuffer | null)[] = [];
     let hasTtsAudio = false;
+    let ttsVolume = 80; // captured for use in onstop
 
     if (isMangaTts) {
       const segments = mc!.segments;
-      const voice = opts!.ttsVoice ?? 'zh-CN-XiaoxiaoNeural';
+      const customVoice = opts!.ttsCustomVoice?.trim() ?? '';
+      const voice = customVoice || (opts!.ttsVoice ?? 'longxiaochun');
+      const rate  = opts!.ttsRate   ?? 1.0;
+      ttsVolume   = opts!.ttsVolume ?? 80;
 
       setRecordState('generating_audio');
       setTtsStep({ done: 0, total: segments.length });
@@ -112,7 +116,7 @@ export default function VideoGenerator({
       const results = await Promise.all(
         segments.map(async (seg, i) => {
           try {
-            const ab = await synthesize(seg.text, voice);
+            const ab = await synthesize(seg.text, voice, { rate });
             doneCount++;
             setTtsStep({ done: doneCount, total: segments.length });
             setProgress(Math.round((doneCount / segments.length) * 100));
@@ -162,7 +166,7 @@ export default function VideoGenerator({
             mp3 ? { mp3, startMs: i * slideDurationMs } : null,
           );
           mp4 = await webmToMp4WithAudio(
-            videoBlob, audioSegments, r => setProgress(Math.round(r * 100)),
+            videoBlob, audioSegments, r => setProgress(Math.round(r * 100)), ttsVolume,
           );
         } else {
           mp4 = await webmToMp4(videoBlob, r => setProgress(Math.round(r * 100)));

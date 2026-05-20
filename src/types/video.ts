@@ -153,7 +153,10 @@ export interface MangaOptions {
   subtitleFontSize: number;    // default 72
   slideDurationMs: number;     // ms per segment, default 4000
   ttsEnabled: boolean;         // enable voice narration during recording
-  ttsVoice: string;            // Ark TTS voice ID (tts.ts TtsVoiceId)
+  ttsVoice: string;            // Bailian CosyVoice voice ID
+  ttsCustomVoice: string;      // custom voice ID; if non-empty, overrides ttsVoice
+  ttsRate: number;             // speech rate multiplier: 0.5 ~ 2.0, default 1.0
+  ttsVolume: number;           // audio volume 0-100, default 80
 }
 
 export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
@@ -161,7 +164,10 @@ export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
   subtitleFontSize: 72,
   slideDurationMs: 4000,
   ttsEnabled: false,
-  ttsVoice: 'xiao_xiao',
+  ttsVoice: 'longxiaochun',
+  ttsCustomVoice: '',
+  ttsRate: 1.0,
+  ttsVolume: 80,
 };
 
 // ─── Content / generator ──────────────────────────────────────────────────────

@@ -88,11 +88,12 @@ export async function webmToMp4(
 // ── WebM + MP3 segments → MP4 with merged audio track ─────────────────────────
 // Each audioSegments entry is { mp3: ArrayBuffer, startMs: number } or null (skipped).
 // Audio is time-shifted by startMs and mixed into a single AAC track using FFmpeg.
-// This avoids all browser AudioContext/autoplay-policy issues.
+// volume: 0-100 (default 80). Applied as a FFmpeg volume filter.
 export async function webmToMp4WithAudio(
   videoBlob: Blob,
   audioSegments: Array<{ mp3: ArrayBuffer; startMs: number } | null>,
   onProgress?: (ratio: number) => void,
+  volume = 80,
 ): Promise<Blob> {
   const ff = await loadFFmpeg();
   ff.on('progress', ({ progress }) => onProgress?.(Math.min(progress, 1)));
@@ -114,6 +115,9 @@ export async function webmToMp4WithAudio(
     '-movflags', '+faststart',
   ];
 
+  // Volume factor (0-100 → 0.0-1.0, clamped)
+  const volFactor = (Math.max(0, Math.min(100, volume)) / 100).toFixed(2);
+
   let exitCode: number;
 
   if (valids.length === 0) {
@@ -122,14 +126,15 @@ export async function webmToMp4WithAudio(
       '-i', 'video.webm', '-map', '0:v:0', ...videoArgs, '-an', 'output.mp4',
     ]);
   } else if (valids.length === 1 && valids[0].startMs === 0) {
-    // Single segment with no delay — simplest merge
+    // Single segment, no delay — apply volume filter
     exitCode = await ff.exec([
       '-i', 'video.webm', '-i', valids[0].name,
-      '-map', '0:v:0', '-map', '1:a:0',
+      '-filter_complex', `[1:a]volume=${volFactor}[aout]`,
+      '-map', '0:v:0', '-map', '[aout]',
       ...videoArgs, '-c:a', 'aac', '-b:a', '128k', 'output.mp4',
     ]);
   } else {
-    // Multiple segments (or single with delay) — use adelay + amix
+    // Multiple segments (or single with delay) — adelay + amix + volume
     const inputArgs: string[] = ['-i', 'video.webm'];
     for (const v of valids) inputArgs.push('-i', v.name);
 
@@ -143,8 +148,9 @@ export async function webmToMp4WithAudio(
       labels.push(`[${label}]`);
     }
     filterParts.push(
-      `${labels.join('')}amix=inputs=${valids.length}:normalize=0:duration=longest[aout]`,
+      `${labels.join('')}amix=inputs=${valids.length}:normalize=0:duration=longest[amixed]`,
     );
+    filterParts.push(`[amixed]volume=${volFactor}[aout]`);
 
     exitCode = await ff.exec([
       ...inputArgs,
