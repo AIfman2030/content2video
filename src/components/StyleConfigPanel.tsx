@@ -1,9 +1,9 @@
 // StyleConfigPanel.tsx
 // Per-style live configuration panel with colour pickers, selectors, and sliders.
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Plus, X, Mic, MicOff, Play, Square, Loader2, RefreshCw, PawPrint } from 'lucide-react';
-import { TTS_VOICES, synthesize } from '../services/tts';
+import { TTS_VOICES } from '../services/tts';
 import { generateArkImage, buildPetCoverPrompt } from '../services/ark';
 import type {
   StyleType, ChineseOptions, AIOptions,
@@ -893,65 +893,44 @@ function MangaPanel({ opts, onChange }: {
 }) {
   const u = (patch: Partial<MangaOptions>) => onChange({ ...opts, ...patch });
 
-  // ── Voice preview state ─────────────────────────────────────────────────
+  // ── Voice preview state (uses browser speechSynthesis — no network needed) ──
   const [previewingVoice, setPreviewingVoice] = useState<string | null>(null);
-  const [loadingVoice, setLoadingVoice] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string>('');
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const sourceRef   = useRef<AudioBufferSourceNode | null>(null);
 
   const stopPreview = () => {
-    try { sourceRef.current?.stop(); } catch { /* already stopped */ }
-    sourceRef.current = null;
-    audioCtxRef.current?.close().catch(() => {});
-    audioCtxRef.current = null;
+    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
     setPreviewingVoice(null);
   };
 
-  const previewVoice = async (voiceId: string) => {
-    // Stop any currently playing preview
-    stopPreview();
-    if (previewingVoice === voiceId) return; // second click = stop (already stopped above)
-
-    setLoadingVoice(voiceId);
+  const previewVoice = (voiceId: string) => {
     setPreviewError('');
-
-    // ① Create + resume AudioContext IMMEDIATELY while user gesture is fresh
-    const ctx = new AudioContext();
-    audioCtxRef.current = ctx;
-    try {
-      await ctx.resume();
-    } catch { /* some browsers don't need this */ }
-
-    try {
-      const ab = await synthesize('你好，大家好，欢迎使用漫画字幕配音', voiceId);
-
-      // ② Decode MP3 via the already-unlocked AudioContext
-      const decoded = await ctx.decodeAudioData(ab.slice(0));
-
-      const source = ctx.createBufferSource();
-      source.buffer = decoded;
-      source.connect(ctx.destination);
-      sourceRef.current = source;
-
-      setLoadingVoice(null);
-      setPreviewingVoice(voiceId);
-
-      source.start(0);
-      source.onended = () => {
-        sourceRef.current = null;
-        ctx.close().catch(() => {});
-        audioCtxRef.current = null;
-        setPreviewingVoice(null);
-      };
-    } catch (e) {
-      ctx.close().catch(() => {});
-      audioCtxRef.current = null;
-      setLoadingVoice(null);
-      setPreviewingVoice(null);
-      const msg = e instanceof Error ? e.message : String(e);
-      setPreviewError(msg.slice(0, 40));
+    // Second click on same voice = stop
+    if (previewingVoice === voiceId) {
+      stopPreview();
+      return;
     }
+    stopPreview();
+    if (!('speechSynthesis' in window)) {
+      setPreviewError('浏览器不支持语音试听');
+      return;
+    }
+    setPreviewingVoice(voiceId);
+    const utt = new SpeechSynthesisUtterance('你好，大家好，欢迎使用漫画字幕配音。');
+    utt.lang = 'zh-CN';
+    utt.rate = 1.0;
+    utt.pitch = 1.0;
+    // Pick a Chinese voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const zhVoice = voices.find(v => v.lang.startsWith('zh-CN')) ?? voices.find(v => v.lang.startsWith('zh'));
+    if (zhVoice) utt.voice = zhVoice;
+    utt.onend = () => setPreviewingVoice(null);
+    utt.onerror = (e) => {
+      setPreviewingVoice(null);
+      const err = (e as SpeechSynthesisErrorEvent).error;
+      // 'interrupted' is expected when stopPreview() cancels — not an error
+      if (err !== 'interrupted') setPreviewError(`试听失败: ${err ?? '请检查音频设备'}`);
+    };
+    window.speechSynthesis.speak(utt);
   };
 
   return (
@@ -1023,7 +1002,6 @@ function MangaPanel({ opts, onChange }: {
             <div className="flex flex-col gap-1.5">
               {TTS_VOICES.map(v => {
                 const isSelected = opts.ttsVoice === v.id;
-                const isLoading  = loadingVoice === v.id;
                 const isPlaying  = previewingVoice === v.id;
                 return (
                   <div key={v.id} className="flex items-center gap-1.5">
@@ -1043,9 +1021,8 @@ function MangaPanel({ opts, onChange }: {
                     {/* Preview button */}
                     <button
                       onClick={() => previewVoice(v.id)}
-                      disabled={isLoading || (!!loadingVoice && !isLoading)}
                       title={isPlaying ? '停止试听' : '试听音色'}
-                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all disabled:opacity-40"
+                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg transition-all"
                       style={{
                         background: isPlaying
                           ? 'rgba(168,85,247,0.35)'
@@ -1053,9 +1030,7 @@ function MangaPanel({ opts, onChange }: {
                         border: `1px solid ${isPlaying ? 'rgba(168,85,247,0.6)' : 'rgba(255,255,255,0.1)'}`,
                       }}
                     >
-                      {isLoading ? (
-                        <Loader2 size={11} className="animate-spin" style={{ color: '#a855f7' }} />
-                      ) : isPlaying ? (
+                      {isPlaying ? (
                         <Square size={10} style={{ color: '#d8b4fe' }} />
                       ) : (
                         <Play size={10} style={{ color: 'rgba(255,255,255,0.45)' }} />
