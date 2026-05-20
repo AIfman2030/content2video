@@ -7,8 +7,11 @@ import { routers } from "./router";
 
 const queryClient = new QueryClient();
 
+// Must be outside the component — creating a new router on every render
+// causes React Router to reset its state and corrupts the DOM (appendChild errors).
+const router = createBrowserRouter(routers);
+
 const App = () => {
-  const router = createBrowserRouter(routers);
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
