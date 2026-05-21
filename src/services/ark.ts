@@ -65,6 +65,6 @@ export function buildPetCoverPrompt(title: string): string {
     `character positioned in the lower 60% of frame, looking upward with confident cheerful expression, ` +
     `upper 40% of the image is clean atmospheric gradient sky with soft bokeh out-of-focus background, ` +
     `empty space at the top intentionally left for title text overlay, ` +
-    `vibrant rich colors, sharp detailed fur texture, professional digital art, portrait 9:16`
+    `vibrant rich colors, sharp detailed fur texture, professional digital art, portrait 3:4`
   );
 }

@@ -36,11 +36,11 @@ export const CoverPreview: React.FC<CoverPreviewProps> = ({
       {/* Title */}
       <div className="text-center">
         <h3 className="text-white text-xl font-bold mb-1">封面预览</h3>
-        <p className="text-white/50 text-sm">9:16 竖版封面图 · 1080 × 1920 px</p>
+        <p className="text-white/50 text-sm">3:4 竖版封面图 · 1080 × 1440 px</p>
       </div>
 
       {/* Canvas container */}
-      <div className="relative" style={{ maxHeight: '65vh', aspectRatio: '9/16' }}>
+      <div className="relative" style={{ maxHeight: '65vh', aspectRatio: '3/4' }}>
         <canvas
           ref={canvasRef}
           width={COVER_W}
@@ -56,7 +56,7 @@ export const CoverPreview: React.FC<CoverPreviewProps> = ({
         {loading && (
           <div
             className="flex items-center justify-center rounded-2xl bg-white/5"
-            style={{ height: '65vh', aspectRatio: '9/16' }}
+            style={{ height: '65vh', aspectRatio: '3/4' }}
           >
             <Loader2 className="w-8 h-8 animate-spin text-white/60" />
           </div>

@@ -347,7 +347,7 @@ function PetCoverSection({ config, onChange, titleForGen }: {
     setGenError('');
     try {
       const prompt = buildPetCoverPrompt(titleForGen);
-      const url = await generateArkImage(prompt, '1440x2560');
+      const url = await generateArkImage(prompt, '1440x1920');
       onChange({ ...config, enabled: true, imageUrl: url });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -415,7 +415,7 @@ function PetCoverSection({ config, onChange, titleForGen }: {
 
           {/* Preview thumbnail */}
           {config.imageUrl && !loading && (
-            <div className="relative overflow-hidden rounded-lg" style={{ aspectRatio: '9/16', background: '#111' }}>
+            <div className="relative overflow-hidden rounded-lg" style={{ aspectRatio: '3/4', background: '#111' }}>
               <img
                 src={petProxy(config.imageUrl)}
                 crossOrigin="anonymous"

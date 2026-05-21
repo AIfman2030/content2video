@@ -59,15 +59,15 @@ function drawTitleText(
 
   if (title.length <= 10) {
     ctx.font = `900 ${fontSize}px "Noto Sans SC", "PingFang SC", sans-serif`;
-    ctx.fillText(title, cx, 290);
+    ctx.fillText(title, cx, 220);   // 15% from top @ 1440
   } else {
     const mid   = Math.ceil(title.length / 2);
     const line1 = title.slice(0, mid);
     const line2 = title.slice(mid);
     const s     = (fontSize * 0.9) | 0;
     ctx.font = `900 ${s}px "Noto Sans SC", "PingFang SC", sans-serif`;
-    ctx.fillText(line1, cx, 220);
-    ctx.fillText(line2, cx, 360);
+    ctx.fillText(line1, cx, 165);
+    ctx.fillText(line2, cx, 270);
   }
 
   // Accent underline
@@ -75,7 +75,7 @@ function drawTitleText(
   ctx.strokeStyle   = accent;
   ctx.lineWidth     = 5;
   ctx.globalAlpha   = 0.85;
-  const lineY = 460;
+  const lineY = 350;    // ~24% from top @ 1440
   ctx.beginPath();
   ctx.moveTo(cx - 200, lineY);
   ctx.lineTo(cx + 200, lineY);
@@ -145,7 +145,7 @@ export async function drawPetCover(
   }
 
   // ── 3. Top gradient overlay (title readability) ───────────────────────────
-  const overlayH = petConfig.position === 'full' ? 600 : 540;
+  const overlayH = petConfig.position === 'full' ? 450 : 400;
   const topGrad  = ctx.createLinearGradient(0, 0, 0, overlayH);
   topGrad.addColorStop(0,    'rgba(5,5,12,0.97)');
   topGrad.addColorStop(0.55, 'rgba(5,5,12,0.72)');

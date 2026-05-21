@@ -1,38 +1,62 @@
+/**
+ * image-proxy: Fetches an external image and returns it as binary.
+ * Used to bypass CORS restrictions when drawing external images onto Canvas.
+ */
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS });
   }
 
-  const { searchParams } = new URL(req.url);
-  const url = searchParams.get("url");
+  const urlParam = new URL(req.url).searchParams.get("url");
+  if (!urlParam) {
+    return new Response(JSON.stringify({ error: "Missing ?url= parameter" }), {
+      status: 400,
+      headers: { ...CORS, "Content-Type": "application/json" },
+    });
+  }
 
-  if (!url) {
-    return new Response(JSON.stringify({ error: "missing url param" }), {
+  let targetUrl: string;
+  try {
+    targetUrl = decodeURIComponent(urlParam);
+    new URL(targetUrl); // validate URL
+  } catch {
+    return new Response(JSON.stringify({ error: "Invalid URL" }), {
       status: 400,
       headers: { ...CORS, "Content-Type": "application/json" },
     });
   }
 
   try {
-    const upstream = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0" },
+    const imgRes = await fetch(targetUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ImageProxy/1.0)",
+        "Accept": "image/*,*/*",
+      },
     });
 
-    const contentType = upstream.headers.get("content-type") || "image/jpeg";
-    const body = await upstream.arrayBuffer();
+    if (!imgRes.ok) {
+      return new Response(JSON.stringify({ error: `Upstream HTTP ${imgRes.status}` }), {
+        status: imgRes.status,
+        headers: { ...CORS, "Content-Type": "application/json" },
+      });
+    }
 
-    return new Response(body, {
-      status: 200,
+    const contentType = imgRes.headers.get("Content-Type") ?? "image/jpeg";
+    const data = await imgRes.arrayBuffer();
+
+    return new Response(data, {
       headers: {
         ...CORS,
         "Content-Type": contentType,
         "Cache-Control": "public, max-age=3600",
+        "Content-Length": String(data.byteLength),
       },
     });
   } catch (e) {

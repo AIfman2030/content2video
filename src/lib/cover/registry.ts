@@ -1,11 +1,11 @@
 import type { StyleType } from '../../types/video';
 
 export const COVER_W = 1080;
-export const COVER_H = 1920;
+export const COVER_H = 1440;   // 3:4 ratio (was 1920 for 9:16)
 
-// Icon anchor — up 100px more per user request
+// Icon anchor — scale relative to COVER_H (was 1280 @ 1920)
 export const ICON_CX = COVER_W / 2;
-export const ICON_CY = 1280;
+export const ICON_CY = Math.round(COVER_H * 0.667);  // ~66.7% from top → 960
 export const ICON_R  = 300;
 
 export interface CoverOpts {
@@ -59,13 +59,14 @@ export function drawRoundRect(
   ctx.closePath();
 }
 
-/** Rainbow neon border — padH=horizontal margin, padV=vertical margin (top/bottom more inward) */
+/** Rainbow neon border — padH=horizontal margin, padV=vertical margin (auto-scales with H) */
 export function drawRainbowBorder(
   ctx: CanvasRenderingContext2D,
   W: number, H: number,
-  padH = 26, padV = 200, bw = 14, cr = 60,
+  padH = 26, padV?: number, bw = 14, cr = 60,
 ): void {
-  const g = ctx.createLinearGradient(padH, padV, W - padH, H - padV);
+  const vpad = padV ?? Math.round(H * 0.104); // ~10.4% of H (200px at 1920, 150px at 1440)
+  const g = ctx.createLinearGradient(padH, vpad, W - padH, H - vpad);
   g.addColorStop(0,    '#ff00cc');
   g.addColorStop(0.17, '#ff4400');
   g.addColorStop(0.34, '#ffcc00');
@@ -76,9 +77,9 @@ export function drawRainbowBorder(
   ctx.save();
   ctx.shadowColor = 'rgba(255,255,255,0.55)'; ctx.shadowBlur = 22;
   ctx.strokeStyle = g; ctx.lineWidth = bw;
-  drawRoundRect(ctx, padH, padV, W - 2 * padH, H - 2 * padV, cr); ctx.stroke();
+  drawRoundRect(ctx, padH, vpad, W - 2 * padH, H - 2 * vpad, cr); ctx.stroke();
   ctx.shadowBlur = 10; ctx.globalAlpha = 0.35; ctx.lineWidth = bw * 2.5;
-  drawRoundRect(ctx, padH, padV, W - 2 * padH, H - 2 * padV, cr); ctx.stroke();
+  drawRoundRect(ctx, padH, vpad, W - 2 * padH, H - 2 * vpad, cr); ctx.stroke();
   ctx.shadowBlur = 0; ctx.restore();
 }
 
