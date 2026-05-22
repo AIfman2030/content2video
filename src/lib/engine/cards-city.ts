@@ -1,14 +1,16 @@
-// cards-city.ts – 十二生肖风格 (重构)
-// 参考设计：大间距、右侧简约装饰（4点 + 竖线）
+// cards-city.ts – 十二生肖风格
+// • 右侧：8 种循环动画
+// • 左侧：单行文字（不换行，自动缩字适配）
+// • 大行间距布局，参考简约风格
 
 import type { GeneratedContent, CityOptions } from '../../types/video';
-import { CW, CH, clamp, easeOutCubic, wrapText, T } from './helpers';
+import { CW, CH, clamp, easeOutCubic, easeInOutQuad, T } from './helpers';
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
 const SLIDE_ENTER = 600;
 const SLIDE_HOLD  = 2000;
 const SLIDE_EXIT  = 400;
-const SLIDE_TOTAL = SLIDE_ENTER + SLIDE_HOLD + SLIDE_EXIT; // 3000 ms
+const SLIDE_TOTAL = SLIDE_ENTER + SLIDE_HOLD + SLIDE_EXIT;
 
 export function cityTotalMs(n: number): number {
   return T.cardBase + n * SLIDE_TOTAL + T.outroDur;
@@ -23,84 +25,236 @@ function drawPerspGrid(ctx: CanvasRenderingContext2D, alpha: number) {
   ctx.strokeStyle = '#cccccc';
   ctx.lineWidth   = 0.8;
   ctx.globalAlpha = alpha * 0.09;
-  const hSteps = 9;
-  for (let i = 0; i <= hSteps; i++) {
-    const y = TOP + (i / hSteps) * (BOT - TOP);
+  for (let i = 0; i <= 9; i++) {
+    const y = TOP + (i / 9) * (BOT - TOP);
     ctx.beginPath(); ctx.moveTo(L, y);   ctx.lineTo(VX, VY); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(R, y);   ctx.lineTo(VX, VY); ctx.stroke();
   }
-  const vSteps = 14;
-  for (let i = 0; i <= vSteps; i++) {
-    const x = L + (i / vSteps) * (R - L);
+  for (let i = 0; i <= 14; i++) {
+    const x = L + (i / 14) * (R - L);
     ctx.beginPath(); ctx.moveTo(x, TOP); ctx.lineTo(VX, VY); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x, BOT); ctx.lineTo(VX, VY); ctx.stroke();
   }
   ctx.restore();
 }
 
-// ─── Right-side decoration: 4 dots + vertical accent bar ─────────────────────
-const DECOR_CX = Math.round(CW * 0.80);   // 80% from left
-const DECOR_CY = Math.round(CH * 0.50);   // vertically centered
+// ─── Right-side animated graphics (8 types) ──────────────────────────────────
+const ANIM_CX = Math.round(CW * 0.73);
+const ANIM_CY = Math.round(CH * 0.50);
 
-function drawRightDecor(
+function drawRightAnim(
   ctx: CanvasRenderingContext2D,
-  alpha: number,
-  accent: string,
   elapsed: number,
+  cardIdx: number,
+  accent: string,
+  alpha: number,
 ) {
   if (alpha <= 0.01) return;
-  const entryEase = easeOutCubic(clamp(elapsed / 800, 0, 1));
-
+  const t = elapsed * 0.001;
   ctx.save();
-  ctx.globalAlpha = alpha * entryEase;
-
-  const barH  = 180;
-  const barW  = 4;
-  const dotR  = 14;
-  const dotDX = 70;
-  const dotDY1 = -65;
-  const dotDY2 =  70;
-
-  // Vertical accent bar
-  const barG = ctx.createLinearGradient(0, DECOR_CY - barH / 2, 0, DECOR_CY + barH / 2);
-  barG.addColorStop(0,   'rgba(0,0,0,0)');
-  barG.addColorStop(0.3, accent);
-  barG.addColorStop(0.7, accent);
-  barG.addColorStop(1,   'rgba(0,0,0,0)');
-  ctx.fillStyle = barG;
-  const barX = DECOR_CX - barW / 2;
-  ctx.fillRect(barX, DECOR_CY - barH / 2, barW, barH);
-
-  // 4 gray dots (2×2 arrangement on either side of the bar)
-  const dotPositions: [number, number][] = [
-    [DECOR_CX - dotDX, DECOR_CY + dotDY1],
-    [DECOR_CX - dotDX, DECOR_CY + dotDY2],
-    [DECOR_CX + dotDX, DECOR_CY + dotDY1],
-    [DECOR_CX + dotDX, DECOR_CY + dotDY2],
-  ];
-  dotPositions.forEach(([dx, dy]) => {
-    ctx.beginPath();
-    ctx.arc(dx, dy, dotR, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(200,200,200,0.55)';
-    ctx.fill();
-  });
-
-  // Two small accent dots on bar endpoints
-  [[DECOR_CX, DECOR_CY - barH / 2], [DECOR_CX, DECOR_CY + barH / 2]].forEach(([dx, dy]) => {
-    ctx.shadowColor = accent; ctx.shadowBlur = 16;
-    ctx.beginPath();
-    ctx.arc(dx, dy, 7, 0, Math.PI * 2);
-    ctx.fillStyle = accent;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-  });
-
+  ctx.globalAlpha = alpha;
+  ctx.translate(ANIM_CX, ANIM_CY);
+  switch (cardIdx % 8) {
+    case 0: animBallOnLine(ctx, t, accent);   break;
+    case 1: animExpandRings(ctx, t, accent);  break;
+    case 2: animPendulum(ctx, t, accent);     break;
+    case 3: animOrbit(ctx, t, accent);        break;
+    case 4: animPulseWaves(ctx, t, accent);   break;
+    case 5: animBounceBall(ctx, t, accent);   break;
+    case 6: animPulseSquares(ctx, t, accent); break;
+    case 7: animRotatingTris(ctx, t, accent); break;
+  }
   ctx.restore();
 }
 
+// 0 · Ball on dashed line
+function animBallOnLine(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  const L = 300;
+  const rawP = (t * 0.4) % 1;
+  const p = rawP < 0.5 ? easeInOutQuad(rawP * 2) : 1 - easeInOutQuad((rawP - 0.5) * 2);
+  const bx = L * 0.5 - p * L;
+  ctx.setLineDash([14, 10]);
+  ctx.strokeStyle = 'rgba(200,200,200,0.45)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-L / 2, 0); ctx.lineTo(L / 2, 0); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#ff6666'; ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-L / 2 + 22, -13); ctx.lineTo(-L / 2, 0); ctx.lineTo(-L / 2 + 22, 13);
+  ctx.stroke();
+  ctx.beginPath(); ctx.arc(-L / 2, 0, 7, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,100,100,0.9)'; ctx.fill();
+  for (let i = 1; i <= 5; i++) {
+    const tp = ((t * 0.4 - i * 0.025) % 1 + 1) % 1;
+    const te = tp < 0.5 ? easeInOutQuad(tp * 2) : 1 - easeInOutQuad((tp - 0.5) * 2);
+    const tx = L * 0.5 - te * L;
+    ctx.save(); ctx.globalAlpha = (1 - i / 6) * 0.55;
+    ctx.beginPath(); ctx.arc(tx, 0, 9 - i * 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = accent; ctx.fill();
+    ctx.restore();
+  }
+  ctx.shadowColor = accent; ctx.shadowBlur = 24;
+  ctx.beginPath(); ctx.arc(bx, 0, 30, 0, Math.PI * 2);
+  ctx.fillStyle = accent; ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// 1 · Expanding concentric rings
+function animExpandRings(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  const maxR = 160;
+  for (let i = 0; i < 4; i++) {
+    const phase = ((t * 0.5 + i * 0.25) % 1);
+    const r = phase * maxR;
+    ctx.save(); ctx.globalAlpha = (1 - phase) * 0.75;
+    ctx.strokeStyle = accent; ctx.lineWidth = 2.5 - phase * 1.5;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.shadowColor = accent; ctx.shadowBlur = 22;
+  ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2);
+  ctx.fillStyle = accent; ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// 2 · Pendulum
+function animPendulum(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  const ARM = 155;
+  const angle = (Math.PI / 4) * Math.sin(t * 2.1);
+  const ax = Math.sin(angle) * ARM, ay = Math.cos(angle) * ARM;
+  const pivotY = -ARM * 0.05;
+  ctx.beginPath(); ctx.arc(0, pivotY, 9, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(200,200,200,0.75)'; ctx.fill();
+  ctx.strokeStyle = 'rgba(200,200,200,0.45)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, pivotY); ctx.lineTo(ax, pivotY + ay); ctx.stroke();
+  ctx.shadowColor = accent; ctx.shadowBlur = 20;
+  ctx.beginPath(); ctx.arc(ax, pivotY + ay, 28, 0, Math.PI * 2);
+  ctx.fillStyle = accent; ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// 3 · Orbiting planet
+function animOrbit(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  const R = 110, angle = t * 1.5;
+  const bx = Math.cos(angle) * R, by = Math.sin(angle) * R;
+  ctx.setLineDash([8, 6]);
+  ctx.strokeStyle = 'rgba(200,200,200,0.22)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.shadowColor = accent; ctx.shadowBlur = 28;
+  ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2);
+  ctx.fillStyle = accent; ctx.fill();
+  ctx.shadowBlur = 0;
+  for (let i = 6; i >= 1; i--) {
+    const ta = angle - i * 0.14;
+    ctx.save(); ctx.globalAlpha = (1 - i / 7) * 0.45;
+    ctx.beginPath(); ctx.arc(Math.cos(ta) * R, Math.sin(ta) * R, 9 - i, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.fill();
+    ctx.restore();
+  }
+  ctx.beginPath(); ctx.arc(bx, by, 16, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'; ctx.fill();
+}
+
+// 4 · Pulsing waves
+function animPulseWaves(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  for (let i = 0; i < 5; i++) {
+    const phase = ((t * 0.55 + i * 0.2) % 1);
+    ctx.save(); ctx.globalAlpha = (1 - phase) * 0.6;
+    ctx.strokeStyle = accent; ctx.lineWidth = 2.5 - phase * 1.8;
+    ctx.beginPath(); ctx.arc(0, 0, 18 + phase * 155, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.shadowColor = accent; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.arc(0, 0, 15, 0, Math.PI * 2);
+  ctx.fillStyle = accent; ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// 5 · Bouncing ball
+function animBounceBall(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  const H = 125;
+  const rawP = (t * 0.85) % 1;
+  const p = rawP < 0.5 ? rawP * 2 : 2 - rawP * 2;
+  const ey = 1 - (1 - p) * (1 - p);
+  const y = -H * ey;
+  const sx = 1 + 0.28 * (1 - ey), sy = 1 - 0.18 * (1 - ey);
+  ctx.strokeStyle = 'rgba(200,200,200,0.32)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-60, 0); ctx.lineTo(60, 0); ctx.stroke();
+  ctx.save(); ctx.globalAlpha = 0.28 * (1 - ey);
+  ctx.beginPath(); ctx.ellipse(0, 0, 30 * (1 - ey * 0.5), 7 * (1 - ey * 0.5), 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#000'; ctx.fill();
+  ctx.restore();
+  ctx.save(); ctx.translate(0, y); ctx.scale(sx, sy);
+  ctx.shadowColor = accent; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.arc(0, 0, 28, 0, Math.PI * 2);
+  ctx.fillStyle = accent; ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// 6 · Pulsing nested squares
+function animPulseSquares(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  for (let i = 0; i < 4; i++) {
+    const rot = t * 0.3 * (i % 2 === 0 ? 1 : -1) + i * 0.4;
+    const phase = ((t * 0.5 + i * 0.25) % 1);
+    const size = 40 + i * 38 + phase * 20;
+    ctx.save(); ctx.rotate(rot);
+    ctx.globalAlpha = i === 0 ? 0.85 : Math.max(0, 0.35 - phase * 0.25);
+    ctx.strokeStyle = accent; ctx.lineWidth = i === 0 ? 2.5 : 1.5;
+    ctx.strokeRect(-size, -size, size * 2, size * 2);
+    ctx.restore();
+  }
+}
+
+// 7 · Rotating nested triangles
+function animRotatingTris(ctx: CanvasRenderingContext2D, t: number, accent: string) {
+  const tri = (r: number, rot: number, col: string, lw: number) => {
+    ctx.beginPath();
+    for (let i = 0; i <= 3; i++) {
+      const a = rot + (i / 3) * Math.PI * 2;
+      if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+      else         ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    ctx.closePath(); ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.stroke();
+  };
+  tri(130, t * 0.4,                  accent + '88', 2);
+  tri(88,  -t * 0.65 + Math.PI / 3,  accent + 'bb', 2);
+  tri(50,  t * 1.1,                   accent,        2.5);
+  ctx.shadowColor = accent; ctx.shadowBlur = 18;
+  ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2);
+  ctx.fillStyle = accent; ctx.fill();
+  ctx.shadowBlur = 0;
+}
+
+// ─── Single-line text helper (no wrapping, auto font-scale) ──────────────────
+/**
+ * Draw text as a single line. If wider than maxW, reduce fontSize proportionally.
+ * Returns the actual font size used.
+ */
+function drawSingleLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  baseFsz: number,
+  fontStyle: string,   // e.g. '900' | '500' | '400'
+  fontFamily: string,
+  maxW: number,
+): number {
+  if (!text) return baseFsz;
+  let fsz = baseFsz;
+  ctx.font = `${fontStyle} ${fsz}px ${fontFamily}`;
+  const w = ctx.measureText(text).width;
+  if (w > maxW) {
+    fsz = Math.floor(baseFsz * (maxW / w));
+    ctx.font = `${fontStyle} ${fsz}px ${fontFamily}`;
+  }
+  ctx.fillText(text, x, y);
+  return fsz;
+}
+
 // ─── Left text content ────────────────────────────────────────────────────────
-const TEXT_X     = 380;                                          // ~20% from left
-const MAX_TEXT_W = Math.round(CW * 0.65) - TEXT_X;             // ≈860px
+const TEXT_X     = 380;                                    // ~20% from left
+const MAX_TEXT_W = Math.round(CW * 0.65) - TEXT_X;       // ≈860px — right boundary before animation
 
 function drawLeftContent(
   ctx: CanvasRenderingContext2D,
@@ -114,39 +268,31 @@ function drawLeftContent(
 ) {
   if (alpha <= 0.01) return;
 
-  // ── Configurable values ───────────────────────────────────────────────────
-  const labelFsz = cityOptions?.labelFontSize ?? 108;
-  const labelCol = (cityOptions?.labelColor && cityOptions.labelColor !== '') ? cityOptions.labelColor : accent;
-  const shortFsz = cityOptions?.shortFontSize ?? 64;
-  const shortCol = (cityOptions?.shortColor  && cityOptions.shortColor  !== '') ? cityOptions.shortColor  : 'rgba(255,255,255,0.95)';
-  const descFsz  = cityOptions?.descFontSize  ?? 40;
-  const descCol  = (cityOptions?.descColor    && cityOptions.descColor   !== '') ? cityOptions.descColor   : 'rgba(200,200,200,0.88)';
+  const fontFamily = '"Noto Sans SC", "PingFang SC", sans-serif';
 
-  const labelLineH = labelFsz + 26;   // generous line height
+  // ── Configurable font sizes / colours ────────────────────────────────────
+  const labelFsz = cityOptions?.labelFontSize ?? 108;
+  const labelCol = (cityOptions?.labelColor && cityOptions.labelColor !== '')
+    ? cityOptions.labelColor : accent;
+  const shortFsz = cityOptions?.shortFontSize ?? 64;
+  const shortCol = (cityOptions?.shortColor  && cityOptions.shortColor  !== '')
+    ? cityOptions.shortColor  : 'rgba(255,255,255,0.95)';
+  const descFsz  = cityOptions?.descFontSize  ?? 40;
+  const descCol  = (cityOptions?.descColor    && cityOptions.descColor   !== '')
+    ? cityOptions.descColor   : 'rgba(220,220,220,0.90)';
+
+  // ── Generous line heights + gaps ─────────────────────────────────────────
+  const labelLineH = labelFsz + 26;
   const shortLineH = shortFsz + 14;
   const descLineH  = descFsz  + 18;
-  const GAP_LS     = 110;   // ← large gap: label → short (was 28)
-  const GAP_SD     = 55;    // ← larger gap: short → desc (was 26)
+  const GAP_LS     = 110;   // label → short
+  const GAP_SD     = 55;    // short → desc
 
-  // ── Measure lines ─────────────────────────────────────────────────────────
-  const labelText = `${slideIdx + 1}. ${point.label || ''}`;
-  ctx.font = `900 ${labelFsz}px "Noto Sans SC", sans-serif`;
-  const labelLines = wrapText(ctx, labelText, MAX_TEXT_W);
-  ctx.font = `500 ${shortFsz}px "Noto Sans SC", sans-serif`;
-  const shortLines = wrapText(ctx, point.short || '', MAX_TEXT_W);
-  ctx.font = `400 ${descFsz}px "Noto Sans SC", sans-serif`;
-  const descLines  = wrapText(ctx, point.desc  || '', MAX_TEXT_W).slice(0, 4);
-
-  // ── Block height → center ─────────────────────────────────────────────────
-  const labelH = labelLines.length * labelLineH;
-  const shortH = shortLines.length > 0 ? shortLines.length * shortLineH : 0;
-  const descH  = descLines.length  > 0 ? descLines.length  * descLineH  : 0;
-  const totalH = labelH
-    + (shortH > 0 ? GAP_LS + shortH : 0)
-    + (descH  > 0 ? GAP_SD + descH  : 0);
+  // Label is always 1 line; short and desc also 1 line each
+  const totalH = labelLineH + GAP_LS + shortLineH + GAP_SD + descLineH;
   const blockTopY = Math.round(CH / 2 - totalH / 2);
 
-  // ── Entrance slide ────────────────────────────────────────────────────────
+  // ── Entrance slide from left ───────────────────────────────────────────────
   const enterEase = easeOutCubic(clamp(slideElapsed / SLIDE_ENTER, 0, 1));
   const xOff = (1 - enterEase) * -150;
 
@@ -155,50 +301,40 @@ function drawLeftContent(
   ctx.translate(xOff, 0);
   ctx.textAlign = 'left'; ctx.textBaseline = 'top';
 
-  // Topic title — just above content block
-  const titleY = Math.max(50, blockTopY - 58);
-  ctx.font = `400 30px "Noto Sans SC", sans-serif`;
+  // Topic title — just above block
+  const titleY = Math.max(50, blockTopY - 60);
+  ctx.font = `400 30px ${fontFamily}`;
   ctx.fillStyle = 'rgba(200,200,200,0.45)';
   ctx.fillText(title || '', TEXT_X, titleY);
 
-  // Vertical accent bar aligned with content block
+  // Vertical accent bar
   ctx.save();
-  ctx.globalAlpha = alpha * 0.40 * enterEase;
-  const barG = ctx.createLinearGradient(0, blockTopY, 0, blockTopY + totalH);
-  barG.addColorStop(0, 'rgba(0,0,0,0)');
-  barG.addColorStop(0.2, labelCol);
-  barG.addColorStop(0.8, labelCol);
-  barG.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.strokeStyle = barG; ctx.lineWidth = 4;
+  ctx.globalAlpha = alpha * 0.38 * enterEase;
+  ctx.strokeStyle = labelCol; ctx.lineWidth = 4;
   ctx.beginPath();
   ctx.moveTo(TEXT_X - 28, blockTopY - 10);
   ctx.lineTo(TEXT_X - 28, blockTopY + totalH + 10);
   ctx.stroke();
   ctx.restore();
 
-  // ① Label — large, accent colour
+  const labelText = `${slideIdx + 1}. ${point.label || ''}`;
+
+  // ① Label — single line, accent colour, auto-scale
   const labelY = blockTopY;
-  ctx.font = `900 ${labelFsz}px "Noto Sans SC", sans-serif`;
   ctx.fillStyle = labelCol;
   ctx.shadowColor = labelCol; ctx.shadowBlur = 18;
-  labelLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, labelY + i * labelLineH));
+  drawSingleLine(ctx, labelText, TEXT_X, labelY, labelFsz, '900', fontFamily, MAX_TEXT_W);
   ctx.shadowBlur = 0;
 
-  // ② Short — medium white
-  if (shortLines.length > 0) {
-    const shortY = labelY + labelH + GAP_LS;
-    ctx.font = `500 ${shortFsz}px "Noto Sans SC", sans-serif`;
-    ctx.fillStyle = shortCol;
-    shortLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, shortY + i * shortLineH));
-  }
+  // ② Short — single line
+  const shortY = labelY + labelLineH + GAP_LS;
+  ctx.fillStyle = shortCol;
+  drawSingleLine(ctx, point.short || '', TEXT_X, shortY, shortFsz, '500', fontFamily, MAX_TEXT_W);
 
-  // ③ Desc — small gray
-  if (descLines.length > 0) {
-    const descY = blockTopY + labelH + (shortH > 0 ? GAP_LS + shortH : 0) + GAP_SD;
-    ctx.font = `400 ${descFsz}px "Noto Sans SC", sans-serif`;
-    ctx.fillStyle = descCol;
-    descLines.forEach((ln, i) => ctx.fillText(ln, TEXT_X, descY + i * descLineH));
-  }
+  // ③ Desc — single line
+  const descY = shortY + shortLineH + GAP_SD;
+  ctx.fillStyle = descCol;
+  drawSingleLine(ctx, point.desc || '', TEXT_X, descY, descFsz, '400', fontFamily, MAX_TEXT_W);
 
   ctx.restore();
 }
@@ -239,8 +375,12 @@ export function drawCityCards(
   const point = content.points[slideIdx];
   if (!point) return;
 
-  // Right decoration
-  drawRightDecor(ctx, alpha, accent, slideE);
+  // Right animation (slight lead)
+  const rightA = easeOutCubic(clamp(slideE / 500, 0, 1)) *
+    (slideE > SLIDE_ENTER + SLIDE_HOLD
+      ? 1 - clamp((slideE - SLIDE_ENTER - SLIDE_HOLD) / SLIDE_EXIT, 0, 1)
+      : 1);
+  drawRightAnim(ctx, elapsed, slideIdx, accent, rightA);
 
   // Left content (100 ms stagger)
   const leftE = Math.max(0, slideE - 100);
