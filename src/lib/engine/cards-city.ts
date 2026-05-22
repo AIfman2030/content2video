@@ -261,8 +261,8 @@ function animRotatingTris(ctx: CanvasRenderingContext2D, t: number, accent: stri
 }
 
 // ─── Left text content ────────────────────────────────────────────────────────
-const TEXT_X    = 120;
-const MAX_TEXT_W = Math.round(CW * 0.50) - TEXT_X - 40; // ≈820px
+const TEXT_X    = 180;
+const MAX_TEXT_W = Math.round(CW * 0.50) - TEXT_X - 40; // ≈740px
 
 function drawLeftContent(
   ctx: CanvasRenderingContext2D,
