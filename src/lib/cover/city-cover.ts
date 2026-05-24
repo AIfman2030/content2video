@@ -3,12 +3,6 @@ import { COVER_W, COVER_H, ICON_CX, ICON_CY, ICON_R, CoverOpts,
 
 const W = COVER_W, H = COVER_H;
 
-// 24 distinct auspicious animals: 12 zodiac + mythical creatures
-const ZODIAC_CHARS = [
-  '鼠','牛','虎','兔','龙','蛇','马','羊','猴','鸡','狗','猪',
-  '麟','鹭','雀','虎','雁','鹮','凤','鹰','豹','熊','象','龟',
-];
-
 // Per-index neon palettes for variety
 const PALETTES: [string, string][] = [
   ['#f5d87a','#ff6b35'],['#00d4ff','#7700ff'],['#ff4466','#44ffaa'],
@@ -20,6 +14,17 @@ const PALETTES: [string, string][] = [
   ['#00bbff','#ff6644'],['#ff0066','#66ff00'],['#8888ff','#ffaa00'],
   ['#44ff88','#ff4400'],['#ffcc88','#0044cc'],['#ff00aa','#aaff44'],
 ];
+
+/** Extract a single display character from a title string.
+ *  Prefers the first CJK character; falls back to the first character overall. */
+function titleChar(title: string): string {
+  if (!title) return '道';
+  // Find the first CJK Unified Ideograph (U+4E00–U+9FFF) or CJK Extension
+  const cjk = title.match(/[\u4e00-\u9fff\u3400-\u4dbf]/);
+  if (cjk) return cjk[0];
+  // Fallback: first character of the string
+  return [...title][0] ?? '道';
+}
 
 function drawBg(ctx: CanvasRenderingContext2D) {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
@@ -59,17 +64,28 @@ function drawZodiacIcon(
   ctx.shadowBlur = 0; ctx.strokeStyle = hex2rgbaCover(c2, 0.65); ctx.lineWidth = 3;
   ctx.beginPath(); ctx.arc(cx, cy, r * 0.68, 0, Math.PI * 2); ctx.stroke();
 
-  // Chinese character
+  // Character — auto-scale font to always fit inside the circle
+  const maxFsz = Math.round(r * 0.9);
   ctx.shadowColor = '#fff'; ctx.shadowBlur = 24;
-  ctx.font = `900 ${Math.round(r * 0.9)}px "Noto Sans SC", sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#fff'; ctx.fillText(char, cx, cy + r * 0.04);
+  ctx.fillStyle = '#fff';
+
+  // Try max size, shrink if measured width exceeds diameter
+  let fsz = maxFsz;
+  ctx.font = `900 ${fsz}px "Noto Sans SC", sans-serif`;
+  const measured = ctx.measureText(char).width;
+  if (measured > r * 1.6) {
+    fsz = Math.floor(maxFsz * (r * 1.6) / measured);
+    ctx.font = `900 ${fsz}px "Noto Sans SC", sans-serif`;
+  }
+  ctx.fillText(char, cx, cy + r * 0.04);
   ctx.shadowBlur = 0; ctx.restore();
 }
 
 function drawCity(ctx: CanvasRenderingContext2D, opts: CoverOpts) {
-  const { coverIndex } = opts;
-  const char = ZODIAC_CHARS[coverIndex % ZODIAC_CHARS.length];
+  const { title, coverIndex } = opts;
+  // Use the first CJK (or first) character from the configured title
+  const char = titleChar(title);
   const [c1, c2] = PALETTES[coverIndex % PALETTES.length];
   drawBg(ctx);
   drawRainbowBorder(ctx, W, H);
