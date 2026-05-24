@@ -28,12 +28,29 @@ function resetInstance() {
   loadPromise = null;
 }
 
+// ── Shared FFmpeg args for H.264 output ──────────────────────────────────────
+// -fflags +genpts: regenerate presentation timestamps — fixes MediaRecorder WebM
+//   files that have missing/invalid timestamps (very common in Chrome/Edge).
+// -vsync vfr: keep variable frame rate from source without forcing CFR padding.
+const H264_ARGS = [
+  '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '22',
+  '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+];
+
+// ── Clean up any stale temp files left by a previous failed run ───────────────
+async function cleanupStaleFiles(ff: FFmpeg, names: string[]) {
+  for (const n of names) {
+    try { await ff.deleteFile(n); } catch { /* not present — OK */ }
+  }
+}
+
 // ── Base WebM→MP4 (video-only fallback) ───────────────────────────────────────
 export async function webmToMp4(
   webmBlob: Blob,
   onProgress?: (ratio: number) => void,
 ): Promise<Blob> {
   const ff = await loadFFmpeg();
+  await cleanupStaleFiles(ff, ['input.webm', 'output.mp4']);
 
   ff.on('progress', ({ progress }) => {
     onProgress?.(Math.min(progress, 1));
@@ -42,31 +59,27 @@ export async function webmToMp4(
   const inputData = await fetchFile(webmBlob);
   await ff.writeFile('input.webm', inputData);
 
-  // Try H.264 + AAC. Use optional audio map (0:a:0?) so it doesn't fail
-  // when the WebM has no audio track (e.g. video-only recording).
+  // First attempt: H.264 + optional AAC.
+  // -fflags +genpts fixes MediaRecorder WebM timestamp issues.
   let exitCode = await ff.exec([
+    '-fflags', '+genpts',
     '-i', 'input.webm',
     '-map', '0:v:0',
     '-map', '0:a:0?',
-    '-c:v', 'libx264',
-    '-preset', 'ultrafast',
-    '-crf', '18',
-    '-pix_fmt', 'yuv420p',
+    ...H264_ARGS,
     '-c:a', 'aac',
-    '-movflags', '+faststart',
     'output.mp4',
   ]);
 
+  // Second attempt: video-only (no audio)
   if (exitCode !== 0) {
     try { await ff.deleteFile('output.mp4'); } catch { /* may not exist */ }
     exitCode = await ff.exec([
+      '-fflags', '+genpts',
       '-i', 'input.webm',
-      '-c:v', 'libx264',
-      '-preset', 'ultrafast',
-      '-crf', '18',
-      '-pix_fmt', 'yuv420p',
+      '-map', '0:v:0',
+      ...H264_ARGS,
       '-an',
-      '-movflags', '+faststart',
       'output.mp4',
     ]);
   }
@@ -98,6 +111,10 @@ export async function webmToMp4WithAudio(
   const ff = await loadFFmpeg();
   ff.on('progress', ({ progress }) => onProgress?.(Math.min(progress, 1)));
 
+  // Clean up any leftover temp files from a previous failed run
+  const audioNames = audioSegments.map((_, i) => `aud${i}.mp3`);
+  await cleanupStaleFiles(ff, ['video.webm', 'output.mp4', ...audioNames]);
+
   await ff.writeFile('video.webm', await fetchFile(videoBlob));
 
   // Write only the non-null segments
@@ -110,11 +127,6 @@ export async function webmToMp4WithAudio(
     valids.push({ name, startMs: seg.startMs });
   }
 
-  const videoArgs = [
-    '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '18', '-pix_fmt', 'yuv420p',
-    '-movflags', '+faststart',
-  ];
-
   // Volume factor (0-100 → 0.0-1.0, clamped)
   const volFactor = (Math.max(0, Math.min(100, volume)) / 100).toFixed(2);
 
@@ -123,19 +135,20 @@ export async function webmToMp4WithAudio(
   if (valids.length === 0) {
     // No valid audio → video-only
     exitCode = await ff.exec([
-      '-i', 'video.webm', '-map', '0:v:0', ...videoArgs, '-an', 'output.mp4',
+      '-fflags', '+genpts', '-i', 'video.webm',
+      '-map', '0:v:0', ...H264_ARGS, '-an', 'output.mp4',
     ]);
   } else if (valids.length === 1 && valids[0].startMs === 0) {
     // Single segment, no delay — apply volume filter
     exitCode = await ff.exec([
-      '-i', 'video.webm', '-i', valids[0].name,
+      '-fflags', '+genpts', '-i', 'video.webm', '-i', valids[0].name,
       '-filter_complex', `[1:a]volume=${volFactor}[aout]`,
       '-map', '0:v:0', '-map', '[aout]',
-      ...videoArgs, '-c:a', 'aac', '-b:a', '128k', 'output.mp4',
+      ...H264_ARGS, '-c:a', 'aac', '-b:a', '128k', 'output.mp4',
     ]);
   } else {
     // Multiple segments (or single with delay) — adelay + amix + volume
-    const inputArgs: string[] = ['-i', 'video.webm'];
+    const inputArgs: string[] = ['-fflags', '+genpts', '-i', 'video.webm'];
     for (const v of valids) inputArgs.push('-i', v.name);
 
     const filterParts: string[] = [];
@@ -156,7 +169,7 @@ export async function webmToMp4WithAudio(
       ...inputArgs,
       '-filter_complex', filterParts.join(';'),
       '-map', '0:v:0', '-map', '[aout]',
-      ...videoArgs, '-c:a', 'aac', '-b:a', '128k', 'output.mp4',
+      ...H264_ARGS, '-c:a', 'aac', '-b:a', '128k', 'output.mp4',
     ]);
   }
 
@@ -170,7 +183,8 @@ export async function webmToMp4WithAudio(
     console.warn('Audio merge failed, retrying video-only…');
     try { await ff.deleteFile('output.mp4'); } catch { /* ignore */ }
     exitCode = await ff.exec([
-      '-i', 'video.webm', '-map', '0:v:0', ...videoArgs, '-an', 'output.mp4',
+      '-fflags', '+genpts', '-i', 'video.webm',
+      '-map', '0:v:0', ...H264_ARGS, '-an', 'output.mp4',
     ]);
     if (exitCode !== 0) {
       try { await ff.deleteFile('video.webm'); } catch { /* ignore */ }

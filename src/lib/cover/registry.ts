@@ -59,13 +59,13 @@ export function drawRoundRect(
   ctx.closePath();
 }
 
-/** Rainbow neon border — padH=horizontal margin, padV=vertical margin (auto-scales with H) */
+/** Rainbow neon border — padH=horizontal margin, padV=vertical margin */
 export function drawRainbowBorder(
   ctx: CanvasRenderingContext2D,
   W: number, H: number,
-  padH = 26, padV?: number, bw = 14, cr = 60,
+  padH = 12, padV?: number, bw = 14, cr = 32,
 ): void {
-  const vpad = padV ?? Math.round(H * 0.104); // ~10.4% of H (200px at 1920, 150px at 1440)
+  const vpad = padV ?? 12; // hug all four edges
   const g = ctx.createLinearGradient(padH, vpad, W - padH, H - vpad);
   g.addColorStop(0,    '#ff00cc');
   g.addColorStop(0.17, '#ff4400');
