@@ -13,7 +13,7 @@ export function getShapeSvg(
     const fn = CHINESE_SVGS[shapeId];
     inner = fn ? fn(color, lineWidth) : CHINESE_SVGS['mountain'](color, lineWidth);
   } else if (style === 'city') {
-    inner = cityToSvg(shapeId, color);
+    inner = cityToSvg(shapeId, color, lineWidth);
   } else {
     const fn = AI_SVGS[shapeId];
     inner = fn ? fn(color) : AI_SVGS['chatgpt'](color);
