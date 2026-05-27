@@ -2,11 +2,11 @@ import { useState, type ReactNode } from 'react';
 import { Film, Key, Video } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
-  SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions,
+  SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions,
 } from '../types/video';
 import {
   DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS, DEFAULT_AITECH_OPTIONS,
-  DEFAULT_PET_COVER_CONFIG, type PetCoverConfig,
+  DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, type PetCoverConfig,
 } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
@@ -113,6 +113,7 @@ export default function Index() {
   const [aitechOptions, setAitechOptions] = useState<AItechOptions>(DEFAULT_AITECH_OPTIONS);
   const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOptions>(DEFAULT_SUBTITLE_OPTIONS);
   const [cityOptions, setCityOptions] = useState<CityOptions>(DEFAULT_CITY_OPTIONS);
+  const [natureOptions, setNatureOptions] = useState<NatureOptions>(DEFAULT_NATURE_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
   const [petCoverConfig, setPetCoverConfig] = useState<PetCoverConfig>(DEFAULT_PET_COVER_CONFIG);
 
@@ -330,6 +331,8 @@ export default function Index() {
                 onCityOptionsChange={setCityOptions}
                 mangaOptions={mangaOptions}
                 onMangaOptionsChange={setMangaOptions}
+                natureOptions={natureOptions}
+                onNatureOptionsChange={setNatureOptions}
                 accentOverrides={accentOverrides}
                 onAccentOverrideChange={(sty, color) =>
                   setAccentOverrides(prev => ({ ...prev, [sty]: color }))
@@ -417,6 +420,7 @@ export default function Index() {
             mangaContent={mangaContent ?? undefined}
             mangaOptions={mangaOptions}
             aitechOptions={aitechOptions}
+            natureOptions={natureOptions}
           />
         </main>
       </div>
@@ -438,6 +442,7 @@ export default function Index() {
           mangaOptions={mangaOptions}
           aitechOptions={aitechOptions}
           petCoverConfig={petCoverConfig}
+          natureOptions={natureOptions}
         />
       )}
 

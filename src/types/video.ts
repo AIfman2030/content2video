@@ -118,6 +118,16 @@ export const DEFAULT_AITECH_OPTIONS: AItechOptions = {
 export interface NatureOptions {
   accentColor: string;
   particleStyle: 'default' | 'snow' | 'rain' | 'petals';
+  // ── Text overrides ────────────────────────────────────────────────────────
+  titleFontSize?: number;   // default 68
+  titleColor?: string;      // '' = '#fff'
+  wordFontSize?: number;    // default 46 (base; shorter words scale up)
+  fontFamily?: string;      // '' = "Noto Sans SC"
+  // ── Color overrides ('' = auto from built-in contrast palette) ───────────
+  leftColor?: string;       // left circle + left words
+  rightColor?: string;      // right circle + right words
+  // ── Circle ring ──────────────────────────────────────────────────────────
+  borderWidth?: number;     // default 2.5
 }
 
 export const DEFAULT_NATURE_OPTIONS: NatureOptions = {

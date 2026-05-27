@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { X, Play, Video, Download, RotateCcw, Loader2, Mic } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, PetCoverConfig } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, PetCoverConfig, NatureOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
 import { CoverPreview } from './CoverPreview';
@@ -21,6 +21,7 @@ interface Props {
   mangaOptions?: MangaOptions;
   aitechOptions?: AItechOptions;
   petCoverConfig?: PetCoverConfig;
+  natureOptions?: NatureOptions;
 }
 
 const PREVIEW_W = 512;
@@ -30,7 +31,7 @@ type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'd
 export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
   subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions,
-  petCoverConfig,
+  petCoverConfig, natureOptions,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<'cover' | 'video'>('cover');
@@ -66,7 +67,7 @@ export default function VideoGenerator({
   useEffect(() => {
     if (!canvasRef.current) return;
     setEngineReady(false); setInitError('');
-    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions)
+    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions)
       .then(engine => { engineRef.current = engine; setEngineReady(true); engine.start(); })
       .catch(err => setInitError(String(err)));
     return () => { engineRef.current?.stop(); };

@@ -9,7 +9,7 @@ import type {
   StyleType, ChineseOptions, AIOptions,
   SubtitleOptions, SubtitleEnterAnim,
   ColorScheme, AnimMode, PolyShape, CityOptions, MangaOptions, AItechOptions,
-  PetCoverConfig,
+  PetCoverConfig, NatureOptions,
 } from '../types/video';
 import CoverPicker from './CoverPicker';
 
@@ -37,6 +37,9 @@ interface Props {
   petCoverConfig: PetCoverConfig;
   onPetCoverConfigChange: (c: PetCoverConfig) => void;
   titleForPetCover: string;
+  // ── Nature ─────────────────────────────────────────────────────────────────
+  natureOptions: NatureOptions;
+  onNatureOptionsChange: (v: NatureOptions) => void;
 }
 
 // ─── Shared colour presets ─────────────────────────────────────────────────────
@@ -628,13 +631,25 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOp
   );
 }
 
-function NaturePanel({ coverIndex, onCoverIndexChange, accentColor, onAccentColorChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover }: {
+const NATURE_FONTS = [
+  { value: '',                    label: '默认（Noto Sans SC）' },
+  { value: 'Microsoft YaHei',     label: '微软雅黑' },
+  { value: 'PingFang SC',         label: '苹方' },
+  { value: 'STKaiti',             label: '楷体' },
+  { value: 'serif',               label: '衬线' },
+  { value: 'sans-serif',          label: '无衬线' },
+];
+
+function NaturePanel({ coverIndex, onCoverIndexChange, accentColor, onAccentColorChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover, natureOptions, onNatureOptionsChange }: {
   coverIndex: number; onCoverIndexChange: (v: number) => void;
   accentColor: string; onAccentColorChange: (c: string) => void;
   style: StyleType;
   petCoverConfig: PetCoverConfig; onPetCoverConfigChange: (c: PetCoverConfig) => void;
   titleForPetCover: string;
+  natureOptions: NatureOptions; onNatureOptionsChange: (v: NatureOptions) => void;
 }) {
+  const upd = (patch: Partial<NatureOptions>) => onNatureOptionsChange({ ...natureOptions, ...patch });
+
   return (
     <div className="space-y-4">
       {!petCoverConfig.enabled && (
@@ -644,7 +659,38 @@ function NaturePanel({ coverIndex, onCoverIndexChange, accentColor, onAccentColo
         </Row>
       )}
       <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
-      <ColorPicker label="强调色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
+
+      {/* ── 颜色 ── */}
+      <SectionDivider title="颜色" />
+      <OptionalColorPicker label="左侧色（空=自动配色）" value={natureOptions.leftColor ?? ''} placeholder="自动" onChange={c => upd({ leftColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="右侧色（空=自动配色）" value={natureOptions.rightColor ?? ''} placeholder="自动" onChange={c => upd({ rightColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="标题颜色（空=白色）" value={natureOptions.titleColor ?? ''} placeholder="#ffffff" onChange={c => upd({ titleColor: c })} accent={accentColor} />
+
+      {/* ── 字体 ── */}
+      <SectionDivider title="字体" />
+      <Row>
+        <Label>字体</Label>
+        <select
+          className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+          value={natureOptions.fontFamily ?? ''}
+          onChange={e => upd({ fontFamily: e.target.value })}
+        >
+          {NATURE_FONTS.map(f => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
+      </Row>
+
+      {/* ── 字体大小 ── */}
+      <SectionDivider title="字体大小" />
+      <NumericSlider label="标题字号" value={natureOptions.titleFontSize ?? 68} min={40} max={100} onChange={v => upd({ titleFontSize: v })} />
+      <NumericSlider label="词组字号（基准）" value={natureOptions.wordFontSize ?? 46} min={24} max={70} onChange={v => upd({ wordFontSize: v })} />
+
+      {/* ── 边框 ── */}
+      <SectionDivider title="圆圈边框" />
+      <NumericSlider label="边框宽度" value={natureOptions.borderWidth ?? 2.5} min={1} max={10} step={0.5} onChange={v => upd({ borderWidth: v })} />
+
+      <ColorPicker label="强调色（备用）" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
     </div>
   );
 }
@@ -1208,6 +1254,7 @@ export default function StyleConfigPanel({
   mangaOptions, onMangaOptionsChange,
   accentOverrides, onAccentOverrideChange,
   petCoverConfig, onPetCoverConfigChange, titleForPetCover,
+  natureOptions, onNatureOptionsChange,
 }: Props) {
   const ov = accentOverrides[style];
 
@@ -1274,6 +1321,8 @@ export default function StyleConfigPanel({
           petCoverConfig={petCoverConfig}
           onPetCoverConfigChange={onPetCoverConfigChange}
           titleForPetCover={titleForPetCover}
+          natureOptions={natureOptions}
+          onNatureOptionsChange={onNatureOptionsChange}
         />
       );
 

@@ -1,4 +1,4 @@
-import type { NatureContent } from '../../types/video';
+import type { NatureContent, NatureOptions } from '../../types/video';
 import { CW, CH, clamp, lerp, easeOutCubic, easeOutBack, hex2rgba, seededRandom } from './helpers';
 import { SPOT_PAIRS } from './nature-spots';
 
@@ -57,25 +57,30 @@ function buildCenterSlots(): { x: number; y: number }[] {
   return all;
 }
 
-const wordFsz = (w: string) => w.length <= 2 ? 46 : w.length <= 3 ? 40 : w.length <= 4 ? 34 : 28;
+const wordFsz = (w: string, base = 46) => {
+  if (w.length <= 2) return base;
+  if (w.length <= 3) return Math.round(base * 0.87);
+  if (w.length <= 4) return Math.round(base * 0.74);
+  return Math.round(base * 0.61);
+};
 
 // ── Draw circle with ink-stroke reveal ───────────────────────────────────────
-function drawCircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, p: number, col: string) {
+function drawCircle(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, p: number, col: string, bw = 2.5) {
   ctx.save();
   ctx.strokeStyle = hex2rgba(col, 0.55);
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = bw;
   ctx.shadowColor = col; ctx.shadowBlur = 22;
   ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(p, 1)); ctx.stroke();
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = hex2rgba(col, 0.12); ctx.lineWidth = 18;
+  ctx.strokeStyle = hex2rgba(col, 0.12); ctx.lineWidth = bw * 7;
   ctx.beginPath(); ctx.arc(cx, cy, r + 2, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(p, 1)); ctx.stroke();
   ctx.restore();
 }
 
 // ── Badge ─────────────────────────────────────────────────────────────────────
-function drawBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, label: string, alpha: number, col: string) {
+function drawBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, label: string, alpha: number, col: string, ff = '"Noto Sans SC", sans-serif') {
   ctx.save(); ctx.globalAlpha = alpha;
-  ctx.font = `700 36px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `700 36px ${ff}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   const tw = ctx.measureText(label).width;
   const pw = tw + 44, ph = 48;
   ctx.beginPath(); ctx.roundRect(cx - pw / 2, cy - ph / 2, pw, ph, 24);
@@ -86,11 +91,11 @@ function drawBadge(ctx: CanvasRenderingContext2D, cx: number, cy: number, label:
 }
 
 // ── Word ──────────────────────────────────────────────────────────────────────
-function drawWord(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, prog: number, col: string, float: number) {
+function drawWord(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, prog: number, col: string, float: number, ff = '"Noto Sans SC", sans-serif', wordBase = 46) {
   const sc = lerp(0.7, 1, easeOutBack(Math.min(prog, 0.999)));
   const al = clamp(prog * 2.5, 0, 1);
   ctx.save(); ctx.globalAlpha = al; ctx.translate(x, y + float); ctx.scale(sc, sc);
-  ctx.font = `700 ${wordFsz(text)}px "Noto Sans SC", sans-serif`;
+  ctx.font = `700 ${wordFsz(text, wordBase)}px ${ff}`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.shadowColor = col; ctx.shadowBlur = 14; ctx.fillStyle = col; ctx.fillText(text, 0, 0);
   ctx.shadowBlur = 0; ctx.restore();
@@ -100,9 +105,20 @@ function drawWord(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
 export function drawNatureScene(
   ctx: CanvasRenderingContext2D, elapsed: number,
   nc: NatureContent, _accent: string, _accent2: string, coverIndex: number,
+  opts?: NatureOptions,
 ) {
-  // Override with high-contrast vivid colours
-  const [accent, accent2] = CONTRAST_PAIRS[coverIndex % CONTRAST_PAIRS.length];
+  // Color: user override → CONTRAST_PAIRS fallback
+  const [pairA, pairA2] = CONTRAST_PAIRS[coverIndex % CONTRAST_PAIRS.length];
+  const accent  = (opts?.leftColor  && opts.leftColor  !== '') ? opts.leftColor  : pairA;
+  const accent2 = (opts?.rightColor && opts.rightColor !== '') ? opts.rightColor : pairA2;
+
+  // Typography
+  const ff       = opts?.fontFamily ? `"${opts.fontFamily}", sans-serif` : '"Noto Sans SC", sans-serif';
+  const titleFsz = opts?.titleFontSize ?? 68;
+  const titleCol = (opts?.titleColor && opts.titleColor !== '') ? opts.titleColor : '#fff';
+  const wordBase = opts?.wordFontSize ?? 46;
+  const bw       = opts?.borderWidth ?? 2.5;
+
   const rand = seededRandom(coverIndex * 37 + 11);
   const lSlots = buildSlots(rand);
   const rSlots = buildSlots(rand);
@@ -130,25 +146,25 @@ export function drawNatureScene(
   if (elapsed > N_BG_END) {
     const ta = easeOutCubic(clamp((elapsed - N_BG_END) / (N_TITLE_END - N_BG_END), 0, 1));
     ctx.save(); ctx.globalAlpha = ta;
-    ctx.font = `800 68px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.shadowColor = accent; ctx.shadowBlur = 20; ctx.fillStyle = '#fff'; ctx.fillText(nc.title, CW / 2, 30);
+    ctx.font = `800 ${titleFsz}px ${ff}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.shadowColor = accent; ctx.shadowBlur = 20; ctx.fillStyle = titleCol; ctx.fillText(nc.title, CW / 2, 30);
     ctx.shadowBlur = 0; ctx.restore();
   }
 
   // Circles
   if (elapsed > N_TITLE_END) {
     const cp = easeOutCubic(clamp((elapsed - N_TITLE_END) / (N_CIRCLE_END - N_TITLE_END), 0, 1));
-    drawCircle(ctx, LCX, CCY, CR, cp, accent);
-    drawCircle(ctx, RCX, CCY, CR, cp, accent2);
+    drawCircle(ctx, LCX, CCY, CR, cp, accent, bw);
+    drawCircle(ctx, RCX, CCY, CR, cp, accent2, bw);
   }
 
   // Badges
   if (elapsed > N_CIRCLE_END) {
     const ba = easeOutCubic(clamp((elapsed - N_CIRCLE_END) / (N_BADGE_END - N_CIRCLE_END), 0, 1));
-    drawBadge(ctx, LCX, CCY - CR - 38, nc.leftTitle, ba, accent);
-    drawBadge(ctx, RCX, CCY - CR - 38, nc.rightTitle, ba, accent2);
+    drawBadge(ctx, LCX, CCY - CR - 38, nc.leftTitle, ba, accent, ff);
+    drawBadge(ctx, RCX, CCY - CR - 38, nc.rightTitle, ba, accent2, ff);
     // Common items badge
-    if (NC > 0) drawBadge(ctx, CW / 2, CCY - CR - 38, '共同', ba, GOLD);
+    if (NC > 0) drawBadge(ctx, CW / 2, CCY - CR - 38, '共同', ba, GOLD, ff);
   }
 
   // Scenic spots (no name labels)
@@ -170,11 +186,11 @@ export function drawNatureScene(
       const float = Math.sin(elapsed * 0.0008 + i * 1.2) * 3;
       if (i < NL && lSlots[i]) {
         const s = lSlots[i];
-        drawWord(ctx, nc.leftItems[i], LCX + Math.cos(s.angle) * s.radius, CCY + Math.sin(s.angle) * s.radius, prog, accent, float);
+        drawWord(ctx, nc.leftItems[i], LCX + Math.cos(s.angle) * s.radius, CCY + Math.sin(s.angle) * s.radius, prog, accent, float, ff, wordBase);
       }
       if (i < NR && rSlots[i]) {
         const s = rSlots[i];
-        drawWord(ctx, nc.rightItems[i], RCX + Math.cos(s.angle) * s.radius, CCY + Math.sin(s.angle) * s.radius, prog, accent2, -float);
+        drawWord(ctx, nc.rightItems[i], RCX + Math.cos(s.angle) * s.radius, CCY + Math.sin(s.angle) * s.radius, prog, accent2, -float, ff, wordBase);
       }
     }
     // Common items (center zone, slight delay after left/right)
@@ -185,7 +201,7 @@ export function drawNatureScene(
       const prog = clamp(te / 400, 0, 1);
       const cs = cSlots[i % cSlots.length];
       const float = Math.sin(elapsed * 0.0007 + i * 2.1) * 4;
-      drawWord(ctx, nc.commonItems![i], cs.x, cs.y + float, prog, GOLD, 0);
+      drawWord(ctx, nc.commonItems![i], cs.x, cs.y + float, prog, GOLD, 0, ff, wordBase);
     }
   }
 
