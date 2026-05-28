@@ -1,113 +1,175 @@
-# 漫画字幕 TTS 升级：阿里百炼 CosyVoice + 完整音色配置
+# Plan: Chinese Style Full Customization
 
-## 背景
-
-技能路径 `~/.qclaw/skills/tts-aifman/` 不存在，基于用户需求直接实现：
-- 切换 TTS 服务商：ByteDance Ark → 阿里百炼 DashScope CosyVoice
-- 阿里百炼 API Key 在 UI 界面配置（不写入代码）
-- 预设音色列表 + 支持自定义音色 ID
-- 语速（语速倍率）可调
-- 音量可调（FFmpeg 混流时应用）
+## Context
+The Chinese style is too rigid: fixed 2-col × 3-row layout, always 3 text lines per card (label/short/desc), limited shape variety (~25), and only one card entrance animation. Users want full control over layout, per-line content/font/color/animation.
 
 ---
 
-## API 技术方案
+## What Changes
 
-### 阿里百炼 TTS（DashScope OpenAI 兼容接口）
+### 1. New Types — `src/types/video.ts`
 
+Add new types and extend `ChineseOptions`:
+
+```ts
+export type ChineseLineAnim =
+  | 'fadeIn' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight'
+  | 'zoomIn' | 'bounceIn' | 'rotateIn' | 'flipH' | 'typewriter'
+  | 'glitch' | 'wave';
+
+export type ChineseLineExitAnim =
+  | 'fadeOut' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight'
+  | 'zoomOut' | 'dissolve';
+
+export interface ChineseCardLineConfig {
+  field: 'label' | 'short' | 'desc' | 'static'; // content source
+  staticText?: string;                            // used when field='static'
+  fontSize: number;
+  fontFamily: string;          // '' = "Noto Sans SC"
+  color: string;               // '' = auto from theme
+  fontWeight: 400 | 600 | 800;
+  enterAnim: ChineseLineAnim;
+  exitAnim: ChineseLineExitAnim;
+}
+
+// ChineseOptions additions:
+//   cardCols: 1 | 2          (default 2)
+//   cardRows: 1 | 2 | 3      (default 3)
+//   cardLines: ChineseCardLineConfig[]  (1–3 items, default 3 lines)
 ```
-POST https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech
-Authorization: Bearer {API_KEY}
-Content-Type: application/json
 
-Body:
-{
-  "model": "cosyvoice-v1",
-  "input": "文字内容",
-  "voice": "longxiaochun",
-  "response_format": "mp3",
-  "speed": 1.0          // 0.5 ~ 2.0
+**Default `cardLines` (3 lines, preserving existing behavior):**
+```ts
+[
+  { field: 'label', fontSize: 68, fontFamily: '', color: '', fontWeight: 800, enterAnim: 'slideLeft',  exitAnim: 'fadeOut' },
+  { field: 'short', fontSize: 36, fontFamily: '', color: '', fontWeight: 600, enterAnim: 'slideUp',    exitAnim: 'fadeOut' },
+  { field: 'desc',  fontSize: 32, fontFamily: '', color: '', fontWeight: 400, enterAnim: 'fadeIn',     exitAnim: 'dissolve' },
+]
+```
+
+---
+
+### 2. More Shapes — `src/lib/shapes/chinese.ts` + `src/lib/themes.ts`
+
+Add 20 new SVG shape generators to `CHINESE_SVGS`. Categories:
+
+| Group | New shapes |
+|-------|-----------|
+| 自然 | `plum` 梅花 · `pine` 松竹 · `wave` 水波 · `peony` 牡丹 |
+| 纹样 | `fenix` 凤凰纹 · `fish` 鱼纹 · `spiral` 螺旋纹 · `hexflower` 六角花 |
+| 文字 | `fu` 福字 · `shou` 寿字 · `xi` 喜字 |
+| 器物 | `fan` 折扇 · `vase` 花瓶 · `seal` 印章框 · `crown` 皇冠 |
+| 几何 | `ring3` 三环 · `starburst` 放射星 · `maze` 迷宫格 · `diamond4` 四钻 · `lotus8` 八瓣莲 |
+
+Add all new IDs to `CHINESE_SHAPES` in `themes.ts`.
+
+---
+
+### 3. Card Engine Rewrite — `src/lib/engine/cards.ts`
+
+#### Layout
+```ts
+const cols = chineseOptions?.cardCols ?? 2;
+const rows = chineseOptions?.cardRows ?? 3;
+const PAGE_SIZE = cols * rows;
+const cardW = (CW - MARGIN*2 - GAP*(cols-1)) / cols;
+const cardH = computeCardH(lines.length);  // taller for 1 line, shorter for 3
+```
+
+#### Per-line animation system
+
+Each line has its own `te` offset (staggered by 80ms per line per card). The animation is applied in `ctx.save/translate/restore` scope:
+
+```ts
+function applyLineEnterAnim(
+  ctx, text, x, y, te, anim: ChineseLineAnim, fsz, elapsed
+): void
+```
+
+**12 enter animations:**
+- `fadeIn` — alpha 0→1
+- `slideUp` — translate Y from +60 to 0, fade in
+- `slideDown` — translate Y from -60 to 0, fade in
+- `slideLeft` — translate X from +120 to 0, fade in
+- `slideRight` — translate X from -120 to 0, fade in
+- `zoomIn` — scale 0.3→1, fade in (easeOutBack)
+- `bounceIn` — scale 1.3→0.9→1 (springy overshoot)
+- `rotateIn` — rotate -30°→0°, scale 0→1, fade in
+- `flipH` — scaleX 0→1 with perspective-like squash
+- `typewriter` — clip text to `Math.floor(t * text.length)` chars
+- `glitch` — 3 random X/Y jitter frames, then settle at position
+- `wave` — each character rendered at sinusoidal Y offset with phase per char
+
+**7 exit animations:**
+Applied when `outA < 1` (page transition). Use `exitT = 1 - outA`.
+- `fadeOut` — alpha × outA
+- `slideUp` — translate Y × -exitT * 80
+- `slideDown` — translate Y × exitT * 80
+- `slideLeft` — translate X × -exitT * 120
+- `slideRight` — translate X × exitT * 120
+- `zoomOut` — scale lerp(1, 0.2, exitT)
+- `dissolve` — alpha drops but also slight scatter (random small offsets)
+
+#### Card height computation
+```ts
+function computeCardH(numLines: number): number {
+  if (numLines === 1) return 180;
+  if (numLines === 2) return 220;
+  return 268;  // existing default
 }
 ```
 
-- **HTTP REST**，无 WebSocket（从 Edge Function 调用无 CORS 问题）
-- 返回直接二进制 MP3 数据（同 OpenAI TTS 格式）
-- 保留 Google TTS 作为 fallback（API Key 无效时）
+---
 
-### CosyVoice 预设音色（`cosyvoice-v1`）
+### 4. Config UI — `src/components/StyleConfigPanel.tsx`
 
-| ID | 说明 |
-|---|---|
-| `longxiaochun` | 龙小淳（女·温暖亲切） |
-| `longwan` | 龙婉（女·温柔知性） |
-| `longcheng` | 龙橙（男·磁性低沉） |
-| `longshu` | 龙书（男·沉稳播报） |
-| `longfei` | 龙飞（男·活泼热情） |
+#### ChinesePanel additions (below existing controls):
 
-用户还可以手动输入任意音色 ID（如 `longxiaobai` 等）
+**Layout section:**
+```
+[行数]  ○1  ○2  ●3
+[列数]  ○1  ●2
+```
+
+**卡片文字行** section — show 1-3 accordion-style collapsible rows:
+- Tab switcher: 行1 / 行2 / 行3 (+ add/remove buttons for 1-3 lines)
+- For each line:
+  - 内容来源: pill select `标题词 / 副标题 / 描述 / 自定义`
+  - 自定义文字 (text input, visible when field='static')
+  - 字号 (NumericSlider 16-100px)
+  - 字体 (select: Noto/微软雅黑/楷体/STSong/sans-serif)
+  - 颜色 (OptionalColorPicker)
+  - 字重 (pill: 细/中/粗)
+  - 入场动画 (pill grid 4×3 = 12 options)
+  - 退场动画 (pill grid 4×2 = 7 options)
 
 ---
 
-## 文件变更清单
+## Files Modified
 
-### 1. `src/types/video.ts`
-- 在 `MangaOptions` 中新增字段：
-  - `ttsRate: number` — 语速，默认 `1.0`，范围 `0.5 ~ 2.0`
-  - `ttsVolume: number` — 音量，默认 `80`，范围 `0 ~ 100`
-  - `ttsCustomVoice: string` — 自定义音色 ID，非空时覆盖 `ttsVoice`
-- 更新 `DEFAULT_MANGA_OPTIONS` 补充三个默认值
+| File | Change |
+|------|--------|
+| `src/types/video.ts` | Add `ChineseCardLineConfig`, `ChineseLineAnim`, `ChineseLineExitAnim`; extend `ChineseOptions` |
+| `src/lib/engine/cards.ts` | Full rewrite of Chinese card path with configurable layout + per-line anim system |
+| `src/lib/shapes/chinese.ts` | Add 20 new SVG shape generators |
+| `src/lib/themes.ts` | Add new shape IDs to `CHINESE_SHAPES` |
+| `src/components/StyleConfigPanel.tsx` | Extend `ChinesePanel` with layout + per-line config UI |
 
-### 2. `src/services/tts.ts`
-- 新增 Bailian Key 存储（`bailian_api_key` key in localStorage）：
-  - `getStoredBailianKey() / setStoredBailianKey()`
-- 替换 `TTS_VOICES` 为 5 个 CosyVoice 音色
-- 更新 `DEFAULT_TTS_VOICE = 'longxiaochun'`
-- `synthesize()` 新增可选参数 `{ rate?: number }` 并透传到 Edge Function
-
-### 3. `supabase/functions/manga-tts/index.ts`
-- 替换 `arkTTS()` 为 `bailianTTS(text, voice, apiKey, rate)`
-- 调用 `https://dashscope.aliyuncs.com/compatible-mode/v1/audio/speech`
-- 接收新参数 `rate`，映射到请求体 `speed`
-- 保留 `googleTTS()` fallback
-
-### 4. `src/components/StyleConfigPanel.tsx` — `MangaPanel` 组件
-新增控件（在"配音朗读"开关打开后显示）：
-
-**新增 API Key 输入框**（顶部）
-- `<input type="password">` 输入框，保存到 `bailian_api_key` localStorage
-- 提示文字："阿里百炼 API Key（不提交代码）"
-
-**预设音色列表**（现有 UI 复用，更新音色数据）
-
-**自定义音色 ID 输入框**（音色列表下方）
-- placeholder: "自定义音色 ID（如 longxiaobai）"
-- 非空时覆盖预设音色选择
-
-**语速滑块**
-- 使用已有 `NumericSlider` 组件
-- 范围：0.5 ~ 2.0，步长 0.1，单位 "x"，默认 1.0
-
-**音量滑块**
-- 使用已有 `NumericSlider` 组件
-- 范围：0 ~ 100，步长 5，单位 "%"，默认 80
-
-### 5. `src/components/VideoGenerator.tsx`
-- 读取 `opts.ttsRate / ttsVolume / ttsCustomVoice`
-- 实际音色 = `ttsCustomVoice.trim() || ttsVoice`
-- `synthesize(text, voice, { rate: ttsRate })` 传递语速
-- `webmToMp4WithAudio(..., volume)` 传递音量
-
-### 6. `src/lib/mp4Converter.ts`
-- `webmToMp4WithAudio()` 新增可选参数 `volume = 80`（0~100）
-- 在 FFmpeg 滤镜中追加 `volume=X.XX` 效果（单/多段均适用）
+`src/lib/engine/helpers.ts` — no changes needed (reuse `clamp`, `easeOutBack`, `lerp`, `hex2rgba`, `roundRect`).
 
 ---
 
-## 验证点
+## Backward Compatibility
 
-1. 配置 Bailian API Key → 开启配音 → 选/自定义音色 → 试听有效
-2. 调整语速（0.5x / 2.0x）→ 录制后视频语速正确
-3. 调整音量（低/高）→ 录制后视频音量变化
-4. API Key 未配置 → fallback Google TTS 无声
-5. 自定义音色 ID 非空 → 覆盖预设选择
-6. 页面刷新后 API Key 自动恢复
+`ChineseOptions.cardLines` defaults to `undefined`, and the engine falls back to the existing 3-line behavior when `undefined`. Existing saved configs continue working without migration.
+
+---
+
+## Verification
+
+1. Switch to Chinese style → open StyleConfigPanel → verify new sections appear
+2. Change rows to 1, cols to 1 → canvas shows 1 card per page full-width
+3. Add a line, set it to `static` → verify custom text appears on canvas
+4. Cycle through all 12 enter animations → each should be visually distinct
+5. Change to page 2+ → verify exit animations fire during transition
+6. CoverPicker → scroll to see all 45 shapes
