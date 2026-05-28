@@ -90,6 +90,10 @@ export const CHINESE_SHAPES: ShapeItem[] = [
   { id: 'bamboo', label: '竹石图', group: '自然' },
   { id: 'crane', label: '仙鹤云纹', group: '自然' },
   { id: 'lotus', label: '荷花蜻蜓', group: '自然' },
+  { id: 'plum', label: '梅花五瓣', group: '自然' },
+  { id: 'pine', label: '松树剪影', group: '自然' },
+  { id: 'wave', label: '水波纹', group: '自然' },
+  { id: 'peony', label: '牡丹花开', group: '自然' },
   // 纹样
   { id: 'cloud', label: '祥云瑞气', group: '纹样' },
   { id: 'taichi', label: '太极八卦', group: '纹样' },
@@ -97,22 +101,38 @@ export const CHINESE_SHAPES: ShapeItem[] = [
   { id: 'meander', label: '回纹边框', group: '纹样' },
   { id: 'icecrack', label: '冰裂纹', group: '纹样' },
   { id: 'knot', label: '盘长结', group: '纹样' },
+  { id: 'fenix', label: '凤凰纹', group: '纹样' },
+  { id: 'fish', label: '鱼纹', group: '纹样' },
+  { id: 'hexflower', label: '六角花', group: '纹样' },
   // 瑞兽
   { id: 'dragon', label: '龙纹', group: '瑞兽' },
   { id: 'opera', label: '京剧脸谱', group: '瑞兽' },
   { id: 'toad', label: '金蟾', group: '瑞兽' },
   { id: 'magpie', label: '喜鹊登梅', group: '瑞兽' },
+  // 文字
+  { id: 'fu', label: '福', group: '文字' },
+  { id: 'shou', label: '寿', group: '文字' },
+  { id: 'xi', label: '囍', group: '文字' },
   // 器物
   { id: 'guqin', label: '古琴', group: '器物' },
   { id: 'tile', label: '瓦当纹', group: '器物' },
   { id: 'lantern', label: '灯笼纹', group: '器物' },
   { id: 'ruyi', label: '玉如意', group: '器物' },
+  { id: 'fan', label: '折扇', group: '器物' },
+  { id: 'vase', label: '花瓶', group: '器物' },
+  { id: 'seal', label: '印章框', group: '器物' },
   // 几何
   { id: 'coin', label: '铜钱纹', group: '几何' },
   { id: 'papercut', label: '窗花剪纸', group: '几何' },
   { id: 'jade', label: '玉佩纹', group: '几何' },
   { id: 'heaven', label: '天圆地方', group: '几何' },
   { id: 'bagua', label: '八卦阵', group: '几何' },
+  { id: 'ring3', label: '三环', group: '几何' },
+  { id: 'starburst', label: '放射星', group: '几何' },
+  { id: 'diamond4', label: '四钻', group: '几何' },
+  { id: 'lotus8', label: '八瓣莲', group: '几何' },
+  { id: 'maze', label: '迷宫格', group: '几何' },
+  { id: 'spiral', label: '螺旋纹', group: '几何' },
 ];
 
 export const CITY_SHAPES: ShapeItem[] = [

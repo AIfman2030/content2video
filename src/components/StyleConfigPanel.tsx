@@ -10,7 +10,9 @@ import type {
   SubtitleOptions, SubtitleEnterAnim,
   ColorScheme, AnimMode, PolyShape, CityOptions, MangaOptions, AItechOptions,
   PetCoverConfig, NatureOptions,
+  ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim,
 } from '../types/video';
+import { DEFAULT_CARD_LINES } from '../types/video';
 import CoverPicker from './CoverPicker';
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
@@ -445,6 +447,162 @@ function PetCoverSection({ config, onChange, titleForGen }: {
   );
 }
 
+// ─── Card line animation labels ────────────────────────────────────────────────
+const ENTER_ANIM_OPTS: { value: ChineseLineEnterAnim; label: string }[] = [
+  { value: 'slideLeft',  label: '← 左飞入' },
+  { value: 'slideRight', label: '→ 右飞入' },
+  { value: 'slideUp',    label: '↑ 上滑入' },
+  { value: 'slideDown',  label: '↓ 下落入' },
+  { value: 'fadeIn',     label: '淡入' },
+  { value: 'zoomIn',     label: '缩放入' },
+  { value: 'bounceIn',   label: '弹跳入' },
+  { value: 'rotateIn',   label: '旋转入' },
+  { value: 'flipH',      label: '翻转入' },
+  { value: 'typewriter', label: '打字机' },
+  { value: 'glitch',     label: '故障' },
+  { value: 'wave',       label: '波浪' },
+];
+const EXIT_ANIM_OPTS: { value: ChineseLineExitAnim; label: string }[] = [
+  { value: 'fadeOut',    label: '淡出' },
+  { value: 'slideUp',    label: '↑ 上飞出' },
+  { value: 'slideDown',  label: '↓ 下落出' },
+  { value: 'slideLeft',  label: '← 左飞出' },
+  { value: 'slideRight', label: '→ 右飞出' },
+  { value: 'zoomOut',    label: '缩小出' },
+  { value: 'dissolve',   label: '溶解出' },
+];
+const FONT_FAMILY_OPTS = [
+  { value: '',              label: 'Noto Sans SC（默认）' },
+  { value: 'Microsoft YaHei', label: '微软雅黑' },
+  { value: 'STKaiti',       label: '楷体' },
+  { value: 'STSong',        label: '宋体' },
+  { value: 'PingFang SC',   label: '苹方' },
+  { value: 'serif',         label: '衬线' },
+];
+
+function CardLineEditor({
+  line, index, accent, onChange,
+}: {
+  line: ChineseCardLineConfig;
+  index: number;
+  accent: string;
+  onChange: (v: ChineseCardLineConfig) => void;
+}) {
+  const upd = (patch: Partial<ChineseCardLineConfig>) => onChange({ ...line, ...patch });
+  const lineLabel = ['第一行', '第二行', '第三行'][index] ?? `行 ${index + 1}`;
+
+  return (
+    <div className="space-y-2.5 p-2.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="text-[10px] font-bold tracking-wide" style={{ color: 'rgba(255,255,255,0.45)' }}>{lineLabel}</div>
+
+      {/* Content source */}
+      <Row>
+        <Label>内容来源</Label>
+        <div className="grid grid-cols-4 gap-1">
+          {([
+            { value: 'label',  label: '标题词' },
+            { value: 'short',  label: '副标题' },
+            { value: 'desc',   label: '描述' },
+            { value: 'static', label: '自定义' },
+          ] as const).map(o => (
+            <button
+              key={o.value}
+              onClick={() => upd({ field: o.value })}
+              className="py-1 rounded text-[10px] font-medium transition-all"
+              style={{
+                background: line.field === o.value ? accent : 'rgba(255,255,255,0.06)',
+                color: line.field === o.value ? '#000' : 'rgba(255,255,255,0.55)',
+              }}
+            >{o.label}</button>
+          ))}
+        </div>
+      </Row>
+
+      {line.field === 'static' && (
+        <TextInput label="自定义文字" value={line.staticText} onChange={v => upd({ staticText: v })} placeholder="输入固定显示的文字" />
+      )}
+
+      {/* Font size + weight */}
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <NumericSlider label="字号" value={line.fontSize} min={16} max={120} onChange={v => upd({ fontSize: v })} />
+        </div>
+        <div className="pb-1">
+          <div className="flex gap-0.5">
+            {([400, 600, 800] as const).map(w => (
+              <button
+                key={w}
+                onClick={() => upd({ fontWeight: w })}
+                className="w-7 h-6 rounded text-[10px] font-medium transition-all"
+                style={{
+                  fontWeight: w,
+                  background: line.fontWeight === w ? accent : 'rgba(255,255,255,0.06)',
+                  color: line.fontWeight === w ? '#000' : 'rgba(255,255,255,0.5)',
+                }}
+              >
+                {w === 400 ? '细' : w === 600 ? '中' : '粗'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Font family */}
+      <Row>
+        <Label>字体</Label>
+        <select
+          className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+          value={line.fontFamily}
+          onChange={e => upd({ fontFamily: e.target.value })}
+        >
+          {FONT_FAMILY_OPTS.map(f => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
+        </select>
+      </Row>
+
+      {/* Color */}
+      <OptionalColorPicker label="颜色（空=自动）" value={line.color} placeholder="自动" onChange={c => upd({ color: c })} accent={accent} />
+
+      {/* Enter animation */}
+      <Row>
+        <Label>入场动画</Label>
+        <div className="grid grid-cols-4 gap-1">
+          {ENTER_ANIM_OPTS.map(o => (
+            <button
+              key={o.value}
+              onClick={() => upd({ enterAnim: o.value })}
+              className="py-1 px-0.5 rounded text-[9px] font-medium transition-all leading-tight"
+              style={{
+                background: line.enterAnim === o.value ? accent : 'rgba(255,255,255,0.06)',
+                color: line.enterAnim === o.value ? '#000' : 'rgba(255,255,255,0.5)',
+              }}
+            >{o.label}</button>
+          ))}
+        </div>
+      </Row>
+
+      {/* Exit animation */}
+      <Row>
+        <Label>退场动画</Label>
+        <div className="grid grid-cols-4 gap-1">
+          {EXIT_ANIM_OPTS.map(o => (
+            <button
+              key={o.value}
+              onClick={() => upd({ exitAnim: o.value })}
+              className="py-1 px-0.5 rounded text-[9px] font-medium transition-all leading-tight"
+              style={{
+                background: line.exitAnim === o.value ? accent : 'rgba(255,255,255,0.06)',
+                color: line.exitAnim === o.value ? '#000' : 'rgba(255,255,255,0.5)',
+              }}
+            >{o.label}</button>
+          ))}
+        </div>
+      </Row>
+    </div>
+  );
+}
+
 function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover }: {
   options: ChineseOptions; onChange: (v: ChineseOptions) => void;
   accent: string; coverIndex: number; onCoverIndexChange: (v: number) => void;
@@ -453,6 +611,7 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
   titleForPetCover: string;
 }) {
   const upd = (patch: Partial<ChineseOptions>) => onChange({ ...options, ...patch });
+  const lines = options.cardLines ?? DEFAULT_CARD_LINES;
 
   const COLOR_SCHEMES: { value: ColorScheme; label: string }[] = [
     { value: 'cinnabar', label: '朱砂' },
@@ -465,6 +624,20 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
     { value: 'single', label: '单句呈现' },
     { value: 'grid',   label: '九宫格' },
   ];
+
+  const updateLine = (i: number, v: ChineseCardLineConfig) => {
+    const next = [...lines];
+    next[i] = v;
+    upd({ cardLines: next });
+  };
+  const addLine = () => {
+    if (lines.length >= 3) return;
+    upd({ cardLines: [...lines, { ...DEFAULT_CARD_LINES[lines.length] ?? DEFAULT_CARD_LINES[2] }] });
+  };
+  const removeLine = (i: number) => {
+    if (lines.length <= 1) return;
+    upd({ cardLines: lines.filter((_, idx) => idx !== i) });
+  };
 
   return (
     <div className="space-y-4">
@@ -493,37 +666,61 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
       <StepSlider label="线条宽度" value={options.lineWidth}   min={1} max={4} onChange={v => upd({ lineWidth:   v as 1|2|3|4 })} />
       <PillSelect label="动画模式" value={options.animMode}    onChange={am => upd({ animMode: am as AnimMode })} options={ANIM_MODES} />
 
-      {/* ── Title ─────────────────────────────────────────────────────────── */}
-      <SectionDivider title="标题样式" />
-      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.35)' }}>
-        字号&nbsp;<b style={{color:'rgba(255,255,255,0.55)'}}>{options.titleFontSize ?? 68}px</b>
-        &nbsp;·&nbsp;颜色&nbsp;<b style={{color:options.titleColor||accent}}>{options.titleColor||'主题强调色（默认）'}</b>
+      {/* ── Card grid layout ─────────────────────────────────────────────── */}
+      <SectionDivider title="卡片版式" />
+      <PillSelect
+        label="每页行数"
+        value={String(options.cardRows ?? 3)}
+        onChange={v => upd({ cardRows: Number(v) as 1 | 2 | 3 })}
+        options={[
+          { value: '1', label: '1 行' },
+          { value: '2', label: '2 行' },
+          { value: '3', label: '3 行' },
+        ]}
+      />
+      <PillSelect
+        label="每行列数"
+        value={String(options.cardCols ?? 2)}
+        onChange={v => upd({ cardCols: Number(v) as 1 | 2 })}
+        options={[
+          { value: '1', label: '1 列' },
+          { value: '2', label: '2 列' },
+        ]}
+      />
+      <div className="px-2 py-1.5 rounded text-[10px]" style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.3)' }}>
+        每页 <b style={{ color: 'rgba(255,255,255,0.6)' }}>{(options.cardRows ?? 3) * (options.cardCols ?? 2)}</b> 张卡片
       </div>
-      <NumericSlider label="标题字号" value={options.titleFontSize ?? 68} min={40} max={100} onChange={v => upd({ titleFontSize: v })} />
-      <OptionalColorPicker label="标题颜色（空=强调色）" value={options.titleColor ?? ''} placeholder="跟随主题强调色" onChange={c => upd({ titleColor: c })} accent={accent} />
 
-      {/* ── Short / subtitle ──────────────────────────────────────────────── */}
-      <SectionDivider title="副标题样式" />
-      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.35)' }}>
-        字号&nbsp;<b style={{color:'rgba(255,255,255,0.55)'}}>{options.shortFontSize ?? 36}px</b>
-        &nbsp;·&nbsp;颜色&nbsp;<b style={{color:options.shortColor||'#aaffcc'}}>{options.shortColor||'主题次要色（默认）'}</b>
-      </div>
-      <NumericSlider label="副标题字号" value={options.shortFontSize ?? 36} min={20} max={60} onChange={v => upd({ shortFontSize: v })} />
-      <OptionalColorPicker label="副标题颜色（空=次要色）" value={options.shortColor ?? ''} placeholder="跟随主题次要色" onChange={c => upd({ shortColor: c })} accent={accent} />
+      {/* ── Per-line text config ──────────────────────────────────────────── */}
+      <SectionDivider title={`卡片文字（${lines.length} 行）`} />
 
-      {/* ── Desc ──────────────────────────────────────────────────────────── */}
-      <SectionDivider title="辅助说明样式" />
-      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.35)' }}>
-        字号&nbsp;<b style={{color:'rgba(255,255,255,0.55)'}}>{options.descFontSize ?? 32}px</b>
-        &nbsp;·&nbsp;颜色&nbsp;<b style={{color:options.descColor||'rgba(255,255,255,0.92)'}}>{options.descColor||'近白色 0.92（默认）'}</b>
-      </div>
-      <NumericSlider label="辅助说明字号" value={options.descFontSize ?? 32} min={16} max={48} onChange={v => upd({ descFontSize: v })} />
-      <OptionalColorPicker label="辅助说明颜色（空=白色）" value={options.descColor ?? ''} placeholder="rgba(255,255,255,0.92)" onChange={c => upd({ descColor: c })} accent={accent} />
+      <div className="space-y-2">
+        {lines.map((ln, i) => (
+          <div key={i} className="relative">
+            <CardLineEditor line={ln} index={i} accent={accent} onChange={v => updateLine(i, v)} />
+            {lines.length > 1 && (
+              <button
+                onClick={() => removeLine(i)}
+                className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] transition-opacity hover:opacity-100 opacity-40"
+                style={{ background: 'rgba(255,80,80,0.2)', color: '#ff5555' }}
+                title="删除此行"
+              >
+                <X size={10} />
+              </button>
+            )}
+          </div>
+        ))}
 
-      {/* ── Background ────────────────────────────────────────────────────── */}
-      <SectionDivider title="背景配色" />
-      <div className="px-2 py-1.5 rounded-lg text-[10px]" style={{ background:'rgba(255,255,255,0.04)', color:'rgba(255,255,255,0.25)' }}>
-        当前背景为纯黑色，配色方案仅影响文字和装饰元素颜色
+        {lines.length < 3 && (
+          <button
+            onClick={addLine}
+            className="w-full py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[11px] font-medium transition-all hover:opacity-80"
+            style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', border: '1px dashed rgba(255,255,255,0.1)' }}
+          >
+            <Plus size={11} />
+            添加行（{lines.length}/3）
+          </button>
+        )}
       </div>
     </div>
   );

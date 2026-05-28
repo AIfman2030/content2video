@@ -3,6 +3,33 @@ export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
 
+// ─── Chinese card line animation types ────────────────────────────────────────
+export type ChineseLineEnterAnim =
+  | 'fadeIn' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight'
+  | 'zoomIn' | 'bounceIn' | 'rotateIn' | 'flipH' | 'typewriter'
+  | 'glitch' | 'wave';
+
+export type ChineseLineExitAnim =
+  | 'fadeOut' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight'
+  | 'zoomOut' | 'dissolve';
+
+export interface ChineseCardLineConfig {
+  field: 'label' | 'short' | 'desc' | 'static'; // content source
+  staticText: string;                             // used when field='static'
+  fontSize: number;
+  fontFamily: string;           // '' = "Noto Sans SC"
+  color: string;                // '' = auto from theme
+  fontWeight: 400 | 600 | 800;
+  enterAnim: ChineseLineEnterAnim;
+  exitAnim: ChineseLineExitAnim;
+}
+
+export const DEFAULT_CARD_LINES: ChineseCardLineConfig[] = [
+  { field: 'label', staticText: '', fontSize: 68, fontFamily: '', color: '', fontWeight: 800, enterAnim: 'slideLeft',  exitAnim: 'fadeOut' },
+  { field: 'short', staticText: '', fontSize: 36, fontFamily: '', color: '', fontWeight: 600, enterAnim: 'slideUp',    exitAnim: 'fadeOut' },
+  { field: 'desc',  staticText: '', fontSize: 32, fontFamily: '', color: '', fontWeight: 400, enterAnim: 'fadeIn',     exitAnim: 'dissolve' },
+];
+
 // ─── Existing ──────────────────────────────────────────────────────────────────
 export interface AIOptions {
   polyShape: PolyShape;
@@ -14,7 +41,12 @@ export interface ChineseOptions {
   lineWidth: 1 | 2 | 3 | 4;
   animMode: AnimMode;
   titleEntranceAnim?: 'dropsFromSky' | 'typewriter';  // default 'dropsFromSky'
-  // ── Optional text style overrides (undefined = use theme defaults) ──────
+  // ── Card layout ────────────────────────────────────────────────────────────
+  cardCols?: 1 | 2;     // default 2
+  cardRows?: 1 | 2 | 3; // default 3
+  // ── Per-line card text config (1-3 items) ──────────────────────────────────
+  cardLines?: ChineseCardLineConfig[];
+  // ── Legacy text style overrides (kept for backward compat) ────────────────
   titleFontSize?: number;    // default 68
   titleColor?: string;       // default '' = use accent
   shortFontSize?: number;    // default 36
