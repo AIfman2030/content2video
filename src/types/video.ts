@@ -250,3 +250,40 @@ export interface ThemeConfig {
   particle: string;
   gridColor: string;
 }
+
+// ─── Unified Title Options (all canvas styles) ────────────────────────────────
+export type TitleLineEnterAnim = 'withScene' | 'dropsFromSky' | 'slideUp' | 'fadeIn' | 'typewriter';
+
+export interface TitleLineConfig {
+  text: string;       // '' = auto-split from content.title by line index
+  fontSize: number;
+  fontFamily: string; // '' = "Noto Sans SC"
+  fontWeight: 400 | 700 | 900;
+  color: string;      // '' = '#ffffff'
+  colorEnd: string;   // '' = solid; non-empty = horizontal left→right gradient
+  enterAnim: TitleLineEnterAnim;
+}
+
+export interface TitleOptions {
+  lines: TitleLineConfig[];    // 1-3 items
+  subtitleText: string;        // custom small text below title; '' = hidden
+  subtitleColor: string;
+  subtitleFontSize: number;
+  headerFontSize: number;      // font size after fly-up settle
+}
+
+export const DEFAULT_TITLE_LINE_1: TitleLineConfig = {
+  text: '', fontSize: 88, fontFamily: '', fontWeight: 700,
+  color: '#ffffff', colorEnd: '', enterAnim: 'withScene',
+};
+export const DEFAULT_TITLE_LINE_2: TitleLineConfig = {
+  text: '', fontSize: 172, fontFamily: '', fontWeight: 900,
+  color: '#ffffff', colorEnd: '#3b9ef5', enterAnim: 'dropsFromSky',
+};
+export const DEFAULT_TITLE_OPTIONS: TitleOptions = {
+  lines: [DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2],
+  subtitleText: '',
+  subtitleColor: 'rgba(180,200,255,0.75)',
+  subtitleFontSize: 40,
+  headerFontSize: 60,
+};

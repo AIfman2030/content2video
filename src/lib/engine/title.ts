@@ -1,247 +1,432 @@
-import type { GeneratedContent, StyleType, ChineseOptions } from '../../types/video';
-import { CW, CH, clamp, lerp, easeOutCubic, easeOutBack, hex2rgba, T } from './helpers';
+import type { GeneratedContent, StyleType, TitleOptions, TitleLineConfig } from '../../types/video';
+import { CW, CH, clamp, lerp, easeOutCubic, easeOutBack, hex2rgba } from './helpers';
 
-const LEFT_PAD = 72;   // aitech settled: left edge of title
-const GREEN    = '#2dff8a';  // sun-wave green
+// ── Timing (absolute ms from elapsed = 0) ─────────────────────────────────────
+const T_L1_START  =    0;   // line 1 (withScene) fades in with black screen
+const T_L2_START  =  700;   // line 2 dropsFromSky begins
+const T_L2_LAND   = 1200;   // line 2 hits center → smoke burst
+const T_SUB_IN    = 1350;   // subtitle fades in
+const T_FLY_START = 1900;   // title begins flying to header
+const T_FLY_END   = 2500;   // title settled at header
 
-// ── dropsFromSky phase timing (relative to te = elapsed - T.titleEntrance) ──
-const DROP_DUR   = 500;   // 0   → 500ms : title falls from above screen
-const IMPACT_DUR = 400;   // 500 → 900ms : slams center, impact effects
-const FLY_DUR    = 600;   // 900 → 1500ms: flies up to header
+// Drop start Y (off-screen above)
+const DROP_FROM_Y  = -280;
 
-const IMPACT_FONT = 180;    // font size while at center
-const SETTLED_FONT_CHINESE = 72;  // settled font size (header)
+// Header settle Y
+const HEADER_Y = 78;
 
-/** easeInQuart — slow start, accelerates sharply — gives the "launched upward" feel */
-function easeInQuart(t: number): number { return t * t * t * t; }
+// ── Smoke particles (deterministic, pre-generated) ────────────────────────────
+interface SmokeP {
+  x0: number; y0: number;
+  vx: number; vy: number;
+  size: number; baseAlpha: number;
+}
 
+function buildSmoke(): SmokeP[] {
+  return Array.from({ length: 48 }, (_, i) => {
+    const s = i * 2.3713;
+    const sin  = (x: number) => Math.sin(x * 0.9999);   // cheap pseudo-random via sin
+    const frac = (x: number) => ((x % 1) + 1) % 1;
+
+    const rand1 = frac(sin(s * 127.1) * 43758.5);
+    const rand2 = frac(sin(s * 311.7) * 43758.5);
+    const rand3 = frac(sin(s * 74.3)  * 43758.5);
+    const rand4 = frac(sin(s * 209.1) * 43758.5);
+    const rand5 = frac(sin(s * 53.9)  * 43758.5);
+
+    // Upper-semicircle angle: smoke rises upward
+    const a = rand1 * Math.PI;
+    const speed = 3 + rand2 * 10;
+    return {
+      x0: (rand3 - 0.5) * 500,
+      y0: (rand4 - 0.3) * 60,   // slight vertical scatter at origin
+      vx: Math.cos(a) * speed,
+      vy: -Math.abs(Math.sin(a) * speed) * 1.6,
+      size: 5 + rand5 * 22,
+      baseAlpha: 0.3 + rand1 * 0.5,
+    };
+  });
+}
+const SMOKE: SmokeP[] = buildSmoke();
+
+// ── Text / gradient fill ───────────────────────────────────────────────────────
+function applyFill(
+  ctx: CanvasRenderingContext2D,
+  cfg: TitleLineConfig,
+  cx: number, cy: number, halfW: number,
+) {
+  const baseColor = cfg.color || '#ffffff';
+  if (cfg.colorEnd && cfg.colorEnd !== baseColor) {
+    const g = ctx.createLinearGradient(cx - halfW, cy, cx + halfW, cy);
+    g.addColorStop(0, baseColor);
+    g.addColorStop(1, cfg.colorEnd);
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = baseColor;
+  }
+}
+
+// ── Auto-split title into lines ───────────────────────────────────────────────
+function resolveLineText(cfg: TitleLineConfig, i: number, title: string): string {
+  if (cfg.text) return cfg.text;
+  const mid = Math.ceil(title.length / 2);
+  if (i === 0) return title.slice(0, mid);
+  if (i === 1) return title.slice(mid);
+  return title;  // fallback for 3rd line: full title
+}
+
+function fontStr(cfg: TitleLineConfig, fsz: number) {
+  const ff = cfg.fontFamily ? `"${cfg.fontFamily}", sans-serif` : '"Noto Sans SC", "PingFang SC", sans-serif';
+  return `${cfg.fontWeight} ${fsz.toFixed(0)}px ${ff}`;
+}
+
+// ── Enter-time for each line ──────────────────────────────────────────────────
+function lineT0(cfg: TitleLineConfig, idx: number): number {
+  switch (cfg.enterAnim) {
+    case 'withScene':    return T_L1_START + idx * 250;
+    case 'dropsFromSky': return T_L2_START;
+    case 'slideUp':      return T_L1_START + 200 + idx * 300;
+    case 'fadeIn':       return T_L1_START + idx * 350;
+    case 'typewriter':   return T_L1_START + idx * 400;
+    default:             return T_L1_START;
+  }
+}
+
+// ── Smoke burst ───────────────────────────────────────────────────────────────
+function drawSmoke(ctx: CanvasRenderingContext2D, cx: number, cy: number, smokeT: number) {
+  if (smokeT <= 0 || smokeT >= 1) return;
+  ctx.save();
+  for (const p of SMOKE) {
+    const t  = smokeT;
+    const px = cx + p.x0 + p.vx * t * 140;
+    const py = cy + p.y0 + p.vy * t * 140 + 280 * t * t;  // gravity pulls down
+    const al = p.baseAlpha * (1 - t * t);
+    if (al <= 0.01) continue;
+    const r = p.size * (0.6 + t * 2.2);
+    ctx.globalAlpha = al;
+    ctx.shadowColor = 'rgba(255,255,255,0.7)';
+    ctx.shadowBlur  = r * 0.6;
+    ctx.fillStyle   = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur  = 0;
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// ── Shockwave rings ───────────────────────────────────────────────────────────
+function drawShockwaves(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  accent: string, impactT: number,
+) {
+  for (let ring = 0; ring < 3; ring++) {
+    const rt = clamp(impactT - ring * 0.14, 0, 1);
+    if (rt <= 0) continue;
+    const al  = (1 - rt) * 0.7;
+    const r   = rt * 700;
+    ctx.save();
+    ctx.globalAlpha = al;
+    ctx.shadowColor = accent;
+    ctx.shadowBlur  = 22;
+    ctx.strokeStyle = accent;
+    ctx.lineWidth   = Math.max(0.5, (1 - rt) * 5);
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // Horizontal shockwave lines
+  const lineAl = Math.max(0, (1 - impactT * 1.6) * 0.55);
+  if (lineAl > 0) {
+    const len = impactT * CW * 0.72;
+    ctx.save();
+    ctx.globalAlpha = lineAl;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth   = 3;
+    ctx.shadowColor = '#ffffff';
+    ctx.shadowBlur  = 18;
+    for (const dy of [-55, 55]) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + dy); ctx.lineTo(cx - len, cy + dy); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + dy); ctx.lineTo(cx + len, cy + dy); ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+}
+
+// ── Screen flash ──────────────────────────────────────────────────────────────
+function drawFlash(ctx: CanvasRenderingContext2D, accent: string, flashT: number) {
+  const al = Math.max(0, (1 - flashT * 2.2)) * 0.4;
+  if (al <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = al;
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.restore();
+}
+
+// ── Single line Y layout in settled state ─────────────────────────────────────
+function settledLineY(lines: TitleLineConfig[], idx: number): number {
+  // Total height of all lines stacked
+  const totalH = lines.reduce((s, ln) => s + ln.fontSize + 16, 0) - 16;
+  const top = CH * 0.48 - totalH / 2;
+  let y = top;
+  for (let i = 0; i < idx; i++) y += lines[i].fontSize + 16;
+  y += lines[idx].fontSize / 2;
+  return y;
+}
+
+// ── Subtitle dissolve ─────────────────────────────────────────────────────────
+function drawSubtitle(
+  ctx: CanvasRenderingContext2D,
+  elapsed: number,
+  opts: TitleOptions,
+  lines: TitleLineConfig[],
+) {
+  if (!opts.subtitleText) return;
+
+  const subAlphaIn = clamp((elapsed - T_SUB_IN) / 300, 0, 1);
+  if (subAlphaIn <= 0) return;
+
+  // Sub Y: below last line
+  const lastLine = lines[lines.length - 1];
+  const lastY    = settledLineY(lines, lines.length - 1) + lastLine.fontSize / 2 + 28;
+  const subY     = lastY + opts.subtitleFontSize / 2;
+
+  // Fly-out dissolve
+  const flyT = clamp((elapsed - T_FLY_START) / 400, 0, 1);
+  const subAlphaOut = 1 - flyT * flyT;
+  const finalAlpha  = subAlphaIn * subAlphaOut;
+  if (finalAlpha <= 0.01) return;
+
+  // Shake during dissolve
+  const shakeX = flyT > 0.1
+    ? Math.sin(elapsed * 0.06 + 1.2) * flyT * 22
+    : 0;
+
+  ctx.save();
+  ctx.globalAlpha = finalAlpha;
+  ctx.font = `600 ${opts.subtitleFontSize}px "Noto Sans SC", sans-serif`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle    = opts.subtitleColor || 'rgba(180,200,255,0.75)';
+  ctx.shadowColor  = opts.subtitleColor || 'rgba(180,200,255,0.75)';
+  ctx.shadowBlur   = 12;
+  ctx.fillText(opts.subtitleText, CW / 2 + shakeX, subY);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// ── Main export ───────────────────────────────────────────────────────────────
 export function drawTitle(
   ctx: CanvasRenderingContext2D,
   elapsed: number,
   content: GeneratedContent,
   accent: string,
-  accent2: string,
-  style: StyleType,
-  chineseOptions?: ChineseOptions,
+  _accent2: string,
+  _style: StyleType,
+  titleOptions?: TitleOptions,
 ) {
-  if (elapsed < T.titleEntrance) return;
-  const te = elapsed - T.titleEntrance;
+  // Use provided options or fall back to default 2-line split
+  const opts = titleOptions ?? {
+    lines: [
+      { text: '', fontSize: 88,  fontFamily: '', fontWeight: 700 as const, color: '#ffffff', colorEnd: '',        enterAnim: 'withScene'    as const },
+      { text: '', fontSize: 172, fontFamily: '', fontWeight: 900 as const, color: '#ffffff', colorEnd: '#3b9ef5', enterAnim: 'dropsFromSky' as const },
+    ],
+    subtitleText: '',
+    subtitleColor: 'rgba(180,200,255,0.75)',
+    subtitleFontSize: 40,
+    headerFontSize: 60,
+  };
 
-  // ─── dropsFromSky branch (Chinese default) ───────────────────────────────
-  const isDropsFromSky =
-    style === 'chinese' &&
-    (chineseOptions?.titleEntranceAnim ?? 'dropsFromSky') === 'dropsFromSky';
+  const lines  = opts.lines;
+  const flyT   = clamp((elapsed - T_FLY_START) / (T_FLY_END - T_FLY_START), 0, 1);
+  const flyEased = easeOutCubic(flyT);
 
-  if (isDropsFromSky) {
-    const headerY = 78;
-    const centerY = CH * 0.48;
-    const startY  = -240;
+  // ── Impact effects: screen flash + shockwaves ──────────────────────────────
+  // Triggered when any dropsFromSky line lands
+  for (let li = 0; li < lines.length; li++) {
+    const cfg = lines[li];
+    if (cfg.enterAnim !== 'dropsFromSky') continue;
+    const land  = T_L2_LAND;
+    const afterT = elapsed - land;
+    if (afterT >= 0 && afterT < 800) {
+      const ef = clamp(afterT / 600, 0, 1);
+      drawFlash(ctx, accent, ef);
+      const cx = CW / 2;
+      const cy = settledLineY(lines, li);
+      drawShockwaves(ctx, cx, cy, accent, ef);
+    }
+    // Smoke: T_L2_LAND → T_L2_LAND + 1000ms
+    if (afterT >= 0) {
+      const smokeT = clamp(afterT / 1000, 0, 1);
+      drawSmoke(ctx, CW / 2, settledLineY(lines, li), smokeT);
+    }
+  }
 
-    // Phase 1: Drop
-    const dropProgress   = clamp(te / DROP_DUR, 0, 1);
-    const dropY          = lerp(startY, centerY, easeOutBack(dropProgress));
+  // ── Draw each line ─────────────────────────────────────────────────────────
+  for (let li = 0; li < lines.length; li++) {
+    const cfg  = lines[li];
+    const text = resolveLineText(cfg, li, content.title);
+    const t0   = lineT0(cfg, li);
+    const te   = elapsed - t0;
+    if (te < 0) continue;
 
-    // Phase 2: Impact hold (500 → 900ms)
-    const impactT        = clamp((te - DROP_DUR) / IMPACT_DUR, 0, 1);
+    const settledY = settledLineY(lines, li);
 
-    // Phase 3: Fly up (900 → 1500ms)
-    const flyProgress    = clamp((te - DROP_DUR - IMPACT_DUR) / FLY_DUR, 0, 1);
-    // Start slowly then launch fast (reversed easeInQuart for dramatic upward shot)
-    const flyEased       = 1 - easeInQuart(1 - flyProgress);
-    const flyY           = lerp(centerY, headerY, flyEased);
+    // Compute per-anim enter progress
+    let alpha  = 1;
+    let drawY  = settledY;
+    let drawFsz = cfg.fontSize;
+    let shakeY = 0;
 
-    const titleY = te < DROP_DUR
-      ? dropY
-      : te < DROP_DUR + IMPACT_DUR
-        ? centerY
-        : flyY;
-
-    const fontSize = te < DROP_DUR + IMPACT_DUR
-      ? IMPACT_FONT
-      : lerp(IMPACT_FONT, SETTLED_FONT_CHINESE, flyEased);
-
-    ctx.save();
-
-    // ── Impact visual effects (during impact phase + brief afterglow) ──────
-    if (te >= DROP_DUR && te < DROP_DUR + IMPACT_DUR + 200) {
-      const ef = te >= DROP_DUR + IMPACT_DUR
-        ? 1 - clamp((te - DROP_DUR - IMPACT_DUR) / 200, 0, 1) // afterglow fade
-        : impactT;
-
-      // Screen-wide flash (fades in fast, then out)
-      const flashAlpha = Math.max(0, (1 - ef * 2.5)) * 0.45;
-      if (flashAlpha > 0) {
-        ctx.save();
-        ctx.globalAlpha = flashAlpha;
-        ctx.fillStyle = accent;
-        ctx.fillRect(0, 0, CW, CH);
-        ctx.restore();
+    switch (cfg.enterAnim) {
+      case 'withScene': {
+        alpha = clamp(te / 500, 0, 1);
+        const slideIn = easeOutCubic(clamp(te / 600, 0, 1));
+        drawY = lerp(settledY + 50, settledY, slideIn);
+        break;
       }
-
-      // 3 expanding shockwave rings from title center
-      for (let ring = 0; ring < 3; ring++) {
-        const ringDelay = ring * 0.15;
-        const rt = clamp(ef - ringDelay, 0, 1);
-        if (rt <= 0) continue;
-        const ringAlpha = (1 - rt) * 0.75;
-        const ringR = rt * 680;
-        ctx.save();
-        ctx.globalAlpha = ringAlpha;
-        ctx.shadowColor = accent;
-        ctx.shadowBlur = 24;
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = Math.max(0.5, (1 - rt) * 5);
-        ctx.beginPath();
-        ctx.arc(CW / 2, centerY, ringR, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-        ctx.restore();
-      }
-
-      // Horizontal shockwave lines radiating left + right
-      const lineAlpha = Math.max(0, (1 - ef * 1.8)) * 0.55;
-      if (lineAlpha > 0) {
-        const lineLen = ef * CW * 0.7;
-        ctx.save();
-        ctx.globalAlpha = lineAlpha;
-        ctx.strokeStyle = accent;
-        ctx.lineWidth = 3;
-        ctx.shadowColor = accent;
-        ctx.shadowBlur = 18;
-        // upper + lower lines
-        for (const dy of [-60, 60]) {
-          ctx.beginPath();
-          ctx.moveTo(CW / 2, centerY + dy);
-          ctx.lineTo(CW / 2 - lineLen, centerY + dy);
-          ctx.stroke();
-          ctx.beginPath();
-          ctx.moveTo(CW / 2, centerY + dy);
-          ctx.lineTo(CW / 2 + lineLen, centerY + dy);
-          ctx.stroke();
+      case 'dropsFromSky': {
+        const dropDur = 480;
+        const prog = clamp(te / dropDur, 0, 1);
+        drawY  = lerp(DROP_FROM_Y, settledY, easeOutBack(Math.min(prog, 0.999)));
+        alpha  = clamp(te / 200, 0, 1);
+        // Shake on landing
+        if (te >= dropDur && te < dropDur + 160) {
+          const st = (te - dropDur) / 160;
+          shakeY = Math.sin(st * Math.PI * 5) * (1 - st) * 14;
         }
-        ctx.shadowBlur = 0;
-        ctx.restore();
+        // Glow pulse during impact hold
+        if (te >= dropDur) {
+          const holdT = clamp((te - dropDur) / 600, 0, 1);
+          ctx.shadowColor = hex2rgba(accent, 0.9);
+          ctx.shadowBlur  = lerp(60, 24, holdT);
+        }
+        break;
+      }
+      case 'slideUp': {
+        const prog = clamp(te / 550, 0, 1);
+        drawY = lerp(settledY + 90, settledY, easeOutCubic(prog));
+        alpha = clamp(te / 300, 0, 1);
+        break;
+      }
+      case 'fadeIn': {
+        alpha = easeOutCubic(clamp(te / 600, 0, 1));
+        break;
+      }
+      case 'typewriter': {
+        const CHAR_MS = 70;
+        const chars = Math.min(Math.floor(te / CHAR_MS), text.length);
+        alpha = 1;
+
+        // Draw only partial text now (override below)
+        if (flyT >= 0.05) {
+          // After fly starts, just show full text
+        } else {
+          // Typewriter: measure + draw partial manually
+          ctx.save();
+          ctx.globalAlpha = 1;
+          const fsz = cfg.fontSize;
+          ctx.font = fontStr(cfg, fsz);
+          ctx.textAlign    = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor  = hex2rgba(accent, 0.75);
+          ctx.shadowBlur   = 32;
+          const partial = text.slice(0, chars);
+          const hw = ctx.measureText(partial).width / 2;
+          applyFill(ctx, cfg, CW / 2, drawY, hw);
+          ctx.fillText(partial, CW / 2, drawY);
+          // Blinking cursor
+          if (chars < text.length && Math.floor(elapsed / 500) % 2 === 0) {
+            ctx.fillStyle = accent;
+            ctx.shadowBlur = 0;
+            ctx.fillText('|', CW / 2 + hw + 10, drawY);
+          }
+          ctx.shadowBlur = 0;
+          ctx.restore();
+          // Skip default draw below
+          continue;
+        }
+        break;
       }
     }
 
-    // ── Draw the title text ──────────────────────────────────────────────
-    ctx.font = `900 ${fontSize.toFixed(0)}px "Noto Sans SC", "PingFang SC", sans-serif`;
-    ctx.textAlign = 'center';
+    // ── Fly-up: all lines merge to header ─────────────────────────────────
+    if (flyT > 0) {
+      // During fly, converge all lines to a single merged row at headerY
+      // Font shrinks to headerFontSize
+      const merged   = lines.map((ln, i) => resolveLineText(ln, i, content.title)).join('');
+      const targetFsz = opts.headerFontSize;
+      drawFsz = lerp(cfg.fontSize, targetFsz, flyEased);
+      drawY   = lerp(settledY, HEADER_Y, flyEased);
 
-    // Glow: strongest at impact, settles to subtle pulse
-    const glowStrength = te < DROP_DUR + IMPACT_DUR
-      ? lerp(20, 60, impactT)
-      : 40 + 15 * Math.sin(elapsed * 0.002);
-    ctx.shadowColor = hex2rgba(accent, 0.95);
-    ctx.shadowBlur  = glowStrength;
+      // After settle, only draw the first line (merged text), skip subsequent
+      if (flyT >= 1 && li > 0) continue;
+      if (flyT >= 1 && li === 0) {
+        // Settled: draw merged text at header
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.font = fontStr(cfg, targetFsz);
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor  = hex2rgba(accent, 0.8);
+        ctx.shadowBlur   = 24 + 10 * Math.sin(elapsed * 0.002);
+        const hw = ctx.measureText(merged).width / 2;
+        applyFill(ctx, cfg, CW / 2, HEADER_Y, hw);
+        ctx.fillText(merged, CW / 2, HEADER_Y);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        break;
+      }
 
-    // Text scale shake during impact moment (first 150ms of impact phase)
-    let drawY = titleY;
-    if (te >= DROP_DUR && te < DROP_DUR + 150) {
-      const shakeT = (te - DROP_DUR) / 150;
-      drawY += Math.sin(shakeT * Math.PI * 6) * (1 - shakeT) * 12;
+      // During transition: each line individually moves to headerY + shrinks
+      if (flyT > 0 && flyT < 1) {
+        const partText = flyT > 0.5
+          ? (li === 0 ? merged : '')  // collapse all text into line 0 midway
+          : text;
+        if (!partText) continue;
+
+        ctx.save();
+        ctx.globalAlpha = li === 0 ? 1 : clamp(1 - flyEased * 3, 0, 1); // other lines fade out
+        ctx.font = fontStr(cfg, drawFsz);
+        ctx.textAlign    = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor  = hex2rgba(accent, 0.75);
+        ctx.shadowBlur   = 28;
+        const hw = ctx.measureText(partText).width / 2;
+        applyFill(ctx, cfg, CW / 2, drawY, hw);
+        ctx.fillText(partText, CW / 2, drawY + shakeY);
+        ctx.shadowBlur = 0;
+        ctx.restore();
+        continue;
+      }
     }
 
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(content.title, CW / 2, drawY);
-
+    // ── Normal (pre-fly) draw ──────────────────────────────────────────────
+    ctx.save();
+    ctx.globalAlpha  = alpha * (1 - flyT);  // fade out as fly begins
+    ctx.font         = fontStr(cfg, drawFsz);
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor  = hex2rgba(accent, 0.8);
+    ctx.shadowBlur   = cfg.enterAnim === 'dropsFromSky'
+      ? lerp(60, 32, clamp((elapsed - T_L2_LAND) / 600, 0, 1))
+      : 32 + 12 * Math.sin(elapsed * 0.002);
+    const hw = ctx.measureText(text).width / 2;
+    applyFill(ctx, cfg, CW / 2, drawY, hw);
+    ctx.fillText(text, CW / 2, drawY + shakeY);
     ctx.shadowBlur = 0;
     ctx.restore();
-    return;
   }
 
-  // ─── Original typewriter branch (all other styles + chinese/typewriter) ──
-  const CHAR_MS = 80;
-  const typeEnd = content.title.length * CHAR_MS + 400;
-  const visibleChars = Math.min(Math.floor(te / CHAR_MS), content.title.length);
-  const visibleText  = content.title.slice(0, visibleChars);
-
-  const settleT  = clamp((te - typeEnd - 200) / 600, 0, 1);
-  const eased    = easeOutCubic(settleT);
-  const centerY  = CH * 0.38;
-  const headerY  = style === 'aitech' ? 65 : 78;
-  const titleY   = lerp(centerY, headerY, eased);
-  const fontSize = lerp(108, style === 'aitech' ? 58 : 72, eased);
-
-  ctx.save();
-
-  ctx.font = `900 ${fontSize.toFixed(0)}px "Noto Sans SC", "PingFang SC", sans-serif`;
-  const tw = ctx.measureText(visibleText).width;
-
-  let titleX: number;
-  if (style === 'aitech') {
-    ctx.textAlign = 'left';
-    titleX = lerp(CW / 2 - tw / 2, LEFT_PAD, eased);
-  } else {
-    ctx.textAlign = 'center';
-    titleX = CW / 2;
-  }
-  const textCenterX = style === 'aitech' ? titleX + tw / 2 : CW / 2;
-
-  // Green sun wave (aitech only)
-  if (style === 'aitech') {
-    const WAVE_DUR = 1000;
-    const waveT = clamp((te - (typeEnd + 200)) / WAVE_DUR, 0, 1);
-    if (waveT > 0 && waveT < 1) {
-      for (let r = 0; r < 4; r++) {
-        const rt = clamp(waveT - r * 0.18, 0, 1);
-        if (rt <= 0) continue;
-        const radius  = rt * 560;
-        const ringAlpha = (1 - rt) * 0.62;
-        ctx.save(); ctx.globalAlpha = ringAlpha;
-        ctx.shadowColor = GREEN; ctx.shadowBlur = 28;
-        ctx.strokeStyle = GREEN;
-        ctx.lineWidth = Math.max(0.5, (1 - rt) * 3.5);
-        ctx.beginPath(); ctx.arc(textCenterX, titleY, radius, 0, Math.PI * 2); ctx.stroke();
-        ctx.shadowBlur = 0; ctx.restore();
-      }
-      const rayAlpha = Math.max(0, (1 - waveT * 1.3) * 0.55);
-      if (rayAlpha > 0) {
-        const numRays = 16;
-        ctx.save(); ctx.globalAlpha = rayAlpha;
-        ctx.strokeStyle = GREEN; ctx.lineWidth = 2;
-        ctx.shadowColor = GREEN; ctx.shadowBlur = 14;
-        for (let ray = 0; ray < numRays; ray++) {
-          const a   = (ray / numRays) * Math.PI * 2;
-          const r0  = waveT * 90;
-          const r1  = Math.min(waveT * 360, 360);
-          ctx.beginPath();
-          ctx.moveTo(textCenterX + Math.cos(a) * r0, titleY + Math.sin(a) * r0);
-          ctx.lineTo(textCenterX + Math.cos(a) * r1, titleY + Math.sin(a) * r1);
-          ctx.stroke();
-        }
-        ctx.shadowBlur = 0; ctx.restore();
-      }
-    }
-  }
-
-  ctx.shadowColor = hex2rgba(accent, 0.9);
-  ctx.shadowBlur  = 40 + 20 * Math.sin(elapsed * 0.002);
-
-  if (style === 'aitech' && settleT < 0.5) {
-    let charX = titleX;
-    for (let ci = 0; ci < visibleChars; ci++) {
-      const char   = content.title[ci];
-      const glitch = ci === visibleChars - 1 ? (Math.random() - 0.5) * 8 : 0;
-      ctx.fillStyle = ci % 3 === 0 ? accent2 : '#ffffff';
-      ctx.fillText(char, charX + glitch, titleY + glitch * 0.5);
-      charX += ctx.measureText(char).width;
-    }
-  } else {
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(visibleText, titleX, titleY);
-  }
-
-  if (te < typeEnd + 500 && Math.floor(elapsed / 500) % 2 === 0) {
-    ctx.shadowBlur = 0;
-    ctx.font = `300 ${fontSize.toFixed(0)}px monospace`;
-    const cursorX = style === 'aitech'
-      ? titleX + ctx.measureText(visibleText).width + 12
-      : CW / 2 + tw / 2 + 12;
-    ctx.fillStyle = accent;
-    ctx.fillText('|', cursorX, titleY);
-  }
-  ctx.shadowBlur = 0;
-
-  ctx.restore();
+  // ── Subtitle ───────────────────────────────────────────────────────────────
+  drawSubtitle(ctx, elapsed, opts, lines);
 }

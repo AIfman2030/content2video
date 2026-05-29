@@ -1,5 +1,5 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions } from '../types/video';
 import { getThemeConfig } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
@@ -80,6 +80,7 @@ export async function createAnimEngine(
   mangaOptions?: MangaOptions,
   aitechOptions?: AItechOptions,
   natureOptions?: NatureOptions,
+  titleOptions?: TitleOptions,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
   // Allow per-style accent override (affects BG, title, overlays, shape decoration)
@@ -165,6 +166,9 @@ export async function createAnimEngine(
 
     if (isNature && natureContent) {
       drawNatureScene(ctx, elapsed, natureContent, accent, accent2, coverIndex, natureOptions);
+      // Nature title is handled by unified drawTitle
+      const natureTitleContent: GeneratedContent = { title: natureContent.title, points: [] };
+      drawTitle(ctx, elapsed, natureTitleContent, accent, accent2, 'nature', titleOptions);
       return;
     }
 
@@ -181,7 +185,7 @@ export async function createAnimEngine(
     }
 
     // Shape decoration removed — background is plain black
-    drawTitle(ctx, elapsed, content, accent, accent2, style, chineseOptions);
+    drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
     drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions);
 
     const outroStart = (style === 'city'

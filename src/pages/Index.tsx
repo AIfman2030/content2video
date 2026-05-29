@@ -3,10 +3,11 @@ import { Film, Key, Video } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions,
+  TitleOptions,
 } from '../types/video';
 import {
   DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS, DEFAULT_AITECH_OPTIONS,
-  DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, type PetCoverConfig,
+  DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, DEFAULT_TITLE_OPTIONS, type PetCoverConfig,
 } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
@@ -114,6 +115,7 @@ export default function Index() {
   const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOptions>(DEFAULT_SUBTITLE_OPTIONS);
   const [cityOptions, setCityOptions] = useState<CityOptions>(DEFAULT_CITY_OPTIONS);
   const [natureOptions, setNatureOptions] = useState<NatureOptions>(DEFAULT_NATURE_OPTIONS);
+  const [titleOptions, setTitleOptions] = useState<TitleOptions>(DEFAULT_TITLE_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
   const [petCoverConfig, setPetCoverConfig] = useState<PetCoverConfig>(DEFAULT_PET_COVER_CONFIG);
 
@@ -333,6 +335,8 @@ export default function Index() {
                 onMangaOptionsChange={setMangaOptions}
                 natureOptions={natureOptions}
                 onNatureOptionsChange={setNatureOptions}
+                titleOptions={titleOptions}
+                onTitleOptionsChange={setTitleOptions}
                 accentOverrides={accentOverrides}
                 onAccentOverrideChange={(sty, color) =>
                   setAccentOverrides(prev => ({ ...prev, [sty]: color }))
@@ -421,6 +425,7 @@ export default function Index() {
             mangaOptions={mangaOptions}
             aitechOptions={aitechOptions}
             natureOptions={natureOptions}
+            titleOptions={titleOptions}
           />
         </main>
       </div>
@@ -443,6 +448,7 @@ export default function Index() {
           aitechOptions={aitechOptions}
           petCoverConfig={petCoverConfig}
           natureOptions={natureOptions}
+          titleOptions={titleOptions}
         />
       )}
 

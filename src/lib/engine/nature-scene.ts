@@ -112,10 +112,8 @@ export function drawNatureScene(
   const accent  = (opts?.leftColor  && opts.leftColor  !== '') ? opts.leftColor  : pairA;
   const accent2 = (opts?.rightColor && opts.rightColor !== '') ? opts.rightColor : pairA2;
 
-  // Typography
+  // Typography (kept for badge/word rendering; title now handled by unified drawTitle)
   const ff       = opts?.fontFamily ? `"${opts.fontFamily}", sans-serif` : '"Noto Sans SC", sans-serif';
-  const titleFsz = opts?.titleFontSize ?? 68;
-  const titleCol = (opts?.titleColor && opts.titleColor !== '') ? opts.titleColor : '#fff';
   const wordBase = opts?.wordFontSize ?? 46;
   const bw       = opts?.borderWidth ?? 2.5;
 
@@ -142,14 +140,7 @@ export function drawNatureScene(
   }
   ctx.restore();
 
-  // Title
-  if (elapsed > N_BG_END) {
-    const ta = easeOutCubic(clamp((elapsed - N_BG_END) / (N_TITLE_END - N_BG_END), 0, 1));
-    ctx.save(); ctx.globalAlpha = ta;
-    ctx.font = `800 ${titleFsz}px ${ff}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.shadowColor = accent; ctx.shadowBlur = 20; ctx.fillStyle = titleCol; ctx.fillText(nc.title, CW / 2, 30);
-    ctx.shadowBlur = 0; ctx.restore();
-  }
+  // (Title is now rendered by the unified drawTitle in canvasEngine.ts)
 
   // Circles
   if (elapsed > N_TITLE_END) {

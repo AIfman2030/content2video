@@ -11,8 +11,9 @@ import type {
   ColorScheme, AnimMode, PolyShape, CityOptions, MangaOptions, AItechOptions,
   PetCoverConfig, NatureOptions,
   ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim,
+  TitleOptions, TitleLineConfig, TitleLineEnterAnim,
 } from '../types/video';
-import { DEFAULT_CARD_LINES } from '../types/video';
+import { DEFAULT_CARD_LINES, DEFAULT_TITLE_OPTIONS, DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2 } from '../types/video';
 import CoverPicker from './CoverPicker';
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
@@ -42,6 +43,9 @@ interface Props {
   // ── Nature ─────────────────────────────────────────────────────────────────
   natureOptions: NatureOptions;
   onNatureOptionsChange: (v: NatureOptions) => void;
+  // ── Title (all canvas styles) ───────────────────────────────────────────────
+  titleOptions: TitleOptions;
+  onTitleOptionsChange: (v: TitleOptions) => void;
 }
 
 // ─── Shared colour presets ─────────────────────────────────────────────────────
@@ -603,6 +607,149 @@ function CardLineEditor({
   );
 }
 
+// ─── TitleLineEditor ───────────────────────────────────────────────────────────
+const TITLE_ENTER_ANIM_OPTS: { value: TitleLineEnterAnim; label: string }[] = [
+  { value: 'withScene',    label: '随场景淡入' },
+  { value: 'dropsFromSky', label: '从天坠落' },
+  { value: 'slideUp',      label: '↑ 上滑入' },
+  { value: 'fadeIn',       label: '淡入' },
+  { value: 'typewriter',   label: '打字机' },
+];
+const TITLE_FONT_FAMILY_OPTS = [
+  { value: '',              label: 'Noto Sans SC（默认）' },
+  { value: 'Microsoft YaHei', label: '微软雅黑' },
+  { value: 'STKaiti',       label: '楷体' },
+  { value: 'STSong',        label: '宋体' },
+  { value: 'PingFang SC',   label: '苹方' },
+  { value: 'Impact',        label: 'Impact' },
+];
+
+function TitleLineEditor({
+  line, index, accent, totalLines, onChange, onDelete,
+}: {
+  line: TitleLineConfig;
+  index: number;
+  accent: string;
+  totalLines: number;
+  onChange: (v: TitleLineConfig) => void;
+  onDelete: () => void;
+}) {
+  const upd = (p: Partial<TitleLineConfig>) => onChange({ ...line, ...p });
+  const lineLabel = ['第一行', '第二行', '第三行'][index] ?? `行 ${index + 1}`;
+
+  return (
+    <div className="relative space-y-2.5 p-2.5 rounded-lg" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }}>
+      <div className="text-[10px] font-bold tracking-wide" style={{ color: 'rgba(255,255,255,0.45)' }}>{lineLabel}</div>
+      {totalLines > 1 && (
+        <button onClick={onDelete} className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center transition-opacity hover:opacity-100 opacity-40" style={{ background: 'rgba(255,80,80,0.2)', color: '#ff5555' }} title="删除">
+          <X size={10} />
+        </button>
+      )}
+
+      {/* Custom text ('' = auto-split) */}
+      <TextInput label="自定义文字（空=自动拆分）" value={line.text} onChange={v => upd({ text: v })} placeholder="空 = 自动从标题拆分" />
+
+      {/* Font size + weight */}
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <NumericSlider label="字号" value={line.fontSize} min={28} max={240} onChange={v => upd({ fontSize: v })} />
+        </div>
+        <div className="pb-1 flex gap-0.5">
+          {([400, 700, 900] as const).map(w => (
+            <button key={w} onClick={() => upd({ fontWeight: w })} className="w-7 h-6 rounded text-[10px] font-medium transition-all" style={{ fontWeight: w, background: line.fontWeight === w ? accent : 'rgba(255,255,255,0.06)', color: line.fontWeight === w ? '#000' : 'rgba(255,255,255,0.5)' }}>
+              {w === 400 ? '细' : w === 700 ? '中' : '粗'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Font family */}
+      <Row>
+        <Label>字体</Label>
+        <select className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground" value={line.fontFamily} onChange={e => upd({ fontFamily: e.target.value })}>
+          {TITLE_FONT_FAMILY_OPTS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
+        </select>
+      </Row>
+
+      {/* Colors */}
+      <div className="grid grid-cols-2 gap-2">
+        <OptionalColorPicker label="文字颜色" value={line.color} placeholder="#ffffff" onChange={c => upd({ color: c })} accent={accent} />
+        <OptionalColorPicker label="渐变色 →" value={line.colorEnd} placeholder="（无渐变）" onChange={c => upd({ colorEnd: c })} accent={accent} />
+      </div>
+
+      {/* Enter animation */}
+      <Row>
+        <Label>入场动画</Label>
+        <div className="grid grid-cols-3 gap-1">
+          {TITLE_ENTER_ANIM_OPTS.map(o => (
+            <button key={o.value} onClick={() => upd({ enterAnim: o.value })}
+              className="py-1 px-0.5 rounded text-[9px] font-medium transition-all leading-tight"
+              style={{ background: line.enterAnim === o.value ? accent : 'rgba(255,255,255,0.06)', color: line.enterAnim === o.value ? '#000' : 'rgba(255,255,255,0.5)' }}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      </Row>
+    </div>
+  );
+}
+
+function TitlePanel({ opts, onChange, accent }: {
+  opts: TitleOptions;
+  onChange: (v: TitleOptions) => void;
+  accent: string;
+}) {
+  const upd = (p: Partial<TitleOptions>) => onChange({ ...opts, ...p });
+  const lines = opts.lines;
+
+  const updateLine = (i: number, v: TitleLineConfig) => {
+    const next = [...lines]; next[i] = v; upd({ lines: next });
+  };
+  const addLine = () => {
+    if (lines.length >= 3) return;
+    const def = lines.length === 0 ? DEFAULT_TITLE_LINE_1
+      : lines.length === 1 ? DEFAULT_TITLE_LINE_2
+      : { ...DEFAULT_TITLE_LINE_1, fontSize: 60, enterAnim: 'fadeIn' as TitleLineEnterAnim };
+    upd({ lines: [...lines, def] });
+  };
+  const removeLine = (i: number) => {
+    if (lines.length <= 1) return;
+    upd({ lines: lines.filter((_, idx) => idx !== i) });
+  };
+  const reset = () => onChange(DEFAULT_TITLE_OPTIONS);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <SectionDivider title={`标题行（${lines.length}行）`} />
+        <button onClick={reset} className="text-[9px] ml-2 transition-opacity hover:opacity-100 opacity-35 whitespace-nowrap" style={{ color: 'rgba(255,255,255,0.5)' }}>重置默认</button>
+      </div>
+
+      <div className="space-y-2">
+        {lines.map((ln, i) => (
+          <TitleLineEditor key={i} line={ln} index={i} accent={accent} totalLines={lines.length} onChange={v => updateLine(i, v)} onDelete={() => removeLine(i)} />
+        ))}
+        {lines.length < 3 && (
+          <button onClick={addLine} className="w-full py-1.5 rounded-lg flex items-center justify-center gap-1.5 text-[11px] font-medium transition-all hover:opacity-80" style={{ background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.4)', border: '1px dashed rgba(255,255,255,0.1)' }}>
+            <Plus size={11} />添加行（{lines.length}/3）
+          </button>
+        )}
+      </div>
+
+      <SectionDivider title="落版 · 副标题" />
+
+      <NumericSlider label="落版字号（移至顶部后）" value={opts.headerFontSize} min={36} max={100} onChange={v => upd({ headerFontSize: v })} />
+
+      <TextInput label="副标题文字（空=不显示）" value={opts.subtitleText} onChange={v => upd({ subtitleText: v })} placeholder="例：20多岁最大的错觉…" />
+      {opts.subtitleText && (
+        <>
+          <NumericSlider label="副标题字号" value={opts.subtitleFontSize} min={20} max={72} onChange={v => upd({ subtitleFontSize: v })} />
+          <OptionalColorPicker label="副标题颜色" value={opts.subtitleColor} placeholder="rgba(180,200,255,0.75)" onChange={c => upd({ subtitleColor: c })} accent={accent} />
+        </>
+      )}
+    </div>
+  );
+}
 function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover }: {
   options: ChineseOptions; onChange: (v: ChineseOptions) => void;
   accent: string; coverIndex: number; onCoverIndexChange: (v: number) => void;
@@ -1452,75 +1599,91 @@ export default function StyleConfigPanel({
   accentOverrides, onAccentOverrideChange,
   petCoverConfig, onPetCoverConfigChange, titleForPetCover,
   natureOptions, onNatureOptionsChange,
+  titleOptions, onTitleOptionsChange,
 }: Props) {
   const ov = accentOverrides[style];
 
   switch (style) {
     case 'chinese':
       return (
-        <ChinesePanel
-          options={chineseOptions}
-          onChange={onChineseOptionsChange}
-          accent={accent}
-          coverIndex={coverIndex}
-          onCoverIndexChange={onCoverIndexChange}
-          style={style}
-          petCoverConfig={petCoverConfig}
-          onPetCoverConfigChange={onPetCoverConfigChange}
-          titleForPetCover={titleForPetCover}
-        />
+        <div className="space-y-6">
+          <TitlePanel opts={titleOptions} onChange={onTitleOptionsChange} accent={accent} />
+          <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <ChinesePanel
+            options={chineseOptions}
+            onChange={onChineseOptionsChange}
+            accent={accent}
+            coverIndex={coverIndex}
+            onCoverIndexChange={onCoverIndexChange}
+            style={style}
+            petCoverConfig={petCoverConfig}
+            onPetCoverConfigChange={onPetCoverConfigChange}
+            titleForPetCover={titleForPetCover}
+          />
+        </div>
       );
 
     case 'city':
       return (
-        <CityPanel
-          coverIndex={coverIndex}
-          onCoverIndexChange={onCoverIndexChange}
-          accentColor={ov ?? '#ff8c00'}
-          onAccentColorChange={c => onAccentOverrideChange('city', c)}
-          style={style}
-          cityOptions={cityOptions}
-          onCityOptionsChange={onCityOptionsChange}
-          petCoverConfig={petCoverConfig}
-          onPetCoverConfigChange={onPetCoverConfigChange}
-          titleForPetCover={titleForPetCover}
-        />
+        <div className="space-y-6">
+          <TitlePanel opts={titleOptions} onChange={onTitleOptionsChange} accent={accent} />
+          <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <CityPanel
+            coverIndex={coverIndex}
+            onCoverIndexChange={onCoverIndexChange}
+            accentColor={ov ?? '#ff8c00'}
+            onAccentColorChange={c => onAccentOverrideChange('city', c)}
+            style={style}
+            cityOptions={cityOptions}
+            onCityOptionsChange={onCityOptionsChange}
+            petCoverConfig={petCoverConfig}
+            onPetCoverConfigChange={onPetCoverConfigChange}
+            titleForPetCover={titleForPetCover}
+          />
+        </div>
       );
 
     case 'aitech':
       return (
-        <AItechPanel
-          coverIndex={coverIndex}
-          onCoverIndexChange={onCoverIndexChange}
-          aitechOptions={aitechOptions}
-          onAitechOptionsChange={(opts) => {
-            // Keep legacy aiOptions.polyShape in sync for backward compat
-            onAiOptionsChange({ ...aiOptions, polyShape: opts.polyShape });
-            onAitechOptionsChange(opts);
-          }}
-          accentColor={accentOverrides['aitech'] ?? '#a855f7'}
-          onAccentColorChange={c => onAccentOverrideChange('aitech', c)}
-          style={style}
-          petCoverConfig={petCoverConfig}
-          onPetCoverConfigChange={onPetCoverConfigChange}
-          titleForPetCover={titleForPetCover}
-        />
+        <div className="space-y-6">
+          <TitlePanel opts={titleOptions} onChange={onTitleOptionsChange} accent={accent} />
+          <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <AItechPanel
+            coverIndex={coverIndex}
+            onCoverIndexChange={onCoverIndexChange}
+            aitechOptions={aitechOptions}
+            onAitechOptionsChange={(opts) => {
+              onAiOptionsChange({ ...aiOptions, polyShape: opts.polyShape });
+              onAitechOptionsChange(opts);
+            }}
+            accentColor={accentOverrides['aitech'] ?? '#a855f7'}
+            onAccentColorChange={c => onAccentOverrideChange('aitech', c)}
+            style={style}
+            petCoverConfig={petCoverConfig}
+            onPetCoverConfigChange={onPetCoverConfigChange}
+            titleForPetCover={titleForPetCover}
+          />
+        </div>
       );
 
     case 'nature':
       return (
-        <NaturePanel
-          coverIndex={coverIndex}
-          onCoverIndexChange={onCoverIndexChange}
-          accentColor={ov ?? '#4ade80'}
-          onAccentColorChange={c => onAccentOverrideChange('nature', c)}
-          style={style}
-          petCoverConfig={petCoverConfig}
-          onPetCoverConfigChange={onPetCoverConfigChange}
-          titleForPetCover={titleForPetCover}
-          natureOptions={natureOptions}
-          onNatureOptionsChange={onNatureOptionsChange}
-        />
+        <div className="space-y-6">
+          <TitlePanel opts={titleOptions} onChange={onTitleOptionsChange} accent={accent} />
+          <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <NaturePanel
+            coverIndex={coverIndex}
+            onCoverIndexChange={onCoverIndexChange}
+            accentColor={ov ?? '#4ade80'}
+            onAccentColorChange={c => onAccentOverrideChange('nature', c)}
+            style={style}
+            petCoverConfig={petCoverConfig}
+            onPetCoverConfigChange={onPetCoverConfigChange}
+            titleForPetCover={titleForPetCover}
+            natureOptions={natureOptions}
+            onNatureOptionsChange={onNatureOptionsChange}
+          />
+        </div>
       );
 
     case 'subtitle':
