@@ -1,175 +1,261 @@
-# Plan: Chinese Style Full Customization
+# Plan: Unified Title System — All 4 Canvas Styles
 
 ## Context
-The Chinese style is too rigid: fixed 2-col × 3-row layout, always 3 text lines per card (label/short/desc), limited shape variety (~25), and only one card entrance animation. Users want full control over layout, per-line content/font/color/animation.
+Replace the per-style title rendering logic with a single configurable `TitleOptions` system.
+Reference image: two-line title (small line 1 fades in with scene, big line 2 crashes from sky with white smoke explosion), subtitle text below, then the whole title flies to top-center.
 
 ---
 
-## What Changes
+## 1. New Types — `src/types/video.ts`
 
-### 1. New Types — `src/types/video.ts`
+```typescript
+export type TitleLineEnterAnim = 'withScene' | 'dropsFromSky' | 'slideUp' | 'fadeIn' | 'typewriter';
 
-Add new types and extend `ChineseOptions`:
-
-```ts
-export type ChineseLineAnim =
-  | 'fadeIn' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight'
-  | 'zoomIn' | 'bounceIn' | 'rotateIn' | 'flipH' | 'typewriter'
-  | 'glitch' | 'wave';
-
-export type ChineseLineExitAnim =
-  | 'fadeOut' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight'
-  | 'zoomOut' | 'dissolve';
-
-export interface ChineseCardLineConfig {
-  field: 'label' | 'short' | 'desc' | 'static'; // content source
-  staticText?: string;                            // used when field='static'
+export interface TitleLineConfig {
+  text: string;       // '' = auto-split from content.title by line index
   fontSize: number;
-  fontFamily: string;          // '' = "Noto Sans SC"
-  color: string;               // '' = auto from theme
-  fontWeight: 400 | 600 | 800;
-  enterAnim: ChineseLineAnim;
-  exitAnim: ChineseLineExitAnim;
+  fontFamily: string; // '' = "Noto Sans SC"
+  fontWeight: 400 | 700 | 900;
+  color: string;      // '' = '#ffffff'
+  colorEnd: string;   // '' = solid (no gradient); non-empty = horizontal gradient
+  enterAnim: TitleLineEnterAnim;
 }
 
-// ChineseOptions additions:
-//   cardCols: 1 | 2          (default 2)
-//   cardRows: 1 | 2 | 3      (default 3)
-//   cardLines: ChineseCardLineConfig[]  (1–3 items, default 3 lines)
-```
+export interface TitleOptions {
+  lines: TitleLineConfig[];     // 1-3 items
+  subtitleText: string;         // custom small text below title; '' = hidden
+  subtitleColor: string;        // default 'rgba(180,200,255,0.75)'
+  subtitleFontSize: number;     // default 40
+  headerFontSize: number;       // font size after fly-up settle (default 60)
+}
 
-**Default `cardLines` (3 lines, preserving existing behavior):**
-```ts
-[
-  { field: 'label', fontSize: 68, fontFamily: '', color: '', fontWeight: 800, enterAnim: 'slideLeft',  exitAnim: 'fadeOut' },
-  { field: 'short', fontSize: 36, fontFamily: '', color: '', fontWeight: 600, enterAnim: 'slideUp',    exitAnim: 'fadeOut' },
-  { field: 'desc',  fontSize: 32, fontFamily: '', color: '', fontWeight: 400, enterAnim: 'fadeIn',     exitAnim: 'dissolve' },
-]
+export const DEFAULT_TITLE_LINE_1: TitleLineConfig = {
+  text: '', fontSize: 88, fontFamily: '', fontWeight: 700,
+  color: '#ffffff', colorEnd: '', enterAnim: 'withScene',
+};
+export const DEFAULT_TITLE_LINE_2: TitleLineConfig = {
+  text: '', fontSize: 172, fontFamily: '', fontWeight: 900,
+  color: '#ffffff', colorEnd: '#3b9ef5', enterAnim: 'dropsFromSky',
+};
+export const DEFAULT_TITLE_OPTIONS: TitleOptions = {
+  lines: [DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2],
+  subtitleText: '',
+  subtitleColor: 'rgba(180,200,255,0.75)',
+  subtitleFontSize: 40,
+  headerFontSize: 60,
+};
 ```
 
 ---
 
-### 2. More Shapes — `src/lib/shapes/chinese.ts` + `src/lib/themes.ts`
+## 2. Rewrite `src/lib/engine/title.ts`
 
-Add 20 new SVG shape generators to `CHINESE_SVGS`. Categories:
-
-| Group | New shapes |
-|-------|-----------|
-| 自然 | `plum` 梅花 · `pine` 松竹 · `wave` 水波 · `peony` 牡丹 |
-| 纹样 | `fenix` 凤凰纹 · `fish` 鱼纹 · `spiral` 螺旋纹 · `hexflower` 六角花 |
-| 文字 | `fu` 福字 · `shou` 寿字 · `xi` 喜字 |
-| 器物 | `fan` 折扇 · `vase` 花瓶 · `seal` 印章框 · `crown` 皇冠 |
-| 几何 | `ring3` 三环 · `starburst` 放射星 · `maze` 迷宫格 · `diamond4` 四钻 · `lotus8` 八瓣莲 |
-
-Add all new IDs to `CHINESE_SHAPES` in `themes.ts`.
-
----
-
-### 3. Card Engine Rewrite — `src/lib/engine/cards.ts`
-
-#### Layout
-```ts
-const cols = chineseOptions?.cardCols ?? 2;
-const rows = chineseOptions?.cardRows ?? 3;
-const PAGE_SIZE = cols * rows;
-const cardW = (CW - MARGIN*2 - GAP*(cols-1)) / cols;
-const cardH = computeCardH(lines.length);  // taller for 1 line, shorter for 3
+### Timing constants (absolute ms from elapsed=0)
 ```
-
-#### Per-line animation system
-
-Each line has its own `te` offset (staggered by 80ms per line per card). The animation is applied in `ctx.save/translate/restore` scope:
-
-```ts
-function applyLineEnterAnim(
-  ctx, text, x, y, te, anim: ChineseLineAnim, fsz, elapsed
-): void
+T_L1_START    =    0   // line 1 (withScene) begins fading in
+T_L2_START    =  700   // line 2 (dropsFromSky) begins crash
+T_L2_LAND     = 1200   // line 2 hits position → smoke burst triggers
+T_SUB_IN      = 1300   // subtitle fades in
+T_FLY_START   = 1800   // title begins flying to header
+T_FLY_END     = 2400   // title settled at header, subtitle fully gone
 ```
+`T.cardBase = 2800` (unchanged — cards still start at 2800ms)
 
-**12 enter animations:**
-- `fadeIn` — alpha 0→1
-- `slideUp` — translate Y from +60 to 0, fade in
-- `slideDown` — translate Y from -60 to 0, fade in
-- `slideLeft` — translate X from +120 to 0, fade in
-- `slideRight` — translate X from -120 to 0, fade in
-- `zoomIn` — scale 0.3→1, fade in (easeOutBack)
-- `bounceIn` — scale 1.3→0.9→1 (springy overshoot)
-- `rotateIn` — rotate -30°→0°, scale 0→1, fade in
-- `flipH` — scaleX 0→1 with perspective-like squash
-- `typewriter` — clip text to `Math.floor(t * text.length)` chars
-- `glitch` — 3 random X/Y jitter frames, then settle at position
-- `wave` — each character rendered at sinusoidal Y offset with phase per char
-
-**7 exit animations:**
-Applied when `outA < 1` (page transition). Use `exitT = 1 - outA`.
-- `fadeOut` — alpha × outA
-- `slideUp` — translate Y × -exitT * 80
-- `slideDown` — translate Y × exitT * 80
-- `slideLeft` — translate X × -exitT * 120
-- `slideRight` — translate X × exitT * 120
-- `zoomOut` — scale lerp(1, 0.2, exitT)
-- `dissolve` — alpha drops but also slight scatter (random small offsets)
-
-#### Card height computation
-```ts
-function computeCardH(numLines: number): number {
-  if (numLines === 1) return 180;
-  if (numLines === 2) return 220;
-  return 268;  // existing default
+### Auto-split logic
+```typescript
+function resolveLineText(cfg: TitleLineConfig, i: number, title: string): string {
+  if (cfg.text) return cfg.text;
+  const mid = Math.ceil(title.length / 2);
+  if (i === 0) return title.slice(0, mid);
+  if (i === 1) return title.slice(mid);
+  return title; // line 3: full title (unusual case)
 }
 ```
 
----
+### Animation per line
+Each line has a `t0` (enter start time):
+- `withScene` → `t0 = T_L1_START = 0`
+- `dropsFromSky` → `t0 = T_L2_START = 700`, crash from Y=-300 to centerY
+- `fadeIn` → staggered by line index × 300ms after T_L1_START
+- `slideUp` → staggered similarly
+- `typewriter` → staggered similarly
 
-### 4. Config UI — `src/components/StyleConfigPanel.tsx`
+### Smoke particle burst (white)
+Pre-generate 42 smoke particles when module loads (seeded). On each frame during smoke phase (T_L2_LAND → T_L2_LAND+900ms), render them:
+```typescript
+interface SmokeP { x0: number; y0: number; vx: number; vy: number; size: number; baseAlpha: number; }
 
-#### ChinesePanel additions (below existing controls):
+// Generated at module level (seeded deterministic):
+const SMOKE_PARTICLES: SmokeP[] = Array.from({length: 42}, (_, i) => {
+  const seed = i * 2.3;
+  const a = ((Math.sin(seed) * 0.5 + 0.5) * Math.PI); // upper semicircle
+  const speed = 3 + (Math.cos(seed * 1.7) * 0.5 + 0.5) * 8;
+  return { x0: (Math.sin(seed*3)*0.5+0.5-0.5)*400, y0: 0,
+           vx: Math.cos(a)*speed, vy: -Math.abs(Math.sin(a)*speed)*1.8,
+           size: 6 + (Math.sin(seed*2)*0.5+0.5)*20, baseAlpha: 0.35 + (Math.cos(seed)*0.5+0.5)*0.55 };
+});
 
-**Layout section:**
+function drawSmoke(ctx, cx, cy, smokeT) { // smokeT: 0→1
+  for (const p of SMOKE_PARTICLES) {
+    const t = smokeT;
+    const px = cx + p.x0 + p.vx * t * 120;
+    const py = cy + p.y0 + p.vy * t * 120 + 200 * t*t; // gravity
+    const alpha = p.baseAlpha * (1 - t*t);
+    const r = p.size * (1 + t * 2);
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.shadowColor = 'rgba(255,255,255,0.6)'; ctx.shadowBlur = r * 0.8;
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+}
 ```
-[行数]  ○1  ○2  ●3
-[列数]  ○1  ●2
+
+### Gradient text utility
+```typescript
+function applyTextGradient(ctx, cfg, x, y, width) {
+  if (cfg.colorEnd && cfg.colorEnd !== cfg.color) {
+    const g = ctx.createLinearGradient(x - width/2, y, x + width/2, y);
+    g.addColorStop(0, cfg.color || '#fff');
+    g.addColorStop(1, cfg.colorEnd);
+    ctx.fillStyle = g;
+  } else {
+    ctx.fillStyle = cfg.color || '#fff';
+  }
+}
 ```
 
-**卡片文字行** section — show 1-3 accordion-style collapsible rows:
-- Tab switcher: 行1 / 行2 / 行3 (+ add/remove buttons for 1-3 lines)
-- For each line:
-  - 内容来源: pill select `标题词 / 副标题 / 描述 / 自定义`
-  - 自定义文字 (text input, visible when field='static')
-  - 字号 (NumericSlider 16-100px)
-  - 字体 (select: Noto/微软雅黑/楷体/STSong/sans-serif)
-  - 颜色 (OptionalColorPicker)
-  - 字重 (pill: 细/中/粗)
-  - 入场动画 (pill grid 4×3 = 12 options)
-  - 退场动画 (pill grid 4×2 = 7 options)
+### Fly-up: merge all lines into header
+During T_FLY_START → T_FLY_END, the multi-line display transitions to a single merged string at headerY:
+```
+merged = lines.map(resolveLineText).join('')
+targetX = CW/2 (center)
+targetY = 78  (header)
+targetFontSize = titleOptions.headerFontSize (e.g. 60)
+```
+Each line's Y position lerps from its settled Y → headerY, its font size shrinks to `headerFontSize`. Alpha stays 1.
+
+### Subtitle text
+- Appears at T_SUB_IN with `fadeIn` (300ms)
+- Positioned below the lowest line (typically below line 2)
+- During T_FLY_START → T_FLY_START+400ms: explode-dissolve (translate out + shockwave + fade)
+
+### `drawTitle` signature
+```typescript
+export function drawTitle(
+  ctx: CanvasRenderingContext2D,
+  elapsed: number,
+  content: GeneratedContent,
+  accent: string,
+  accent2: string,
+  style: StyleType,
+  titleOptions?: TitleOptions,
+)
+```
+The old `chineseOptions` param is removed — all configuration is now in `TitleOptions`.
 
 ---
 
-## Files Modified
+## 3. `src/lib/engine/nature-scene.ts`
 
-| File | Change |
-|------|--------|
-| `src/types/video.ts` | Add `ChineseCardLineConfig`, `ChineseLineAnim`, `ChineseLineExitAnim`; extend `ChineseOptions` |
-| `src/lib/engine/cards.ts` | Full rewrite of Chinese card path with configurable layout + per-line anim system |
-| `src/lib/shapes/chinese.ts` | Add 20 new SVG shape generators |
-| `src/lib/themes.ts` | Add new shape IDs to `CHINESE_SHAPES` |
-| `src/components/StyleConfigPanel.tsx` | Extend `ChinesePanel` with layout + per-line config UI |
+Remove lines that render the title (currently around line 149-150):
+```typescript
+// DELETE these lines:
+ctx.font = `800 ${titleFsz}px ${ff}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+ctx.shadowColor = accent; ctx.shadowBlur = 20; ctx.fillStyle = titleCol; ctx.fillText(nc.title, CW / 2, 30);
+```
+The unified `drawTitle` will handle the nature title instead.
 
-`src/lib/engine/helpers.ts` — no changes needed (reuse `clamp`, `easeOutBack`, `lerp`, `hex2rgba`, `roundRect`).
+Also remove `titleFsz`, `titleCol` variables if no longer needed.
 
 ---
 
-## Backward Compatibility
+## 4. `src/lib/canvasEngine.ts`
 
-`ChineseOptions.cardLines` defaults to `undefined`, and the engine falls back to the existing 3-line behavior when `undefined`. Existing saved configs continue working without migration.
+1. Add `titleOptions?: TitleOptions` parameter to `createAnimEngine`
+2. Import `TitleOptions`, `DEFAULT_TITLE_OPTIONS` from types
+3. After `drawNatureScene(...)`, add: `drawTitle(ctx, elapsed, { title: natureContent.title, points: [] }, accent, accent2, 'nature', titleOptions)`
+4. Change the existing `drawTitle` call to pass `titleOptions` instead of `chineseOptions`:
+   ```typescript
+   drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
+   ```
+
+---
+
+## 5. `src/components/StyleConfigPanel.tsx`
+
+### New Props
+```typescript
+titleOptions: TitleOptions;
+onTitleOptionsChange: (v: TitleOptions) => void;
+```
+
+### New `TitlePanel` component
+A shared panel shown for all 4 canvas styles (chinese, city, aitech, nature), with:
+
+**Lines section** (1-3 configurable lines):
+- "添加行 / 删除行" buttons
+- Per line:
+  - 自定义文字（空=自动拆分）: text input
+  - 字号: NumericSlider 40-240
+  - 字重: 细/中/粗 pills
+  - 字体: dropdown (Noto/雅黑/楷体/宋体)
+  - 颜色: OptionalColorPicker
+  - 渐变结束色: OptionalColorPicker (label: "渐变色 →")
+  - 入场动画: PillSelect [withScene/dropsFromSky/slideUp/fadeIn/typewriter]
+
+**副标题 section**:
+- 自定义小字: TextInput
+- 颜色: OptionalColorPicker
+- 字号: NumericSlider 20-80
+
+**标题落版 section**:
+- 落版字号 (headerFontSize): NumericSlider 36-100
+
+### Where to show
+In `StyleConfigPanel`'s main switch statement, ALL 4 styles (chinese, city, aitech, nature) render `<TitlePanel>` at the top (before style-specific settings).
+
+---
+
+## 6. Wire-up files
+
+### `src/components/StudioCanvas.tsx`
+Add `titleOptions?: TitleOptions` prop, pass to `createAnimEngine`.
+
+### `src/components/VideoGenerator.tsx`
+Add `titleOptions?: TitleOptions` prop, pass to `createAnimEngine`.
+
+### `src/pages/Index.tsx`
+```typescript
+const [titleOptions, setTitleOptions] = useState<TitleOptions>(DEFAULT_TITLE_OPTIONS);
+```
+Pass `titleOptions` + `onTitleOptionsChange={setTitleOptions}` to `StyleConfigPanel`, `StudioCanvas`, `VideoGenerator`.
+
+---
+
+## 7. Backward compatibility
+
+- `ChineseOptions.titleEntranceAnim` / `titleFontSize` / `titleColor` etc. are kept in the type for reading legacy state, but are **no longer used** in `title.ts` (superseded by `TitleOptions`).
+- `NatureOptions.titleFontSize` / `titleColor` / `fontFamily` fields kept but ignored for title rendering.
+
+---
+
+## Files to modify (8 total)
+1. `src/types/video.ts` — add TitleOptions types + defaults
+2. `src/lib/engine/title.ts` — complete rewrite
+3. `src/lib/engine/nature-scene.ts` — remove title rendering (2 lines)
+4. `src/lib/canvasEngine.ts` — add titleOptions param, call drawTitle for nature too
+5. `src/components/StyleConfigPanel.tsx` — add TitlePanel + Props
+6. `src/components/StudioCanvas.tsx` — thread titleOptions through
+7. `src/components/VideoGenerator.tsx` — thread titleOptions through
+8. `src/pages/Index.tsx` — add titleOptions state + wire
 
 ---
 
 ## Verification
-
-1. Switch to Chinese style → open StyleConfigPanel → verify new sections appear
-2. Change rows to 1, cols to 1 → canvas shows 1 card per page full-width
-3. Add a line, set it to `static` → verify custom text appears on canvas
-4. Cycle through all 12 enter animations → each should be visually distinct
-5. Change to page 2+ → verify exit animations fire during transition
-6. CoverPicker → scroll to see all 45 shapes
+- Chinese style: default 2-line title, line 1 fades with black bg, line 2 crashes at ~700ms with white smoke + shockwave, subtitle text appears below, then all flies to header at ~1800ms, cards appear at 2800ms as before
+- City / AItech / Nature: same title behavior
+- Gradient: Line 2 default `colorEnd='#3b9ef5'` gives white→blue gradient visible during impact phase
+- Config panel: TitlePanel appears at top for all 4 canvas styles
+- Adding/removing lines (1-3 supported)
+- `text=''` auto-splits: line[0]=first half, line[1]=second half of `content.title`
