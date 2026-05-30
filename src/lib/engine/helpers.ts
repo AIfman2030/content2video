@@ -100,3 +100,25 @@ export function totalDuration(pts: number) {
   const numPages = Math.ceil(pts / PAGE_SIZE);
   return T.cardBase + numPages * (pageSlot + PAGE_HOLD) + T.cardReadDelay + T.outroDur;
 }
+
+// ── AI Tech 5-phase timing ─────────────────────────────────────────────────────
+export const AT = {
+  keywordSlot:  1100,   // ms between each keyword card appearing
+  shortSlot:     900,   // ms between each short sentence appearing
+  slideDur:      700,   // ms for cards to slide into left column
+  descSlot:      800,   // ms between each desc item appearing
+  gridAppear:   1200,   // ms for all grid cells to stagger in
+  gridHold:     1500,   // ms hold after grid fully visible
+  explodeDur:    900,   // ms for explosion outro
+};
+
+export function aiTechPhases(n: number) {
+  const p1Start = T.cardBase;
+  const p2Start = p1Start + n * AT.keywordSlot;
+  const p3Start = p2Start + n * AT.shortSlot;
+  const p4Start = p3Start + AT.slideDur + 200;   // 200ms settle buffer
+  const p5Start = p4Start + n * AT.descSlot + 400;
+  const total   = p5Start + AT.gridAppear + AT.gridHold + AT.explodeDur + 200;
+  return { p1Start, p2Start, p3Start, p4Start, p5Start, total };
+}
+

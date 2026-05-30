@@ -4,7 +4,7 @@ import { getThemeConfig } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
 
-import { CW, CH, seededRandom, T, totalDuration } from './engine/helpers';
+import { CW, CH, seededRandom, T, totalDuration, aiTechPhases } from './engine/helpers';
 import { initChineseEffects } from './engine/chinese';
 import { initCityEffects } from './engine/city';
 import { initAIEffects } from './engine/aitech';
@@ -137,7 +137,9 @@ export async function createAnimEngine(
           ? TR_TOTAL_MS
           : style === 'city'
             ? cityTotalMs(content.points.length)
-            : totalDuration(content.points.length);
+            : style === 'aitech'
+              ? aiTechPhases(content.points.length).total
+              : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
   let lastElapsed = 0;
@@ -191,7 +193,8 @@ export async function createAnimEngine(
     const outroStart = (style === 'city'
       ? cityTotalMs(content.points.length)
       : totalDuration(content.points.length)) - T.outroDur;
-    if (elapsed > outroStart) {
+    // aitech has its own phase-5 outro built into drawAITechCards
+    if (style !== 'aitech' && elapsed > outroStart) {
       drawOutro(ctx, elapsed - outroStart, content, accent, accent2, style);
     }
 

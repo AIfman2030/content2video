@@ -131,13 +131,27 @@ export interface AItechOptions {
   polyShape: PolyShape;
   accentColor: string;
   glowIntensity: 'off' | 'subtle' | 'normal' | 'strong';
-  // ── Text style overrides (undefined = use theme defaults) ────────────────
-  labelFontSize?: number;   // default 70 — big title inside card (golden)
-  labelColor?: string;      // default '' = '#ffe655'
-  shortFontSize?: number;   // default 48 — sub-title inside card
-  shortColor?: string;      // default '' = rgba(255,255,255,0.98) (white)
-  descFontSize?: number;    // default 42 — description outside card
-  descColor?: string;       // default '' = rgba(255,168,48,0.97) (amber)
+  // ── Text style overrides ─────────────────────────────────────────────────
+  labelFontSize?: number;   // default 70 — keyword in card (phase 1-2)
+  labelColor?: string;      // default '#ffe655'
+  shortFontSize?: number;   // default 48 — short sentence in card (phase 2)
+  shortColor?: string;      // default 'rgba(255,255,255,0.98)'
+  descFontSize?: number;    // default 42 — desc on right side (phase 4)
+  descColor?: string;       // default 'rgba(255,168,48,0.97)'
+  // ── Phase 3: slide to left ───────────────────────────────────────────────
+  slideEffect?: 'slide' | 'wipe' | 'scale';  // default 'slide'
+  // ── Phase 3: left column labels ─────────────────────────────────────────
+  leftKeywordFontSize?: number;  // default 34
+  leftKeywordColor?: string;     // default = accent
+  // ── Phase 4: desc enter animation ───────────────────────────────────────
+  descEnterEffect?: 'typewriter' | 'fadeIn' | 'slideRight'; // default 'typewriter'
+  // ── Phase 5: grid outro ──────────────────────────────────────────────────
+  gridCellEnterEffect?: 'zoomIn' | 'flipIn' | 'slideUp' | 'fadeIn'; // default 'zoomIn'
+  gridExplosionStyle?: 'burst' | 'scatter' | 'implode'; // default 'burst'
+  gridKeywordFontSize?: number;  // default 80
+  gridShortFontSize?: number;    // default 42
+  gridKeywordColor?: string;     // default = labelColor
+  gridShortColor?: string;       // default = shortColor
 }
 
 export const DEFAULT_AITECH_OPTIONS: AItechOptions = {
