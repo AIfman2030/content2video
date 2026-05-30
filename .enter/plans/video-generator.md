@@ -1,261 +1,245 @@
-# Plan: Unified Title System — All 4 Canvas Styles
+# AI 科技风格大幅升级计划
 
 ## Context
-Replace the per-style title rendering logic with a single configurable `TitleOptions` system.
-Reference image: two-line title (small line 1 fades in with scene, big line 2 crashes from sky with white smoke explosion), subtitle text below, then the whole title flies to top-center.
+用户要求将 AI 科技风格重构为 5 个连续动画阶段，参考答案确认：
+- 激光：接力式（从上一张卡片位置移向下一张）
+- 左侧布局：仅小关键词标签（无卡片外框）
+- 宫格数量：按内容数量自动决定（n 个内容 = n 格）
+- 右侧说明出现：逐条依次出现（打字机/淡入），每条配对左侧关键词
 
 ---
 
-## 1. New Types — `src/types/video.ts`
+## 五阶段动画设计
 
-```typescript
-export type TitleLineEnterAnim = 'withScene' | 'dropsFromSky' | 'slideUp' | 'fadeIn' | 'typewriter';
+```
+Phase 1  T.cardBase → +n×KEYWORD_SLOT
+         关键词逐个出现，每次出现伴随激光接力
 
-export interface TitleLineConfig {
-  text: string;       // '' = auto-split from content.title by line index
-  fontSize: number;
-  fontFamily: string; // '' = "Noto Sans SC"
-  fontWeight: 400 | 700 | 900;
-  color: string;      // '' = '#ffffff'
-  colorEnd: string;   // '' = solid (no gradient); non-empty = horizontal gradient
-  enterAnim: TitleLineEnterAnim;
-}
+Phase 2  → +n×SHORT_SLOT
+         所有关键词可见基础上，短句逐个出现，激光接力
 
-export interface TitleOptions {
-  lines: TitleLineConfig[];     // 1-3 items
-  subtitleText: string;         // custom small text below title; '' = hidden
-  subtitleColor: string;        // default 'rgba(180,200,255,0.75)'
-  subtitleFontSize: number;     // default 40
-  headerFontSize: number;       // font size after fly-up settle (default 60)
-}
+Phase 3  → +SLIDE_DUR (~700ms)
+         原始卡片整体滑向左侧 → 变身为小关键词标签列
 
-export const DEFAULT_TITLE_LINE_1: TitleLineConfig = {
-  text: '', fontSize: 88, fontFamily: '', fontWeight: 700,
-  color: '#ffffff', colorEnd: '', enterAnim: 'withScene',
-};
-export const DEFAULT_TITLE_LINE_2: TitleLineConfig = {
-  text: '', fontSize: 172, fontFamily: '', fontWeight: 900,
-  color: '#ffffff', colorEnd: '#3b9ef5', enterAnim: 'dropsFromSky',
-};
-export const DEFAULT_TITLE_OPTIONS: TitleOptions = {
-  lines: [DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2],
-  subtitleText: '',
-  subtitleColor: 'rgba(180,200,255,0.75)',
-  subtitleFontSize: 40,
-  headerFontSize: 60,
-};
+Phase 4  → +n×DESC_SLOT
+         右侧对应位置逐条出现说明文字（打字机/淡入）
+
+Phase 5  → +GRID_APPEAR + GRID_HOLD + EXPLOSION (~3500ms)
+         宫格收尾：关键词+短句按 n 格排列 → 爆炸消失
+```
+
+**Timing constants（新增到 helpers.ts）**:
+```ts
+AITECH_KEYWORD_SLOT = 1100   // ms
+AITECH_SHORT_SLOT   =  900
+AITECH_SLIDE_DUR    =  700
+AITECH_DESC_SLOT    =  800
+AITECH_GRID_APPEAR  = 1000   // stagger per cell: 80ms
+AITECH_GRID_HOLD    = 1500
+AITECH_EXPLODE_DUR  = 1000
+```
+
+n 项内容总时长 ≈ `T.cardBase + n×1100 + n×900 + 700 + n×800 + 3500`
+
+---
+
+## Phase 1 — 关键词阶段
+
+每张卡片 (`KEYWORD_SLOT=1100ms` 间隔) 依次出现：
+- 卡片 i 出现时：激光束从卡片 i-1 坐标飞向卡片 i 坐标（接力）
+- 激光视觉：一条细亮线（宽 3px，accent 颜色），持续 300ms，有拖尾消散
+- 卡片样式：圆角矩形，半透明背景，label 字段大字 + 上方序号
+
+### 激光参数
+```ts
+const laserDur = 320;  // ms
+// 从 prevCX,prevCY 到 curCX,curCY
+// 用 lerp(t) 画扫线，t=0→1 过 laserDur
+// t>0.5 时目标位置出现卡片 flash
 ```
 
 ---
 
-## 2. Rewrite `src/lib/engine/title.ts`
+## Phase 2 — 短句阶段
 
-### Timing constants (absolute ms from elapsed=0)
-```
-T_L1_START    =    0   // line 1 (withScene) begins fading in
-T_L2_START    =  700   // line 2 (dropsFromSky) begins crash
-T_L2_LAND     = 1200   // line 2 hits position → smoke burst triggers
-T_SUB_IN      = 1300   // subtitle fades in
-T_FLY_START   = 1800   // title begins flying to header
-T_FLY_END     = 2400   // title settled at header, subtitle fully gone
-```
-`T.cardBase = 2800` (unchanged — cards still start at 2800ms)
+Phase2Start = `T.cardBase + n × KEYWORD_SLOT`
 
-### Auto-split logic
-```typescript
-function resolveLineText(cfg: TitleLineConfig, i: number, title: string): string {
-  if (cfg.text) return cfg.text;
-  const mid = Math.ceil(title.length / 2);
-  if (i === 0) return title.slice(0, mid);
-  if (i === 1) return title.slice(mid);
-  return title; // line 3: full title (unusual case)
+- 所有关键词卡片保持可见（不消失）
+- 逐个在对应卡片上补充 short 文字（滑入或淡入）
+- 激光同样接力
+
+---
+
+## Phase 3 — 滑向左侧
+
+Phase3Start = Phase2Start + `n × SHORT_SLOT`
+
+动画 (~700ms)：
+- 所有卡片同时飞向目标位置（左侧标签列）
+- 目标格式：紧凑的竖向小标签
+  - 左侧 x = 120px（标签左边缘）
+  - 每个标签高 = 64px，y 均匀分布
+  - 标签宽 = 300px（可配置 `leftColumnWidth`）
+  - 仅显示 label 文字（no card frame，背景只剩细左边框竖线 + 半透明 pill）
+- 使用 `easeOutCubic` 插值
+- 滑动时可加 motion blur（globalAlpha 残影）
+
+---
+
+## Phase 4 — 描述展开
+
+Phase4Start = Phase3Start + `SLIDE_DUR`
+
+- 右侧 desc 区域：`x = 460px ... x = CW-80px`
+- 每条 desc 在 `DESC_SLOT` 间隔后出现，y 对齐对应左侧标签
+- 出现效果（可配置 `descEnterEffect`）：
+  - `typewriter`：逐字打出，CHAR_MS=40ms
+  - `fadeIn`：easeOutCubic α 淡入
+  - `slideRight`：从右侧 +60px 滑入
+- desc 文字颜色、字号已有 `descColor`/`descFontSize`
+
+---
+
+## Phase 5 — 宫格 + 爆炸收尾
+
+Phase5Start = Phase4Start + `n × DESC_SLOT`
+
+### 宫格计算（自动）
+```ts
+function autoCols(n: number) {
+  if (n <= 4) return 2;       // 2×2 / 1×n
+  if (n === 5) return 3;      // 3+2 bento
+  if (n <= 6) return 3;       // 3×2
+  if (n <= 8) return 4;       // 4×2
+  if (n === 9) return 3;      // 3×3
+  if (n <= 10) return 5;      // 5×2
+  return 4;                    // 4×3 (12)
 }
 ```
 
-### Animation per line
-Each line has a `t0` (enter start time):
-- `withScene` → `t0 = T_L1_START = 0`
-- `dropsFromSky` → `t0 = T_L2_START = 700`, crash from Y=-300 to centerY
-- `fadeIn` → staggered by line index × 300ms after T_L1_START
-- `slideUp` → staggered similarly
-- `typewriter` → staggered similarly
+### 宫格布局
+- 顶部：标题（从顶部 header 下移到居中大字，或保持顶部 header）
+- 网格区域：`y=220px → CH-80px`，自动计算 cellW/cellH
+- 每格内容：keyword (大字) + short (小字)
+- 每格以 `gridCellEnterEffect`（zoomIn/flipIn/slideUp/fadeIn）stagger 出现（80ms 间距）
+- 保持 `GRID_HOLD` ms
 
-### Smoke particle burst (white)
-Pre-generate 42 smoke particles when module loads (seeded). On each frame during smoke phase (T_L2_LAND → T_L2_LAND+900ms), render them:
-```typescript
-interface SmokeP { x0: number; y0: number; vx: number; vy: number; size: number; baseAlpha: number; }
+### 爆炸消失（`gridExplosionStyle`）
+- `burst`：每格向随机方向飞出 + 旋转，持续 EXPLOSION_DUR
+- `scatter`：从中心散开
+- `implode`：向中心收缩消失
 
-// Generated at module level (seeded deterministic):
-const SMOKE_PARTICLES: SmokeP[] = Array.from({length: 42}, (_, i) => {
-  const seed = i * 2.3;
-  const a = ((Math.sin(seed) * 0.5 + 0.5) * Math.PI); // upper semicircle
-  const speed = 3 + (Math.cos(seed * 1.7) * 0.5 + 0.5) * 8;
-  return { x0: (Math.sin(seed*3)*0.5+0.5-0.5)*400, y0: 0,
-           vx: Math.cos(a)*speed, vy: -Math.abs(Math.sin(a)*speed)*1.8,
-           size: 6 + (Math.sin(seed*2)*0.5+0.5)*20, baseAlpha: 0.35 + (Math.cos(seed)*0.5+0.5)*0.55 };
-});
+---
 
-function drawSmoke(ctx, cx, cy, smokeT) { // smokeT: 0→1
-  for (const p of SMOKE_PARTICLES) {
-    const t = smokeT;
-    const px = cx + p.x0 + p.vx * t * 120;
-    const py = cy + p.y0 + p.vy * t * 120 + 200 * t*t; // gravity
-    const alpha = p.baseAlpha * (1 - t*t);
-    const r = p.size * (1 + t * 2);
-    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2);
-    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-    ctx.shadowColor = 'rgba(255,255,255,0.6)'; ctx.shadowBlur = r * 0.8;
-    ctx.fill();
-  }
-  ctx.shadowBlur = 0;
-}
+## 新增 AItechOptions 字段
+
+```ts
+// Phase 2→3 slide
+slideEffect?: 'slide' | 'wipe' | 'scale';  // default 'slide'
+
+// Phase 3 left column
+leftKeywordFontSize?: number;   // default 34
+leftKeywordColor?: string;      // default = accent
+
+// Phase 4 desc
+descEnterEffect?: 'typewriter' | 'fadeIn' | 'slideRight'; // default 'typewriter'
+// descFontSize, descColor already exist
+
+// Phase 5 grid
+gridCellEnterEffect?: 'zoomIn' | 'flipIn' | 'slideUp' | 'fadeIn'; // default 'zoomIn'
+gridExplosionStyle?: 'burst' | 'scatter' | 'implode'; // default 'burst'
+gridKeywordFontSize?: number;   // default 80
+gridShortFontSize?: number;     // default 42
+gridKeywordColor?: string;      // default = labelColor (gold)
+gridShortColor?: string;        // default = shortColor (white)
 ```
 
-### Gradient text utility
-```typescript
-function applyTextGradient(ctx, cfg, x, y, width) {
-  if (cfg.colorEnd && cfg.colorEnd !== cfg.color) {
-    const g = ctx.createLinearGradient(x - width/2, y, x + width/2, y);
-    g.addColorStop(0, cfg.color || '#fff');
-    g.addColorStop(1, cfg.colorEnd);
-    ctx.fillStyle = g;
-  } else {
-    ctx.fillStyle = cfg.color || '#fff';
-  }
-}
-```
+---
 
-### Fly-up: merge all lines into header
-During T_FLY_START → T_FLY_END, the multi-line display transitions to a single merged string at headerY:
-```
-merged = lines.map(resolveLineText).join('')
-targetX = CW/2 (center)
-targetY = 78  (header)
-targetFontSize = titleOptions.headerFontSize (e.g. 60)
-```
-Each line's Y position lerps from its settled Y → headerY, its font size shrinks to `headerFontSize`. Alpha stays 1.
+## Files to Modify
 
-### Subtitle text
-- Appears at T_SUB_IN with `fadeIn` (300ms)
-- Positioned below the lowest line (typically below line 2)
-- During T_FLY_START → T_FLY_START+400ms: explode-dissolve (translate out + shockwave + fade)
+### 1. `src/types/video.ts`
+- Add new optional fields to `AItechOptions` (listed above)
 
-### `drawTitle` signature
-```typescript
-export function drawTitle(
+### 2. `src/lib/engine/helpers.ts`
+- Add `aiTechTotalDuration(n: number): number` function
+- Export `AITECH_KEYWORD_SLOT`, `AITECH_SHORT_SLOT`, `AITECH_SLIDE_DUR`, `AITECH_DESC_SLOT`
+
+### 3. `src/lib/engine/cards-aitech.ts`
+- **Complete rewrite** of `drawAITechCards()`
+- 5 phase dispatch based on elapsed vs phase boundaries
+- Laser beam helper: `drawLaser(ctx, x0,y0, x1,y1, progress, accent)`
+- Grid layout helper: `autoCols(n)`, `computeGridCells(n, cols)`
+- Left column layout: `computeLeftLabels(n)` → array of {x,y}
+- Phase 3 slide tween: all cards lerp from radial positions to label positions
+- Phase 5 explosion per-cell
+
+### 4. `src/lib/canvasEngine.ts`
+- Import `aiTechTotalDuration` from helpers
+- In `render()`: use `aiTechTotalDuration` for aitech outro timing
+- In `createAnimEngine`: use correct total ms for aitech
+
+### 5. `src/components/StyleConfigPanel.tsx`
+- Expand `AItechPanel` with new config sections:
+  - **滑动效果** (slideEffect pill)
+  - **左侧关键词** (leftKeywordFontSize slider + leftKeywordColor picker)
+  - **说明文字出现效果** (descEnterEffect pill)
+  - **宫格收尾** (gridCellEnterEffect pill + gridExplosionStyle pill)
+  - **宫格字号/颜色** (gridKeywordFontSize, gridShortFontSize, gridKeywordColor, gridShortColor)
+
+---
+
+## Card Position Strategy
+
+- Phase 1–2: Use the **existing radial layout** from current `cards-aitech.ts` (cards arranged in a circle around center polygon)
+- Phase 3 target positions: left column, compact labels
+- Phase 5: grid cells at center of screen
+
+Existing radial math:
+```ts
+const angle = (i / displayN) * Math.PI * 2 - Math.PI / 2;
+const cardCX = CX + Math.cos(angle) * CARD_RADIUS;
+const cardCY = CY + Math.sin(angle) * CARD_RADIUS;
+```
+Reuse this for phases 1–2.
+
+---
+
+## Laser Implementation Detail
+
+```ts
+function drawLaser(
   ctx: CanvasRenderingContext2D,
-  elapsed: number,
-  content: GeneratedContent,
+  x0: number, y0: number,   // source (prev card center)
+  x1: number, y1: number,   // dest (current card center)
+  t: number,                // 0→1 progress
   accent: string,
-  accent2: string,
-  style: StyleType,
-  titleOptions?: TitleOptions,
-)
-```
-The old `chineseOptions` param is removed — all configuration is now in `TitleOptions`.
-
----
-
-## 3. `src/lib/engine/nature-scene.ts`
-
-Remove lines that render the title (currently around line 149-150):
-```typescript
-// DELETE these lines:
-ctx.font = `800 ${titleFsz}px ${ff}`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-ctx.shadowColor = accent; ctx.shadowBlur = 20; ctx.fillStyle = titleCol; ctx.fillText(nc.title, CW / 2, 30);
-```
-The unified `drawTitle` will handle the nature title instead.
-
-Also remove `titleFsz`, `titleCol` variables if no longer needed.
-
----
-
-## 4. `src/lib/canvasEngine.ts`
-
-1. Add `titleOptions?: TitleOptions` parameter to `createAnimEngine`
-2. Import `TitleOptions`, `DEFAULT_TITLE_OPTIONS` from types
-3. After `drawNatureScene(...)`, add: `drawTitle(ctx, elapsed, { title: natureContent.title, points: [] }, accent, accent2, 'nature', titleOptions)`
-4. Change the existing `drawTitle` call to pass `titleOptions` instead of `chineseOptions`:
-   ```typescript
-   drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
-   ```
-
----
-
-## 5. `src/components/StyleConfigPanel.tsx`
-
-### New Props
-```typescript
-titleOptions: TitleOptions;
-onTitleOptionsChange: (v: TitleOptions) => void;
+) {
+  // Leading tip moves: tip = lerp(src→dst, t*1.3).clamp(0,1)
+  // Tail fades: tail = max(0, t*1.3 - 1) [no tail on first pass]
+  // Draw from tail to tip using gradient strokeStyle
+  // Glow: shadowBlur=20, shadowColor=accent
+  // At t>0.7 draw secondary thinner fading trail
+}
 ```
 
-### New `TitlePanel` component
-A shared panel shown for all 4 canvas styles (chinese, city, aitech, nature), with:
-
-**Lines section** (1-3 configurable lines):
-- "添加行 / 删除行" buttons
-- Per line:
-  - 自定义文字（空=自动拆分）: text input
-  - 字号: NumericSlider 40-240
-  - 字重: 细/中/粗 pills
-  - 字体: dropdown (Noto/雅黑/楷体/宋体)
-  - 颜色: OptionalColorPicker
-  - 渐变结束色: OptionalColorPicker (label: "渐变色 →")
-  - 入场动画: PillSelect [withScene/dropsFromSky/slideUp/fadeIn/typewriter]
-
-**副标题 section**:
-- 自定义小字: TextInput
-- 颜色: OptionalColorPicker
-- 字号: NumericSlider 20-80
-
-**标题落版 section**:
-- 落版字号 (headerFontSize): NumericSlider 36-100
-
-### Where to show
-In `StyleConfigPanel`'s main switch statement, ALL 4 styles (chinese, city, aitech, nature) render `<TitlePanel>` at the top (before style-specific settings).
-
 ---
 
-## 6. Wire-up files
-
-### `src/components/StudioCanvas.tsx`
-Add `titleOptions?: TitleOptions` prop, pass to `createAnimEngine`.
-
-### `src/components/VideoGenerator.tsx`
-Add `titleOptions?: TitleOptions` prop, pass to `createAnimEngine`.
-
-### `src/pages/Index.tsx`
-```typescript
-const [titleOptions, setTitleOptions] = useState<TitleOptions>(DEFAULT_TITLE_OPTIONS);
-```
-Pass `titleOptions` + `onTitleOptionsChange={setTitleOptions}` to `StyleConfigPanel`, `StudioCanvas`, `VideoGenerator`.
-
----
-
-## 7. Backward compatibility
-
-- `ChineseOptions.titleEntranceAnim` / `titleFontSize` / `titleColor` etc. are kept in the type for reading legacy state, but are **no longer used** in `title.ts` (superseded by `TitleOptions`).
-- `NatureOptions.titleFontSize` / `titleColor` / `fontFamily` fields kept but ignored for title rendering.
-
----
-
-## Files to modify (8 total)
-1. `src/types/video.ts` — add TitleOptions types + defaults
-2. `src/lib/engine/title.ts` — complete rewrite
-3. `src/lib/engine/nature-scene.ts` — remove title rendering (2 lines)
-4. `src/lib/canvasEngine.ts` — add titleOptions param, call drawTitle for nature too
-5. `src/components/StyleConfigPanel.tsx` — add TitlePanel + Props
-6. `src/components/StudioCanvas.tsx` — thread titleOptions through
-7. `src/components/VideoGenerator.tsx` — thread titleOptions through
-8. `src/pages/Index.tsx` — add titleOptions state + wire
+## Key Reuse
+- `hex2rgba`, `clamp`, `lerp`, `easeOutCubic`, `easeOutBack` from `helpers.ts`
+- `wrapText` from helpers
+- `drawPolygon`, `drawStar` for center polygon
+- Existing `initAIEffects` / `drawAIBg` — **unchanged** (background layer stays)
+- Existing card geometry constants: `CARD_RADIUS=370`, `POLY_R`, scale formula
 
 ---
 
 ## Verification
-- Chinese style: default 2-line title, line 1 fades with black bg, line 2 crashes at ~700ms with white smoke + shockwave, subtitle text appears below, then all flies to header at ~1800ms, cards appear at 2800ms as before
-- City / AItech / Nature: same title behavior
-- Gradient: Line 2 default `colorEnd='#3b9ef5'` gives white→blue gradient visible during impact phase
-- Config panel: TitlePanel appears at top for all 4 canvas styles
-- Adding/removing lines (1-3 supported)
-- `text=''` auto-splits: line[0]=first half, line[1]=second half of `content.title`
+1. Open aitech style with 6 content points
+2. Observe: keywords 1→6 appear in radial layout with laser relay
+3. Observe: short sentences appear on each card with laser
+4. Observe: all cards slide to left column labels
+5. Observe: right side descriptions appear one by one (typewriter)
+6. Observe: 6-cell grid appears, then explosion outro
+7. Toggle `descEnterEffect` in panel — verify change
+8. Toggle `gridExplosionStyle` — verify burst/scatter/implode variations
