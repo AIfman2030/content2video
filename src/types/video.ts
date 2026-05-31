@@ -131,27 +131,34 @@ export interface AItechOptions {
   polyShape: PolyShape;
   accentColor: string;
   glowIntensity: 'off' | 'subtle' | 'normal' | 'strong';
-  // ── Text style overrides ─────────────────────────────────────────────────
-  labelFontSize?: number;   // default 70 — keyword in card (phase 1-2)
-  labelColor?: string;      // default '#ffe655'
-  shortFontSize?: number;   // default 48 — short sentence in card (phase 2)
-  shortColor?: string;      // default 'rgba(255,255,255,0.98)'
-  descFontSize?: number;    // default 42 — desc on right side (phase 4)
-  descColor?: string;       // default 'rgba(255,168,48,0.97)'
-  // ── Phase 3: slide to left ───────────────────────────────────────────────
-  slideEffect?: 'slide' | 'wipe' | 'scale';  // default 'slide'
-  // ── Phase 3: left column labels ─────────────────────────────────────────
-  leftKeywordFontSize?: number;  // default 34
-  leftKeywordColor?: string;     // default = accent
-  // ── Phase 4: desc enter animation ───────────────────────────────────────
+  // ── Phase 1: center pattern ───────────────────────────────────────────────
+  centerPattern?: 'random' | 'arc' | 'rings' | 'spiral' | 'neuron'; // default 'random'
+  // ── Phase 1: radial text labels ──────────────────────────────────────────
+  radialFontSize?: number;        // default 52
+  radialColor?: string;           // '' = '#ffffff'
+  radialNumberColor?: string;     // '' = accent
+  // ── Phase 2→3 burst transition ───────────────────────────────────────────
+  burstTransition?: 'shatter' | 'flash' | 'wipe'; // default 'shatter'
+  // ── Phase 3: keyword box ──────────────────────────────────────────────────
+  kwBoxFontSize?: number;         // default 62 — "01关键词" in left box
+  kwBoxColor?: string;            // '' = '#ffffff'
+  kwBoxBorderColor?: string;      // '' = accent
+  kwBoxBorderWidth?: number;      // default 3
+  kwBoxBorderRadius?: number;     // default 16
+  kwBoxBgAlpha?: number;          // 0 = transparent, default 0
+  // ── Phase 3: description text ────────────────────────────────────────────
+  descFontSize?: number;          // default 42
+  descColor?: string;             // '' = 'rgba(220,220,220,0.92)'
   descEnterEffect?: 'typewriter' | 'fadeIn' | 'slideRight'; // default 'typewriter'
-  // ── Phase 5: grid outro ──────────────────────────────────────────────────
+  // ── Phase 4: grid ────────────────────────────────────────────────────────
   gridCellEnterEffect?: 'zoomIn' | 'flipIn' | 'slideUp' | 'fadeIn'; // default 'zoomIn'
   gridExplosionStyle?: 'burst' | 'scatter' | 'implode'; // default 'burst'
-  gridKeywordFontSize?: number;  // default 80
-  gridShortFontSize?: number;    // default 42
-  gridKeywordColor?: string;     // default = labelColor
-  gridShortColor?: string;       // default = shortColor
+  gridKeywordFontSize?: number;   // default 72
+  gridShortFontSize?: number;     // default 38
+  gridKeywordColor?: string;      // '' = '#ffffff'
+  gridShortColor?: string;        // '' = 'rgba(200,200,200,0.9)'
+  gridBorderColor?: string;       // '' = accent
+  gridNumColor?: string;          // '' = accent
 }
 
 export const DEFAULT_AITECH_OPTIONS: AItechOptions = {
@@ -276,6 +283,13 @@ export interface TitleLineConfig {
   color: string;      // '' = '#ffffff'
   colorEnd: string;   // '' = solid; non-empty = horizontal left→right gradient
   enterAnim: TitleLineEnterAnim;
+  // ── Optional border box (like green box in reference) ────────────────────
+  borderEnabled?: boolean;   // show a rounded-rect border + optional fill behind this line
+  borderColor?: string;      // '' = use accent color
+  borderBgAlpha?: number;    // 0–1, fill opacity (default 0.75); 0 = border only
+  borderPadX?: number;       // horizontal padding (default 48)
+  borderPadY?: number;       // vertical padding (default 22)
+  borderRadius?: number;     // corner radius (default 20)
 }
 
 export interface TitleOptions {

@@ -690,6 +690,34 @@ function TitleLineEditor({
           ))}
         </div>
       </Row>
+
+      {/* Border box */}
+      <div className="rounded-lg p-2 space-y-2" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => upd({ borderEnabled: !line.borderEnabled })}
+            className="flex items-center gap-1.5 text-[10px] font-semibold"
+            style={{ color: line.borderEnabled ? accent : 'rgba(255,255,255,0.35)' }}
+          >
+            <span className="w-3 h-3 rounded border flex items-center justify-center text-[8px]"
+              style={{ borderColor: line.borderEnabled ? accent : 'rgba(255,255,255,0.25)', background: line.borderEnabled ? accent : 'transparent', color: '#000' }}>
+              {line.borderEnabled ? '✓' : ''}
+            </span>
+            边框高亮框
+          </button>
+        </div>
+        {line.borderEnabled && (
+          <div className="space-y-2">
+            <OptionalColorPicker label="边框颜色（空=主色）" value={line.borderColor ?? ''} placeholder="同主色" onChange={c => upd({ borderColor: c })} accent={accent} />
+            <NumericSlider label="背景不透明度 %" value={Math.round((line.borderBgAlpha ?? 0.75) * 100)} min={0} max={100} onChange={v => upd({ borderBgAlpha: v / 100 })} />
+            <div className="grid grid-cols-2 gap-2">
+              <NumericSlider label="水平边距" value={line.borderPadX ?? 48} min={8} max={120} onChange={v => upd({ borderPadX: v })} />
+              <NumericSlider label="垂直边距" value={line.borderPadY ?? 22} min={4} max={60} onChange={v => upd({ borderPadY: v })} />
+            </div>
+            <NumericSlider label="圆角" value={line.borderRadius ?? 20} min={0} max={60} onChange={v => upd({ borderRadius: v })} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -924,16 +952,6 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOp
 }) {
   const upd = (patch: Partial<AItechOptions>) => onAitechOptionsChange({ ...aitechOptions, ...patch });
 
-  const SHAPES: { value: PolyShape; label: string }[] = [
-    { value: 'triangle',  label: '三角' },
-    { value: 'quad',      label: '四边' },
-    { value: 'pentagon',  label: '五边' },
-    { value: 'hexagon',   label: '六边' },
-    { value: 'octagon',   label: '八边' },
-    { value: 'star5',     label: '五星' },
-    { value: 'decagon',   label: '十边' },
-  ];
-
   return (
     <div className="space-y-4">
       {!petCoverConfig.enabled && (
@@ -943,53 +961,69 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOp
         </Row>
       )}
       <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
-      <PillSelect label="几何形状" value={aitechOptions.polyShape} onChange={ps => upd({ polyShape: ps as PolyShape })} options={SHAPES} />
       <ColorPicker label="科技主色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
 
-      {/* ── 阶段一·二：关键词 & 短句（卡片样式） ─────────────────────────── */}
-      <SectionDivider title="阶段一·二 — 关键词卡片" />
-      <NumericSlider label="关键词字号" value={aitechOptions.labelFontSize ?? 70} min={40} max={110} onChange={v => upd({ labelFontSize: v })} />
-      <OptionalColorPicker label="关键词颜色（空=金黄）" value={aitechOptions.labelColor ?? ''} placeholder="#ffe655" onChange={c => upd({ labelColor: c })} accent={accentColor} />
-      <NumericSlider label="短句字号" value={aitechOptions.shortFontSize ?? 48} min={28} max={80} onChange={v => upd({ shortFontSize: v })} />
-      <OptionalColorPicker label="短句颜色（空=白色）" value={aitechOptions.shortColor ?? ''} placeholder="rgba(255,255,255,0.98)" onChange={c => upd({ shortColor: c })} accent={accentColor} />
-
-      {/* ── 阶段三：滑向左侧 ──────────────────────────────────────────────── */}
-      <SectionDivider title="阶段三 — 滑向左侧" />
-      <PillSelect label="滑动效果" value={aitechOptions.slideEffect ?? 'slide'} onChange={v => upd({ slideEffect: v as AItechOptions['slideEffect'] })} options={[
-        { value: 'slide', label: '平滑滑动' },
-        { value: 'wipe',  label: '擦除' },
-        { value: 'scale', label: '缩放' },
+      {/* ── 阶段一：中心图案 ─────────────────────────────────────────────────── */}
+      <SectionDivider title="阶段一 — 中心图案" />
+      <PillSelect label="图案类型" value={aitechOptions.centerPattern ?? 'random'} onChange={v => upd({ centerPattern: v as AItechOptions['centerPattern'] })} options={[
+        { value: 'random', label: '随机' },
+        { value: 'arc',    label: '弧形' },
+        { value: 'rings',  label: '同心环' },
+        { value: 'spiral', label: '螺旋' },
+        { value: 'neuron', label: '神经元' },
       ]} />
-      <NumericSlider label="左侧关键词字号" value={aitechOptions.leftKeywordFontSize ?? 34} min={20} max={56} onChange={v => upd({ leftKeywordFontSize: v })} />
-      <OptionalColorPicker label="左侧关键词颜色（空=主色）" value={aitechOptions.leftKeywordColor ?? ''} placeholder="同主色" onChange={c => upd({ leftKeywordColor: c })} accent={accentColor} />
 
-      {/* ── 阶段四：说明展开 ──────────────────────────────────────────────── */}
-      <SectionDivider title="阶段四 — 说明文字" />
+      {/* ── 阶段一：关键词标签 ─────────────────────────────────────────────── */}
+      <SectionDivider title="阶段一 — 放射关键词标签" />
+      <NumericSlider label="标签字号" value={aitechOptions.radialFontSize ?? 52} min={28} max={80} onChange={v => upd({ radialFontSize: v })} />
+      <OptionalColorPicker label="标签文字颜色（空=白色）" value={aitechOptions.radialColor ?? ''} placeholder="#ffffff" onChange={c => upd({ radialColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="序号颜色（空=主色）" value={aitechOptions.radialNumberColor ?? ''} placeholder="同主色" onChange={c => upd({ radialNumberColor: c })} accent={accentColor} />
+
+      {/* ── 过渡效果 ────────────────────────────────────────────────────────── */}
+      <SectionDivider title="画面翻转过渡" />
+      <PillSelect label="爆裂效果" value={aitechOptions.burstTransition ?? 'shatter'} onChange={v => upd({ burstTransition: v as AItechOptions['burstTransition'] })} options={[
+        { value: 'shatter', label: '碎片爆裂' },
+        { value: 'flash',   label: '白闪' },
+        { value: 'wipe',    label: '放射擦除' },
+      ]} />
+
+      {/* ── 阶段三：关键词框 ─────────────────────────────────────────────────── */}
+      <SectionDivider title="阶段三 — 关键词边框" />
+      <NumericSlider label="关键词字号" value={aitechOptions.kwBoxFontSize ?? 62} min={28} max={100} onChange={v => upd({ kwBoxFontSize: v })} />
+      <OptionalColorPicker label="关键词文字颜色（空=白色）" value={aitechOptions.kwBoxColor ?? ''} placeholder="#ffffff" onChange={c => upd({ kwBoxColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="边框颜色（空=主色）" value={aitechOptions.kwBoxBorderColor ?? ''} placeholder="同主色" onChange={c => upd({ kwBoxBorderColor: c })} accent={accentColor} />
+      <NumericSlider label="边框粗细" value={aitechOptions.kwBoxBorderWidth ?? 3} min={1} max={8} onChange={v => upd({ kwBoxBorderWidth: v })} />
+      <NumericSlider label="背景不透明度 %" value={Math.round((aitechOptions.kwBoxBgAlpha ?? 0) * 100)} min={0} max={100} onChange={v => upd({ kwBoxBgAlpha: v / 100 })} />
+
+      {/* ── 阶段三：说明文字 ─────────────────────────────────────────────────── */}
+      <SectionDivider title="阶段三 — 说明文字" />
+      <NumericSlider label="说明字号" value={aitechOptions.descFontSize ?? 42} min={24} max={68} onChange={v => upd({ descFontSize: v })} />
+      <OptionalColorPicker label="说明颜色（空=浅灰）" value={aitechOptions.descColor ?? ''} placeholder="rgba(220,220,220,0.92)" onChange={c => upd({ descColor: c })} accent={accentColor} />
       <PillSelect label="出现效果" value={aitechOptions.descEnterEffect ?? 'typewriter'} onChange={v => upd({ descEnterEffect: v as AItechOptions['descEnterEffect'] })} options={[
         { value: 'typewriter', label: '打字机' },
         { value: 'fadeIn',     label: '淡入' },
         { value: 'slideRight', label: '右滑入' },
       ]} />
-      <NumericSlider label="说明文字字号" value={aitechOptions.descFontSize ?? 42} min={24} max={68} onChange={v => upd({ descFontSize: v })} />
-      <OptionalColorPicker label="说明文字颜色（空=琥珀色）" value={aitechOptions.descColor ?? ''} placeholder="rgba(255,168,48,0.97)" onChange={c => upd({ descColor: c })} accent={accentColor} />
 
-      {/* ── 阶段五：宫格收尾 ──────────────────────────────────────────────── */}
-      <SectionDivider title="阶段五 — 宫格收尾" />
-      <PillSelect label="格子出现效果" value={aitechOptions.gridCellEnterEffect ?? 'zoomIn'} onChange={v => upd({ gridCellEnterEffect: v as AItechOptions['gridCellEnterEffect'] })} options={[
+      {/* ── 阶段四：宫格 ────────────────────────────────────────────────────── */}
+      <SectionDivider title="阶段四 — 宫格收尾" />
+      <PillSelect label="格子出现" value={aitechOptions.gridCellEnterEffect ?? 'zoomIn'} onChange={v => upd({ gridCellEnterEffect: v as AItechOptions['gridCellEnterEffect'] })} options={[
         { value: 'zoomIn',  label: '缩放弹入' },
         { value: 'flipIn',  label: '翻转入场' },
         { value: 'slideUp', label: '上滑入' },
         { value: 'fadeIn',  label: '淡入' },
       ]} />
       <PillSelect label="爆炸效果" value={aitechOptions.gridExplosionStyle ?? 'burst'} onChange={v => upd({ gridExplosionStyle: v as AItechOptions['gridExplosionStyle'] })} options={[
-        { value: 'burst',    label: '爆破飞散' },
-        { value: 'scatter',  label: '随机散开' },
-        { value: 'implode',  label: '向内收缩' },
+        { value: 'burst',   label: '爆破飞散' },
+        { value: 'scatter', label: '随机散开' },
+        { value: 'implode', label: '向内收缩' },
       ]} />
-      <NumericSlider label="宫格关键词字号" value={aitechOptions.gridKeywordFontSize ?? 80} min={36} max={120} onChange={v => upd({ gridKeywordFontSize: v })} />
-      <NumericSlider label="宫格短句字号" value={aitechOptions.gridShortFontSize ?? 42} min={20} max={72} onChange={v => upd({ gridShortFontSize: v })} />
-      <OptionalColorPicker label="宫格关键词颜色（空=金黄）" value={aitechOptions.gridKeywordColor ?? ''} placeholder="#ffe655" onChange={c => upd({ gridKeywordColor: c })} accent={accentColor} />
-      <OptionalColorPicker label="宫格短句颜色（空=白色）" value={aitechOptions.gridShortColor ?? ''} placeholder="rgba(255,255,255,0.95)" onChange={c => upd({ gridShortColor: c })} accent={accentColor} />
+      <NumericSlider label="关键词字号" value={aitechOptions.gridKeywordFontSize ?? 72} min={32} max={120} onChange={v => upd({ gridKeywordFontSize: v })} />
+      <NumericSlider label="短句字号" value={aitechOptions.gridShortFontSize ?? 38} min={16} max={64} onChange={v => upd({ gridShortFontSize: v })} />
+      <OptionalColorPicker label="关键词颜色（空=白色）" value={aitechOptions.gridKeywordColor ?? ''} placeholder="#ffffff" onChange={c => upd({ gridKeywordColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="短句颜色" value={aitechOptions.gridShortColor ?? ''} placeholder="rgba(200,200,200,0.9)" onChange={c => upd({ gridShortColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="边框颜色（空=主色）" value={aitechOptions.gridBorderColor ?? ''} placeholder="同主色" onChange={c => upd({ gridBorderColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="序号颜色（空=主色）" value={aitechOptions.gridNumColor ?? ''} placeholder="同主色" onChange={c => upd({ gridNumColor: c })} accent={accentColor} />
     </div>
   );
 }

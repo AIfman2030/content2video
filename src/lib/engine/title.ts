@@ -416,6 +416,41 @@ export function drawTitle(
     ctx.font         = fontStr(cfg, drawFsz);
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'middle';
+
+    // Border box (drawn BEFORE text so text appears on top)
+    if (cfg.borderEnabled && flyT < 0.8) {
+      const textW   = ctx.measureText(text).width;
+      const padX    = cfg.borderPadX ?? 48;
+      const padY    = cfg.borderPadY ?? 22;
+      const boxW    = textW + padX * 2;
+      const boxH    = drawFsz + padY * 2;
+      const bx      = CW / 2 - boxW / 2;
+      const by      = drawY + shakeY - drawFsz / 2 - padY;
+      const br      = cfg.borderRadius ?? 20;
+      const bc      = cfg.borderColor || accent;
+
+      // Solid fill behind text
+      const bgA = cfg.borderBgAlpha ?? 0.75;
+      if (bgA > 0.01) {
+        ctx.fillStyle = hex2rgba(bc, bgA);
+        ctx.beginPath();
+        ctx.roundRect(bx, by, boxW, boxH, br);
+        ctx.fill();
+      }
+
+      // Glowing border stroke
+      ctx.save();
+      ctx.shadowColor = bc;
+      ctx.shadowBlur  = 28 + 10 * Math.sin(elapsed * 0.004);
+      ctx.strokeStyle = bc;
+      ctx.lineWidth   = 4;
+      ctx.beginPath();
+      ctx.roundRect(bx, by, boxW, boxH, br);
+      ctx.stroke();
+      ctx.shadowBlur  = 0;
+      ctx.restore();
+    }
+
     ctx.shadowColor  = hex2rgba(accent, 0.8);
     ctx.shadowBlur   = cfg.enterAnim === 'dropsFromSky'
       ? lerp(60, 32, clamp((elapsed - T_L2_LAND) / 600, 0, 1))

@@ -101,24 +101,22 @@ export function totalDuration(pts: number) {
   return T.cardBase + numPages * (pageSlot + PAGE_HOLD) + T.cardReadDelay + T.outroDur;
 }
 
-// ── AI Tech 5-phase timing ─────────────────────────────────────────────────────
+// ── AI Tech 4-phase timing ─────────────────────────────────────────────────────
 export const AT = {
-  keywordSlot:  1100,   // ms between each keyword card appearing
-  shortSlot:     900,   // ms between each short sentence appearing
-  slideDur:      700,   // ms for cards to slide into left column
-  descSlot:      800,   // ms between each desc item appearing
-  gridAppear:   1200,   // ms for all grid cells to stagger in
-  gridHold:     1500,   // ms hold after grid fully visible
-  explodeDur:    900,   // ms for explosion outro
+  keywordSlot: 900,    // ms per keyword in radial phase
+  burstDur:    600,    // flip/shatter transition
+  descSlot:    800,    // ms per desc item
+  gridStagger:  90,    // ms stagger between grid cells
+  gridHold:   1200,    // hold after all cells visible
+  explodeDur:  900,    // explosion outro
 };
 
 export function aiTechPhases(n: number) {
   const p1Start = T.cardBase;
-  const p2Start = p1Start + n * AT.keywordSlot;
-  const p3Start = p2Start + n * AT.shortSlot;
-  const p4Start = p3Start + AT.slideDur + 200;   // 200ms settle buffer
-  const p5Start = p4Start + n * AT.descSlot + 400;
-  const total   = p5Start + AT.gridAppear + AT.gridHold + AT.explodeDur + 200;
-  return { p1Start, p2Start, p3Start, p4Start, p5Start, total };
+  const p2Start = p1Start + n * AT.keywordSlot;           // burst transition
+  const p3Start = p2Start + AT.burstDur;                  // desc phase
+  const p4Start = p3Start + n * AT.descSlot + 400;        // grid phase
+  const total   = p4Start + n * AT.gridStagger + 400 + AT.gridHold + AT.explodeDur + 200;
+  return { p1Start, p2Start, p3Start, p4Start, total };
 }
 
