@@ -104,6 +104,7 @@ export function totalDuration(pts: number) {
 // ── AI Tech 4-phase timing ─────────────────────────────────────────────────────
 export const AT = {
   keywordSlot: 900,    // ms per keyword in radial phase
+  shortSlot:   650,    // ms per short sentence after all keywords
   burstDur:    600,    // flip/shatter transition
   descSlot:    800,    // ms per desc item
   gridStagger:  90,    // ms stagger between grid cells
@@ -112,11 +113,12 @@ export const AT = {
 };
 
 export function aiTechPhases(n: number) {
-  const p1Start = T.cardBase;
-  const p2Start = p1Start + n * AT.keywordSlot;           // burst transition
-  const p3Start = p2Start + AT.burstDur;                  // desc phase
-  const p4Start = p3Start + n * AT.descSlot + 400;        // grid phase
-  const total   = p4Start + n * AT.gridStagger + 400 + AT.gridHold + AT.explodeDur + 200;
-  return { p1Start, p2Start, p3Start, p4Start, total };
+  const p1Start  = T.cardBase;
+  const p1bStart = p1Start + n * AT.keywordSlot;            // short-sentence sub-phase
+  const p2Start  = p1bStart + n * AT.shortSlot;             // burst transition
+  const p3Start  = p2Start + AT.burstDur;                   // desc phase
+  const p4Start  = p3Start + n * AT.descSlot + 400;         // grid phase
+  const total    = p4Start + n * AT.gridStagger + 400 + AT.gridHold + AT.explodeDur + 200;
+  return { p1Start, p1bStart, p2Start, p3Start, p4Start, total };
 }
 

@@ -966,11 +966,21 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOp
       {/* ── 阶段一：中心图案 ─────────────────────────────────────────────────── */}
       <SectionDivider title="阶段一 — 中心图案" />
       <PillSelect label="图案类型" value={aitechOptions.centerPattern ?? 'random'} onChange={v => upd({ centerPattern: v as AItechOptions['centerPattern'] })} options={[
-        { value: 'random', label: '随机' },
-        { value: 'arc',    label: '弧形' },
-        { value: 'rings',  label: '同心环' },
-        { value: 'spiral', label: '螺旋' },
-        { value: 'neuron', label: '神经元' },
+        { value: 'random',   label: '随机' },
+        { value: 'arc',      label: '弧形' },
+        { value: 'rings',    label: '同心环' },
+        { value: 'spiral',   label: '螺旋' },
+        { value: 'neuron',   label: '神经元' },
+        { value: 'dna',      label: 'DNA双螺旋' },
+        { value: 'atom',     label: '原子轨道' },
+        { value: 'compass',  label: '罗盘' },
+        { value: 'radar',    label: '雷达扫描' },
+        { value: 'hexgrid',  label: '蜂巢六边' },
+        { value: 'sunburst', label: '日光放射' },
+        { value: 'vortex',   label: '漩涡' },
+        { value: 'crystal',  label: '水晶' },
+        { value: 'eye',      label: '天眼' },
+        { value: 'infinity', label: '无限符号' },
       ]} />
 
       {/* ── 阶段一：关键词标签 ─────────────────────────────────────────────── */}

@@ -132,7 +132,7 @@ export interface AItechOptions {
   accentColor: string;
   glowIntensity: 'off' | 'subtle' | 'normal' | 'strong';
   // ── Phase 1: center pattern ───────────────────────────────────────────────
-  centerPattern?: 'random' | 'arc' | 'rings' | 'spiral' | 'neuron'; // default 'random'
+  centerPattern?: 'random' | 'arc' | 'rings' | 'spiral' | 'neuron' | 'dna' | 'atom' | 'compass' | 'radar' | 'hexgrid' | 'sunburst' | 'vortex' | 'crystal' | 'eye' | 'infinity';
   // ── Phase 1: radial text labels ──────────────────────────────────────────
   radialFontSize?: number;        // default 52
   radialColor?: string;           // '' = '#ffffff'
