@@ -137,6 +137,8 @@ export interface AItechOptions {
   radialFontSize?: number;        // default 52
   radialColor?: string;           // '' = '#ffffff'
   radialNumberColor?: string;     // '' = accent
+  radialShortFontSize?: number;   // default 34
+  radialShortColor?: string;      // '' = 'rgba(200,220,255,0.85)'
   // ── Phase 2→3 burst transition ───────────────────────────────────────────
   burstTransition?: 'shatter' | 'flash' | 'wipe'; // default 'shatter'
   // ── Phase 3: keyword box ──────────────────────────────────────────────────

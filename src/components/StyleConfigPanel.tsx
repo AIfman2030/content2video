@@ -988,6 +988,8 @@ function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOp
       <NumericSlider label="标签字号" value={aitechOptions.radialFontSize ?? 52} min={28} max={80} onChange={v => upd({ radialFontSize: v })} />
       <OptionalColorPicker label="标签文字颜色（空=白色）" value={aitechOptions.radialColor ?? ''} placeholder="#ffffff" onChange={c => upd({ radialColor: c })} accent={accentColor} />
       <OptionalColorPicker label="序号颜色（空=主色）" value={aitechOptions.radialNumberColor ?? ''} placeholder="同主色" onChange={c => upd({ radialNumberColor: c })} accent={accentColor} />
+      <NumericSlider label="短句字号" value={aitechOptions.radialShortFontSize ?? 34} min={20} max={60} onChange={v => upd({ radialShortFontSize: v })} />
+      <OptionalColorPicker label="短句颜色（空=淡蓝白）" value={aitechOptions.radialShortColor ?? ''} placeholder="rgba(200,220,255,0.85)" onChange={c => upd({ radialShortColor: c })} accent={accentColor} />
 
       {/* ── 过渡效果 ────────────────────────────────────────────────────────── */}
       <SectionDivider title="画面翻转过渡" />

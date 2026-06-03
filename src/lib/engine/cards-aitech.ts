@@ -1,11 +1,11 @@
 /**
- * cards-aitech.ts — AI Tech style 4-phase animation (v3)
+ * cards-aitech.ts — AI Tech style 4-phase animation (v4)
  *
- * Phase 1  (T.cardBase + n×900ms):       Keywords appear radially, scan line from center, border draws L→R
- * Phase 1b (+n×650ms):                   Short sentences appear one by one at keyword positions
- * Phase 2  (+600ms burst):               Shatter / flash / wipe transition
- * Phase 3  (+n×800ms):                   Keyword boxed list (left) + desc typewriter (right)
- * Phase 4  (+grid appear + hold + explode): Grid finale
+ * Phase 1  (T.cardBase + n×900ms):          Keywords appear radially — label+short in same box,
+ *                                            scan line from center, border draws L→R
+ * Phase 2  (+600ms burst):                  TEXT-SHATTER transition (characters fly apart)
+ * Phase 3  (+n×800ms):                      Keyword boxed list (left) + desc typewriter (right)
+ * Phase 4  (+grid stagger + hold + explode): Grid finale — text-burst outro
  */
 import type { GeneratedContent, PolyShape, AItechOptions } from '../../types/video';
 import {
@@ -14,35 +14,38 @@ import {
 } from './helpers';
 
 const CX = CW / 2, CY = CH / 2;
-const RADIAL_R  = 380;   // distance center → label anchor
-const NODE_R    = RADIAL_R - 32;  // distance center → circle node
-const INNER_R   = 165;  // inner edge of connector line
+const RADIAL_R = 380;   // distance center → label anchor
+const NODE_R   = 348;   // distance center → circle node
+const INNER_R  = 165;   // inner edge of connector line
+const MAX_BOX_W = 530;  // max radial label box width
 
 // ── Resolved options ───────────────────────────────────────────────────────────
 function resolveOpts(o?: AItechOptions, accent = '#a855f7') {
   return {
-    centerPattern:  o?.centerPattern      ?? 'random',
-    radialFsz:      o?.radialFontSize     ?? 50,
-    radialClr:      o?.radialColor        || '#ffffff',
-    radialNumClr:   o?.radialNumberColor  || accent,
-    burstFx:        o?.burstTransition    ?? 'shatter',
-    kwBoxFsz:       o?.kwBoxFontSize      ?? 62,
-    kwBoxClr:       o?.kwBoxColor         || '#ffffff',
-    kwBoxBorderClr: o?.kwBoxBorderColor   || accent,
-    kwBoxBW:        o?.kwBoxBorderWidth   ?? 3,
-    kwBoxBR:        o?.kwBoxBorderRadius  ?? 16,
-    kwBoxBgA:       o?.kwBoxBgAlpha       ?? 0,
-    descFsz:        o?.descFontSize       ?? 42,
-    descClr:        o?.descColor          || 'rgba(220,220,220,0.92)',
-    descEnter:      o?.descEnterEffect    ?? 'typewriter',
-    gridEnter:      o?.gridCellEnterEffect ?? 'zoomIn',
-    gridExplode:    o?.gridExplosionStyle  ?? 'burst',
-    gridKwFsz:      o?.gridKeywordFontSize ?? 72,
-    gridShortFsz:   o?.gridShortFontSize   ?? 38,
-    gridKwClr:      o?.gridKeywordColor    || '#ffffff',
-    gridShortClr:   o?.gridShortColor      || 'rgba(200,200,200,0.9)',
-    gridBorderClr:  o?.gridBorderColor     || accent,
-    gridNumClr:     o?.gridNumColor        || accent,
+    centerPattern:   o?.centerPattern        ?? 'random',
+    radialFsz:       o?.radialFontSize        ?? 52,
+    radialClr:       o?.radialColor           || '#ffffff',
+    radialNumClr:    o?.radialNumberColor     || accent,
+    radialShortFsz:  o?.radialShortFontSize   ?? 34,
+    radialShortClr:  o?.radialShortColor      || 'rgba(200,220,255,0.85)',
+    burstFx:         o?.burstTransition       ?? 'shatter',
+    kwBoxFsz:        o?.kwBoxFontSize         ?? 62,
+    kwBoxClr:        o?.kwBoxColor            || '#ffffff',
+    kwBoxBorderClr:  o?.kwBoxBorderColor      || accent,
+    kwBoxBW:         o?.kwBoxBorderWidth      ?? 3,
+    kwBoxBR:         o?.kwBoxBorderRadius     ?? 16,
+    kwBoxBgA:        o?.kwBoxBgAlpha          ?? 0,
+    descFsz:         o?.descFontSize          ?? 42,
+    descClr:         o?.descColor             || 'rgba(220,220,220,0.92)',
+    descEnter:       o?.descEnterEffect       ?? 'typewriter',
+    gridEnter:       o?.gridCellEnterEffect   ?? 'zoomIn',
+    gridExplode:     o?.gridExplosionStyle    ?? 'burst',
+    gridKwFsz:       o?.gridKeywordFontSize   ?? 72,
+    gridShortFsz:    o?.gridShortFontSize     ?? 38,
+    gridKwClr:       o?.gridKeywordColor      || '#ffffff',
+    gridShortClr:    o?.gridShortColor        || 'rgba(200,200,200,0.9)',
+    gridBorderClr:   o?.gridBorderColor       || accent,
+    gridNumClr:      o?.gridNumColor          || accent,
   };
 }
 
@@ -55,10 +58,10 @@ function sf(seed: number) {
 function labelPos(i: number, n: number) {
   const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
   return {
-    cx: CX + Math.cos(angle) * RADIAL_R,
-    cy: CY + Math.sin(angle) * RADIAL_R,
-    nx: CX + Math.cos(angle) * NODE_R,
-    ny: CY + Math.sin(angle) * NODE_R,
+    cx:    CX + Math.cos(angle) * RADIAL_R,
+    cy:    CY + Math.sin(angle) * RADIAL_R,
+    nx:    CX + Math.cos(angle) * NODE_R,
+    ny:    CY + Math.sin(angle) * NODE_R,
     angle,
   };
 }
@@ -77,10 +80,10 @@ function autoCols(n: number) {
 interface GridCell { cx: number; cy: number; w: number; h: number; }
 
 function computeGrid(n: number): GridCell[] {
-  const cols = autoCols(n);
-  const rows = Math.ceil(n / cols);
-  const PX   = 28, PY = 28;
-  const GT   = 160, NH = 40;
+  const cols  = autoCols(n);
+  const rows  = Math.ceil(n / cols);
+  const PX    = 28, PY = 28;
+  const GT    = 160, NH = 40;
   const cellW = Math.floor((CW - PX * (cols + 1)) / cols);
   const cellH = Math.floor((CH - GT - PY * (rows + 1) - NH * rows - 60) / rows);
   return Array.from({ length: n }, (_, i) => ({
@@ -91,14 +94,17 @@ function computeGrid(n: number): GridCell[] {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// CENTER PATTERNS (14 total)
+// CENTER PATTERNS (14 types)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const ALL_PATTERNS = ['arc', 'rings', 'spiral', 'neuron', 'dna', 'atom', 'compass', 'radar', 'hexgrid', 'sunburst', 'vortex', 'crystal', 'eye', 'infinity'];
+const ALL_PATTERNS = [
+  'arc', 'rings', 'spiral', 'neuron',
+  'dna', 'atom', 'compass', 'radar',
+  'hexgrid', 'sunburst', 'vortex', 'crystal', 'eye', 'infinity',
+];
 
 function pickPattern(n: number, opt: string): string {
-  if (opt !== 'random') return opt;
-  return ALL_PATTERNS[n % ALL_PATTERNS.length];
+  return opt !== 'random' ? opt : ALL_PATTERNS[n % ALL_PATTERNS.length];
 }
 
 type DC = CanvasRenderingContext2D;
@@ -109,15 +115,13 @@ const pat_arc: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   const rot = t * 0.00025, rot2 = -t * 0.0004;
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot);
   ctx.shadowColor = a; ctx.shadowBlur = 32; ctx.strokeStyle = a; ctx.lineWidth = r * 0.28; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.75, 0.3, Math.PI * 2 - 0.3); ctx.stroke();
-  ctx.shadowBlur = 0; ctx.restore();
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.75, 0.3, Math.PI * 2 - 0.3); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
   ctx.save(); ctx.translate(cx, cy); ctx.rotate(rot2);
   ctx.shadowColor = a2; ctx.shadowBlur = 22; ctx.strokeStyle = a2; ctx.lineWidth = r * 0.18; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(0, 0, r * 0.44, 0.6, Math.PI * 2 - 0.6); ctx.stroke();
-  ctx.shadowBlur = 0; ctx.restore();
+  ctx.beginPath(); ctx.arc(0, 0, r * 0.44, 0.6, Math.PI * 2 - 0.6); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
   ctx.save(); ctx.translate(cx, cy); ctx.shadowColor = a; ctx.shadowBlur = 28 + 12 * Math.sin(t * 0.005);
-  ctx.fillStyle = a; ctx.beginPath(); ctx.arc(0, 0, r * 0.12, 0, Math.PI * 2); ctx.fill();
-  ctx.shadowBlur = 0; ctx.restore(); ctx.restore();
+  ctx.fillStyle = a; ctx.beginPath(); ctx.arc(0, 0, r * 0.12, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
+  ctx.restore();
 };
 
 const pat_rings: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
@@ -130,8 +134,7 @@ const pat_rings: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   for (const ring of rings) {
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(t * ring.speed);
     ctx.shadowColor = ring.clr; ctx.shadowBlur = 18; ctx.strokeStyle = ring.clr; ctx.lineWidth = ring.lw; ctx.setLineDash(ring.dash);
-    ctx.beginPath(); ctx.arc(0, 0, ring.rad, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.restore();
+    ctx.beginPath(); ctx.arc(0, 0, ring.rad, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.restore();
   }
   ctx.save(); ctx.translate(cx, cy); ctx.shadowColor = a; ctx.shadowBlur = 24 + 10 * Math.sin(t * 0.004);
   ctx.fillStyle = a; ctx.beginPath(); ctx.arc(0, 0, r * 0.12, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
@@ -146,9 +149,7 @@ const pat_spiral: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
     ctx.shadowColor = arm === 0 ? a : a2; ctx.shadowBlur = 20; ctx.strokeStyle = arm === 0 ? a : a2; ctx.lineWidth = 4; ctx.lineCap = 'round';
     ctx.beginPath();
     for (let s = 0; s <= 120; s++) {
-      const tt = s / 120;
-      const ro = r * 0.1 + r * 0.82 * tt;
-      const an = tt * Math.PI * 5;
+      const tt = s / 120, ro = r * 0.1 + r * 0.82 * tt, an = tt * Math.PI * 5;
       if (s === 0) ctx.moveTo(Math.cos(an) * ro, Math.sin(an) * ro);
       else ctx.lineTo(Math.cos(an) * ro, Math.sin(an) * ro);
     }
@@ -163,16 +164,13 @@ const pat_neuron: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al;
   const ROT = t * 0.0004;
   for (let i = 0; i < 6; i++) {
-    const an = (i / 6) * Math.PI * 2 + ROT;
-    const clr = i % 2 === 0 ? a : a2;
+    const an = (i / 6) * Math.PI * 2 + ROT, clr = i % 2 === 0 ? a : a2;
     const cpX = Math.cos(an + 0.4) * r * 0.55, cpY = Math.sin(an + 0.4) * r * 0.55;
-    const eX = Math.cos(an) * r * 0.85, eY = Math.sin(an) * r * 0.85;
+    const eX  = Math.cos(an) * r * 0.85, eY = Math.sin(an) * r * 0.85;
     ctx.save(); ctx.translate(cx, cy); ctx.shadowColor = clr; ctx.shadowBlur = 16; ctx.strokeStyle = clr; ctx.lineWidth = 2.5;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(cpX, cpY, eX, eY); ctx.stroke();
     ctx.fillStyle = clr; ctx.shadowBlur = 18; ctx.beginPath(); ctx.arc(eX, eY, 8, 0, Math.PI * 2); ctx.fill();
-    const pt = (t * 0.001 + i / 6) % 1;
-    const px = cpX * 2 * pt * (1 - pt) + eX * pt * pt;
-    const py = cpY * 2 * pt * (1 - pt) + eY * pt * pt;
+    const pt = (t * 0.001 + i / 6) % 1, px = cpX * 2 * pt * (1 - pt) + eX * pt * pt, py = cpY * 2 * pt * (1 - pt) + eY * pt * pt;
     ctx.shadowBlur = 22; ctx.globalAlpha = al * (1 - Math.abs(pt - 0.5) * 2);
     ctx.beginPath(); ctx.arc(px, py, 5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
   }
@@ -181,163 +179,119 @@ const pat_neuron: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.restore();
 };
 
-/** DNA double helix */
 const pat_dna: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
-  const ROT = t * 0.0008;
-  const STEPS = 80;
+  const ROT = t * 0.0008, STEPS = 80;
   for (let strand = 0; strand < 2; strand++) {
     const clr = strand === 0 ? a : a2;
     ctx.shadowColor = clr; ctx.shadowBlur = 18; ctx.strokeStyle = clr; ctx.lineWidth = 3;
     ctx.beginPath();
     for (let s = 0; s <= STEPS; s++) {
-      const tt = s / STEPS;
-      const angle = tt * Math.PI * 4 + ROT + strand * Math.PI;
-      const x = Math.cos(angle) * r * 0.7;
-      const y = (tt - 0.5) * r * 1.8;
+      const tt = s / STEPS, angle = tt * Math.PI * 4 + ROT + strand * Math.PI;
+      const x = Math.cos(angle) * r * 0.7, y = (tt - 0.5) * r * 1.8;
       if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke(); ctx.shadowBlur = 0;
   }
-  // Rungs
   for (let s = 0; s <= 14; s++) {
-    const tt = s / 14;
-    const angle = tt * Math.PI * 4 + ROT;
-    const x1 = Math.cos(angle) * r * 0.7, y = (tt - 0.5) * r * 1.8;
-    const x2 = Math.cos(angle + Math.PI) * r * 0.7;
+    const tt = s / 14, angle = tt * Math.PI * 4 + ROT;
+    const x1 = Math.cos(angle) * r * 0.7, y = (tt - 0.5) * r * 1.8, x2 = Math.cos(angle + Math.PI) * r * 0.7;
     ctx.globalAlpha = al * 0.5; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
   }
   ctx.restore();
 };
 
-/** Atom electron orbits */
 const pat_atom: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al;
   const ORBITS = [
-    { tilt: 0, speed: 0.0015, clr: a },
-    { tilt: Math.PI / 3, speed: -0.001, clr: a2 },
+    { tilt: 0, speed: 0.0015, clr: a }, { tilt: Math.PI / 3, speed: -0.001, clr: a2 },
     { tilt: Math.PI * 2 / 3, speed: 0.0012, clr: a },
   ];
   for (const orb of ORBITS) {
     ctx.save(); ctx.translate(cx, cy); ctx.rotate(orb.tilt);
     ctx.shadowColor = orb.clr; ctx.shadowBlur = 14; ctx.strokeStyle = orb.clr; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.ellipse(0, 0, r * 0.9, r * 0.38, 0, 0, Math.PI * 2); ctx.stroke();
-    const ea = t * orb.speed;
-    const ex = Math.cos(ea) * r * 0.9, ey = Math.sin(ea) * r * 0.38;
-    ctx.shadowBlur = 22; ctx.fillStyle = orb.clr; ctx.beginPath(); ctx.arc(ex, ey, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.shadowBlur = 0; ctx.restore();
+    const ea = t * orb.speed, ex = Math.cos(ea) * r * 0.9, ey = Math.sin(ea) * r * 0.38;
+    ctx.shadowBlur = 22; ctx.fillStyle = orb.clr; ctx.beginPath(); ctx.arc(ex, ey, 8, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
   }
   ctx.save(); ctx.translate(cx, cy); ctx.shadowColor = a; ctx.shadowBlur = 32 + 12 * Math.sin(t * 0.005);
   ctx.fillStyle = a; ctx.beginPath(); ctx.arc(0, 0, r * 0.14, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
   ctx.restore();
 };
 
-/** Compass rose */
 const pat_compass: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
   const ROT = t * 0.0003;
-  // Outer ring
   ctx.shadowColor = a; ctx.shadowBlur = 14; ctx.strokeStyle = a; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
-  // 8 direction arrows
   for (let i = 0; i < 8; i++) {
-    const an = (i / 8) * Math.PI * 2 + ROT;
-    const isPrimary = i % 2 === 0;
-    const len = isPrimary ? r * 0.75 : r * 0.5;
-    const clr = isPrimary ? a : a2;
+    const an = (i / 8) * Math.PI * 2 + ROT, isPrimary = i % 2 === 0;
+    const len = isPrimary ? r * 0.75 : r * 0.5, clr = isPrimary ? a : a2;
     const tipX = Math.cos(an) * len, tipY = Math.sin(an) * len;
-    ctx.save();
-    ctx.shadowColor = clr; ctx.shadowBlur = isPrimary ? 20 : 10; ctx.strokeStyle = clr; ctx.lineWidth = isPrimary ? 3 : 1.5;
+    ctx.save(); ctx.shadowColor = clr; ctx.shadowBlur = isPrimary ? 20 : 10; ctx.strokeStyle = clr; ctx.lineWidth = isPrimary ? 3 : 1.5;
     ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(tipX, tipY); ctx.stroke();
-    // Arrowhead
     if (isPrimary) {
       const ah = 0.35;
-      const ax1 = Math.cos(an - ah) * (len * 0.75), ay1 = Math.sin(an - ah) * (len * 0.75);
-      const ax2 = Math.cos(an + ah) * (len * 0.75), ay2 = Math.sin(an + ah) * (len * 0.75);
       ctx.fillStyle = clr; ctx.shadowBlur = 18;
-      ctx.beginPath(); ctx.moveTo(tipX, tipY); ctx.lineTo(ax1, ay1); ctx.lineTo(ax2, ay2); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(tipX, tipY);
+      ctx.lineTo(Math.cos(an - ah) * len * 0.75, Math.sin(an - ah) * len * 0.75);
+      ctx.lineTo(Math.cos(an + ah) * len * 0.75, Math.sin(an + ah) * len * 0.75);
+      ctx.closePath(); ctx.fill();
     }
     ctx.shadowBlur = 0; ctx.restore();
   }
-  // Center dot
-  ctx.shadowColor = a; ctx.shadowBlur = 28; ctx.fillStyle = a; ctx.beginPath(); ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2); ctx.fill();
-  ctx.shadowBlur = 0; ctx.restore();
+  ctx.shadowColor = a; ctx.shadowBlur = 28; ctx.fillStyle = a; ctx.beginPath(); ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
+  ctx.restore();
 };
 
-/** Radar scanning beam */
 const pat_radar: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
   const scanAngle = (t * 0.0025) % (Math.PI * 2);
-  // Outer circle
   ctx.shadowColor = a2; ctx.shadowBlur = 12; ctx.strokeStyle = a2; ctx.lineWidth = 2; ctx.setLineDash([6, 8]);
   ctx.beginPath(); ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-  // Inner circles
   for (const fr of [0.55, 0.28]) {
     ctx.shadowBlur = 8; ctx.strokeStyle = a2; ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.arc(0, 0, r * fr, 0, Math.PI * 2); ctx.stroke();
   }
   ctx.shadowBlur = 0;
-  // Sweep sector gradient
+  ctx.save(); ctx.rotate(scanAngle);
   const SECTOR = Math.PI / 3;
-  ctx.save();
-  ctx.rotate(scanAngle);
   const grad = ctx.createLinearGradient(0, 0, r * 0.9, 0);
-  grad.addColorStop(0, hex2rgba(a, 0));
-  grad.addColorStop(0.7, hex2rgba(a, 0.35));
-  grad.addColorStop(1, hex2rgba(a, 0.65));
-  ctx.fillStyle = grad;
-  ctx.beginPath(); ctx.moveTo(0, 0);
-  ctx.arc(0, 0, r * 0.92, -SECTOR * 0.1, 0);
-  ctx.closePath(); ctx.fill();
-  // Bright sweep line
+  grad.addColorStop(0, hex2rgba(a, 0)); grad.addColorStop(0.7, hex2rgba(a, 0.35)); grad.addColorStop(1, hex2rgba(a, 0.65));
+  ctx.fillStyle = grad; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, r * 0.92, -SECTOR * 0.1, 0); ctx.closePath(); ctx.fill();
   ctx.shadowColor = a; ctx.shadowBlur = 28; ctx.strokeStyle = a; ctx.lineWidth = 2.5;
-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r * 0.92, 0); ctx.stroke();
-  ctx.shadowBlur = 0; ctx.restore();
-  // Random blips
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r * 0.92, 0); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
   for (let b = 0; b < 5; b++) {
-    const bAngle = sf(b * 17.3) * Math.PI * 2;
-    const bR     = (sf(b * 29.1) * 0.65 + 0.2) * r;
-    const bx     = Math.cos(bAngle) * bR, by = Math.sin(bAngle) * bR;
-    const diff   = ((scanAngle - bAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-    const blipA  = diff < 1.5 ? Math.max(0, 1 - diff / 1.5) : 0;
+    const bAngle = sf(b * 17.3) * Math.PI * 2, bR = (sf(b * 29.1) * 0.65 + 0.2) * r;
+    const bx = Math.cos(bAngle) * bR, by = Math.sin(bAngle) * bR;
+    const diff = ((scanAngle - bAngle) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+    const blipA = diff < 1.5 ? Math.max(0, 1 - diff / 1.5) : 0;
     if (blipA > 0.05) {
       ctx.save(); ctx.globalAlpha = al * blipA;
       ctx.shadowColor = a; ctx.shadowBlur = 20; ctx.fillStyle = a;
       ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
     }
   }
-  // Center
   ctx.shadowColor = a; ctx.shadowBlur = 24; ctx.fillStyle = a; ctx.beginPath(); ctx.arc(0, 0, r * 0.1, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
   ctx.restore();
 };
 
-/** Hexagonal grid */
 const pat_hexgrid: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
-  const ROT = t * 0.0004;
-  const HEX_R = r * 0.32;
+  const ROT = t * 0.0004, HEX_R = r * 0.32;
   const positions = [
-    { ox: 0, oy: 0 },
-    { ox: HEX_R * 1.73, oy: 0 },
-    { ox: -HEX_R * 1.73, oy: 0 },
-    { ox: HEX_R * 0.87, oy: -HEX_R * 1.5 },
-    { ox: -HEX_R * 0.87, oy: -HEX_R * 1.5 },
-    { ox: HEX_R * 0.87, oy: HEX_R * 1.5 },
-    { ox: -HEX_R * 0.87, oy: HEX_R * 1.5 },
+    { ox: 0, oy: 0 }, { ox: HEX_R * 1.73, oy: 0 }, { ox: -HEX_R * 1.73, oy: 0 },
+    { ox: HEX_R * 0.87, oy: -HEX_R * 1.5 }, { ox: -HEX_R * 0.87, oy: -HEX_R * 1.5 },
+    { ox: HEX_R * 0.87, oy: HEX_R * 1.5 }, { ox: -HEX_R * 0.87, oy: HEX_R * 1.5 },
   ];
   positions.forEach((pos, pi) => {
-    const pulse = 1 + 0.08 * Math.sin(t * 0.004 + pi * 0.8);
-    const clr = pi === 0 ? a : pi % 2 === 0 ? a2 : a;
-    const bAl = pi === 0 ? 1 : 0.55;
-    ctx.save();
-    ctx.translate(pos.ox, pos.oy); ctx.rotate(ROT);
-    ctx.shadowColor = clr; ctx.shadowBlur = pi === 0 ? 24 : 12;
-    ctx.strokeStyle = clr; ctx.lineWidth = pi === 0 ? 3 : 1.8; ctx.globalAlpha = al * bAl;
+    const pulse = 1 + 0.08 * Math.sin(t * 0.004 + pi * 0.8), clr = pi === 0 ? a : pi % 2 === 0 ? a2 : a;
+    ctx.save(); ctx.translate(pos.ox, pos.oy); ctx.rotate(ROT);
+    ctx.shadowColor = clr; ctx.shadowBlur = pi === 0 ? 24 : 12; ctx.strokeStyle = clr; ctx.lineWidth = pi === 0 ? 3 : 1.8; ctx.globalAlpha = al * (pi === 0 ? 1 : 0.55);
     ctx.beginPath();
     for (let vi = 0; vi <= 6; vi++) {
-      const va = (vi / 6) * Math.PI * 2;
-      const vx = Math.cos(va) * HEX_R * pulse, vy = Math.sin(va) * HEX_R * pulse;
+      const va = (vi / 6) * Math.PI * 2, vx = Math.cos(va) * HEX_R * pulse, vy = Math.sin(va) * HEX_R * pulse;
       if (vi === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
     }
     ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
@@ -345,45 +299,31 @@ const pat_hexgrid: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.restore();
 };
 
-/** Sunburst rays */
 const pat_sunburst: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
-  const ROT = t * 0.0006;
-  const RAYS = 16;
+  const ROT = t * 0.0006, RAYS = 16;
   for (let i = 0; i < RAYS; i++) {
-    const an = (i / RAYS) * Math.PI * 2 + ROT;
-    const isPrimary = i % 2 === 0;
-    const len = isPrimary ? r * 0.92 : r * 0.62;
-    const lw  = isPrimary ? 3 : 1.5;
-    const al2 = isPrimary ? 1 : 0.55;
-    const clr = isPrimary ? a : a2;
-    ctx.save(); ctx.globalAlpha = al * al2;
-    ctx.shadowColor = clr; ctx.shadowBlur = isPrimary ? 20 : 8; ctx.strokeStyle = clr; ctx.lineWidth = lw;
-    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(an) * len, Math.sin(an) * len); ctx.stroke();
-    ctx.shadowBlur = 0; ctx.restore();
+    const an = (i / RAYS) * Math.PI * 2 + ROT, isPrimary = i % 2 === 0;
+    const len = isPrimary ? r * 0.92 : r * 0.62, clr = isPrimary ? a : a2;
+    ctx.save(); ctx.globalAlpha = al * (isPrimary ? 1 : 0.55);
+    ctx.shadowColor = clr; ctx.shadowBlur = isPrimary ? 20 : 8; ctx.strokeStyle = clr; ctx.lineWidth = isPrimary ? 3 : 1.5;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(an) * len, Math.sin(an) * len); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
   }
-  // Bright center
   ctx.shadowColor = a; ctx.shadowBlur = 38 + 16 * Math.sin(t * 0.005); ctx.fillStyle = a;
   ctx.beginPath(); ctx.arc(0, 0, r * 0.14, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
   ctx.restore();
 };
 
-/** Vortex / spiral funnel */
 const pat_vortex: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
-  const ROT = t * 0.0018;
-  const RINGS = 5;
+  const ROT = t * 0.0018, RINGS = 5;
   for (let ri = 0; ri < RINGS; ri++) {
-    const ringFrac = (ri + 1) / RINGS;
-    const ringR = r * ringFrac * 0.9;
-    const clr = ri % 2 === 0 ? a : a2;
+    const ringFrac = (ri + 1) / RINGS, ringR = r * ringFrac * 0.9, clr = ri % 2 === 0 ? a : a2;
     const startAngle = ROT * (1 + ri * 0.4);
     ctx.save(); ctx.shadowColor = clr; ctx.shadowBlur = 14; ctx.strokeStyle = clr; ctx.lineWidth = 2.5 - ri * 0.3;
     ctx.beginPath();
     for (let s = 0; s <= 60; s++) {
-      const tt = s / 60;
-      const angle = tt * Math.PI * 2 + startAngle;
-      const pr = ringR * (0.6 + 0.4 * tt);
+      const tt = s / 60, angle = tt * Math.PI * 2 + startAngle, pr = ringR * (0.6 + 0.4 * tt);
       if (s === 0) ctx.moveTo(Math.cos(angle) * pr, Math.sin(angle) * pr);
       else ctx.lineTo(Math.cos(angle) * pr, Math.sin(angle) * pr);
     }
@@ -393,95 +333,63 @@ const pat_vortex: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.restore();
 };
 
-/** Crystal facets */
 const pat_crystal: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
-  const ROT = t * 0.0005;
-  const FACETS = 6;
+  const ROT = t * 0.0005, FACETS = 6;
   for (let f = 0; f < FACETS; f++) {
-    const an = (f / FACETS) * Math.PI * 2 + ROT;
-    const an2 = ((f + 1) / FACETS) * Math.PI * 2 + ROT;
-    const midAn = (an + an2) / 2;
+    const an = (f / FACETS) * Math.PI * 2 + ROT, an2 = ((f + 1) / FACETS) * Math.PI * 2 + ROT, midAn = (an + an2) / 2;
     const p1x = Math.cos(an) * r * 0.82, p1y = Math.sin(an) * r * 0.82;
     const p2x = Math.cos(an2) * r * 0.82, p2y = Math.sin(an2) * r * 0.82;
     const pmx = Math.cos(midAn) * r * 0.38, pmy = Math.sin(midAn) * r * 0.38;
-    const pulse = 0.65 + 0.35 * Math.sin(t * 0.003 + f);
-    const clr = f % 2 === 0 ? a : a2;
-    ctx.save(); ctx.shadowColor = clr; ctx.shadowBlur = 16; ctx.strokeStyle = clr; ctx.lineWidth = 2;
-    ctx.globalAlpha = al * pulse;
-    // Outer edge
+    const pulse = 0.65 + 0.35 * Math.sin(t * 0.003 + f), clr = f % 2 === 0 ? a : a2;
+    ctx.save(); ctx.shadowColor = clr; ctx.shadowBlur = 16; ctx.strokeStyle = clr; ctx.lineWidth = 2; ctx.globalAlpha = al * pulse;
     ctx.beginPath(); ctx.moveTo(p1x, p1y); ctx.lineTo(p2x, p2y); ctx.stroke();
-    // Spokes to inner point
     ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(p1x, p1y); ctx.lineTo(pmx, pmy); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(p2x, p2y); ctx.lineTo(pmx, pmy); ctx.stroke();
     ctx.shadowBlur = 0; ctx.restore();
   }
-  // Glint at center
   const glint = 1 + 0.5 * Math.sin(t * 0.007);
   ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 28 * glint; ctx.fillStyle = '#ffffff';
   ctx.beginPath(); ctx.arc(0, 0, r * 0.08 * glint, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
   ctx.restore();
 };
 
-/** Eye / iris */
 const pat_eye: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
   const BLINK = Math.max(0.2, Math.abs(Math.sin(t * 0.0006)));
-  // Eyelid shape
   const EW = r * 1.4, EH = r * 0.6 * BLINK;
   ctx.shadowColor = a; ctx.shadowBlur = 20; ctx.strokeStyle = a; ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(-EW / 2, 0);
-  ctx.quadraticCurveTo(0, -EH, EW / 2, 0);
-  ctx.quadraticCurveTo(0, EH, -EW / 2, 0);
-  ctx.stroke(); ctx.shadowBlur = 0;
-  // Iris
+  ctx.beginPath(); ctx.moveTo(-EW / 2, 0); ctx.quadraticCurveTo(0, -EH, EW / 2, 0); ctx.quadraticCurveTo(0, EH, -EW / 2, 0); ctx.stroke(); ctx.shadowBlur = 0;
   const irisR = r * 0.32 * BLINK;
   if (irisR > 4) {
     ctx.shadowColor = a2; ctx.shadowBlur = 24; ctx.strokeStyle = a2; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.arc(0, 0, irisR, 0, Math.PI * 2); ctx.stroke();
-    // Iris segments
     const ROT = t * 0.001;
     for (let i = 0; i < 8; i++) {
-      const an = (i / 8) * Math.PI * 2 + ROT;
-      ctx.strokeStyle = a2; ctx.lineWidth = 1;
+      const an = (i / 8) * Math.PI * 2 + ROT; ctx.strokeStyle = a2; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(Math.cos(an) * irisR * 0.3, Math.sin(an) * irisR * 0.3);
       ctx.lineTo(Math.cos(an) * irisR * 0.95, Math.sin(an) * irisR * 0.95); ctx.stroke();
     }
-    ctx.shadowBlur = 0;
-    // Pupil
-    ctx.shadowColor = a; ctx.shadowBlur = 18; ctx.fillStyle = a;
+    ctx.shadowBlur = 0; ctx.shadowColor = a; ctx.shadowBlur = 18; ctx.fillStyle = a;
     ctx.beginPath(); ctx.arc(0, 0, irisR * 0.32, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
   }
   ctx.restore();
 };
 
-/** Infinity symbol / ∞ with pulse */
 const pat_infinity: PFn = (ctx, t, cx, cy, r, a, a2, al) => {
   ctx.save(); ctx.globalAlpha = al; ctx.translate(cx, cy);
-  const rx = r * 0.48, ry = r * 0.26;
-  const travel = (t * 0.0015) % 1;
-  // Draw two lobes
+  const rx = r * 0.48, ry = r * 0.26, travel = (t * 0.0015) % 1;
   for (let lobe = 0; lobe < 2; lobe++) {
-    const ox = lobe === 0 ? -rx * 0.55 : rx * 0.55;
-    const clr = lobe === 0 ? a : a2;
+    const ox = lobe === 0 ? -rx * 0.55 : rx * 0.55, clr = lobe === 0 ? a : a2;
     ctx.shadowColor = clr; ctx.shadowBlur = 20; ctx.strokeStyle = clr; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.ellipse(ox, 0, rx * 0.55, ry, 0, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0;
   }
-  // Travelling pulse dot along path
-  const steps = 200;
-  let px = 0, py = 0;
+  const steps = 200; let px = 0, py = 0;
   for (let s = 0; s <= steps; s++) {
-    const tt = (s / steps + travel) % 1;
-    const an = tt * Math.PI * 2;
-    const lobe = an < Math.PI ? 0 : 1;
-    const ox = lobe === 0 ? -rx * 0.55 : rx * 0.55;
-    const la = lobe === 0 ? an : an - Math.PI;
-    if (s === Math.floor(travel * steps)) {
-      px = ox + Math.cos(la) * rx * 0.55;
-      py = Math.sin(la) * ry;
-    }
+    const tt = (s / steps + travel) % 1, an = tt * Math.PI * 2, lobe = an < Math.PI ? 0 : 1;
+    const ox = lobe === 0 ? -rx * 0.55 : rx * 0.55, la = lobe === 0 ? an : an - Math.PI;
+    if (s === Math.floor(travel * steps)) { px = ox + Math.cos(la) * rx * 0.55; py = Math.sin(la) * ry; }
   }
   ctx.shadowColor = '#ffffff'; ctx.shadowBlur = 28; ctx.fillStyle = '#ffffff';
   ctx.beginPath(); ctx.arc(px, py, 9, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
@@ -502,290 +410,293 @@ function drawCenterPattern(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SCAN LINE FROM CENTER (replaces relay laser)
+// TEXT-BURST EXPLOSION (characters fly apart)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+interface BurstEntry { text: string; cx: number; cy: number; fsz: number; color: string; seed: number; }
+
 /**
- * Draws a scanning line from center that sweeps to the keyword's angle.
- * sweepT 0→1: line sweeps from prevAngle to targetAngle
- * Once t>=1 the permanent dashed connector takes over.
+ * Draws characters from each entry flying outward — the "text shatter" effect.
+ * burstT 0→1: characters accelerate outward
  */
+function drawTextBurst(
+  ctx: DC, entries: BurstEntry[], burstT: number, accent: string,
+) {
+  if (burstT <= 0) return;
+  const et     = easeOutCubic(Math.min(burstT, 1));
+  const fadeA  = Math.max(0, 1 - burstT * burstT * 1.2);
+  if (fadeA <= 0.01) return;
+
+  ctx.save();
+  const ff = `"Noto Sans SC", sans-serif`;
+  for (const entry of entries) {
+    ctx.font = `900 ${entry.fsz}px ${ff}`;
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'middle';
+
+    const chars  = [...entry.text];
+    const widths = chars.map(c => ctx.measureText(c).width);
+    const totalW = widths.reduce((a, b) => a + b, 0);
+    let charX = entry.cx - totalW / 2;
+
+    chars.forEach((ch, ci) => {
+      const cw     = widths[ci];
+      const charCX = charX + cw / 2;
+      charX       += cw;
+
+      const cseed = entry.seed + ci * 137.5;
+      // Radial outward angle with large random spread = text shatters in all directions
+      const explosionAngle = Math.atan2(charCX - CX, entry.cy - CY) +
+        (sf(cseed) - 0.5) * Math.PI * 2.2;
+      const dist = (100 + sf(cseed * 2.3) * 800) * et;
+      const rot  = (sf(cseed * 3.7) - 0.5) * et * Math.PI * 3;
+      const tx   = charCX + Math.cos(explosionAngle) * dist;
+      const ty   = entry.cy + Math.sin(explosionAngle) * dist;
+      // Scale chars down as they fly
+      const scale = 1 + et * sf(cseed * 9.1) * 0.4;
+      const charA = fadeA * (0.65 + sf(cseed * 5.1) * 0.35);
+      if (charA <= 0.01) return;
+
+      ctx.save();
+      ctx.globalAlpha = charA;
+      ctx.translate(tx, ty);
+      ctx.rotate(rot);
+      ctx.scale(scale, scale);
+      ctx.fillStyle   = entry.color;
+      ctx.shadowColor = accent;
+      ctx.shadowBlur  = 14;
+      ctx.fillText(ch, -cw / 2, 0);
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    });
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCAN LINE FROM CENTER
+// ═══════════════════════════════════════════════════════════════════════════════
+
 function drawScanLine(
   ctx: DC,
-  elapsed: number,
   prevAngle: number,
   targetAngle: number,
-  sweepT: number,       // 0→1
+  sweepT: number,
   innerR: number,
   outerR: number,
   accent: string,
 ) {
   if (sweepT <= 0) return;
-  const SWEEP_DUR = 0.45;  // first 45% is sweep, then lock
-  let currentAngle: number;
-  let alpha = 1;
+  const SWEEP_DUR = 0.45;
+  let currentAngle: number, beamAlpha: number;
 
   if (sweepT < SWEEP_DUR) {
-    const t = sweepT / SWEEP_DUR;
-    currentAngle = lerp(prevAngle, targetAngle, easeOutCubic(t));
-    alpha = sweepT / SWEEP_DUR;
+    currentAngle = lerp(prevAngle, targetAngle, easeOutCubic(sweepT / SWEEP_DUR));
+    beamAlpha    = sweepT / SWEEP_DUR;
   } else {
     currentAngle = targetAngle;
-    // Fade out the scan line after locking (connector takes over)
-    alpha = Math.max(0, 1 - (sweepT - SWEEP_DUR) / (1 - SWEEP_DUR) * 1.2);
+    beamAlpha    = Math.max(0, 1 - (sweepT - SWEEP_DUR) / (1 - SWEEP_DUR) * 1.3);
   }
+  if (beamAlpha <= 0.01) return;
 
-  if (alpha <= 0.01) return;
+  const tipX = CX + Math.cos(currentAngle) * outerR, tipY = CY + Math.sin(currentAngle) * outerR;
+  const basX = CX + Math.cos(currentAngle) * innerR, basY = CY + Math.sin(currentAngle) * innerR;
 
-  const tipX = CX + Math.cos(currentAngle) * outerR;
-  const tipY = CY + Math.sin(currentAngle) * outerR;
-  const baseX = CX + Math.cos(currentAngle) * innerR;
-  const baseY = CY + Math.sin(currentAngle) * innerR;
+  ctx.save(); ctx.globalAlpha = beamAlpha;
 
-  ctx.save();
-  ctx.globalAlpha = alpha;
-
-  // Glow sector trail
-  ctx.save();
-  ctx.translate(CX, CY);
-  const trailAngle = Math.PI / 10;
-  const trailGrad = ctx.createLinearGradient(0, 0, Math.cos(currentAngle - CX/CX) * outerR, 0);
-  trailGrad.addColorStop(0, hex2rgba(accent, 0));
-  trailGrad.addColorStop(1, hex2rgba(accent, 0.25 * alpha));
-  ctx.fillStyle = trailGrad;
-  ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.arc(0, 0, outerR, currentAngle - trailAngle * 0.7, currentAngle, false);
-  ctx.closePath();
-  ctx.fill();
+  // Sweep trail
+  ctx.save(); ctx.translate(CX, CY);
+  const trailSector = Math.PI / 10;
+  const sgrad = ctx.createLinearGradient(0, 0, outerR, 0);
+  sgrad.addColorStop(0, hex2rgba(accent, 0)); sgrad.addColorStop(1, hex2rgba(accent, 0.22 * beamAlpha));
+  ctx.fillStyle = sgrad;
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, outerR, currentAngle - trailSector, currentAngle, false); ctx.closePath(); ctx.fill();
   ctx.restore();
 
-  // Main beam line
-  const grad = ctx.createLinearGradient(baseX, baseY, tipX, tipY);
-  grad.addColorStop(0, hex2rgba(accent, 0.2));
-  grad.addColorStop(0.6, hex2rgba(accent, 0.8));
-  grad.addColorStop(1, '#ffffff');
-  ctx.shadowColor = accent; ctx.shadowBlur = 26;
-  ctx.strokeStyle = grad; ctx.lineWidth = 3; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(baseX, baseY); ctx.lineTo(tipX, tipY); ctx.stroke();
+  // Main beam
+  const bgrad = ctx.createLinearGradient(basX, basY, tipX, tipY);
+  bgrad.addColorStop(0, hex2rgba(accent, 0.2)); bgrad.addColorStop(0.6, hex2rgba(accent, 0.85)); bgrad.addColorStop(1, '#ffffff');
+  ctx.shadowColor = accent; ctx.shadowBlur = 28; ctx.strokeStyle = bgrad; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(basX, basY); ctx.lineTo(tipX, tipY); ctx.stroke();
 
-  // Arrowhead at tip
-  const AH = 18;
-  const aBack = currentAngle + Math.PI;
-  const a1 = aBack - 0.4, a2 = aBack + 0.4;
+  // Arrowhead
+  const AH = 18, aBack = currentAngle + Math.PI;
   ctx.fillStyle = '#ffffff'; ctx.shadowBlur = 18;
-  ctx.beginPath();
-  ctx.moveTo(tipX, tipY);
-  ctx.lineTo(tipX + Math.cos(a1) * AH, tipY + Math.sin(a1) * AH);
-  ctx.lineTo(tipX + Math.cos(a2) * AH, tipY + Math.sin(a2) * AH);
+  ctx.beginPath(); ctx.moveTo(tipX, tipY);
+  ctx.lineTo(tipX + Math.cos(aBack - 0.4) * AH, tipY + Math.sin(aBack - 0.4) * AH);
+  ctx.lineTo(tipX + Math.cos(aBack + 0.4) * AH, tipY + Math.sin(aBack + 0.4) * AH);
   ctx.closePath(); ctx.fill();
-
-  ctx.shadowBlur = 0;
-  ctx.restore();
+  ctx.shadowBlur = 0; ctx.restore();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PHASE 1: RADIAL KEYWORD LABELS with border L→R
+// PHASE 1: RADIAL LABEL BOX (keyword label + short sentence, same box)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/** Compute the text group layout (number left of label, no overlap) */
-function measureTextGroup(
-  ctx: DC, numStr: string, label: string, fsz: number,
-): { numW: number; labelW: number; totalW: number } {
-  ctx.font = `700 ${fsz}px "Noto Sans SC", sans-serif`;
-  const numW   = ctx.measureText(numStr).width;
-  const labelW = ctx.measureText(label).width;
-  return { numW, labelW, totalW: numW + 6 + labelW };
+interface LabelBoxLayout {
+  bx: number; by: number; bw: number; bh: number;
+  labelLineW: number; numW: number; labelFsz: number; shortFsz: number;
+  shortLines: string[]; PAD_X: number; PAD_Y: number; SEP: number;
+}
+
+function measureLabelBox(
+  ctx: DC, numStr: string, label: string, short: string,
+  labelFsz: number, shortFsz: number,
+  angle: number,
+): LabelBoxLayout {
+  const ff       = `"Noto Sans SC", sans-serif`;
+  const PAD_X = 20, PAD_Y = 16, SEP = 10;
+
+  ctx.font = `700 ${labelFsz}px ${ff}`;
+  const numW    = ctx.measureText(numStr).width;
+  const labelW  = ctx.measureText(label).width;
+  const labelLineW = numW + 6 + labelW;
+
+  ctx.font = `600 ${shortFsz}px ${ff}`;
+  const maxShortW = MAX_BOX_W - PAD_X * 2;
+  const shortLines = short ? wrapText(ctx, short, maxShortW) : [];
+  const shortMaxW  = shortLines.reduce((mx, ln) => Math.max(mx, ctx.measureText(ln).width), 0);
+
+  const innerW = Math.min(MAX_BOX_W - PAD_X * 2, Math.max(labelLineW, shortMaxW));
+  const bw = innerW + PAD_X * 2;
+  const bh = PAD_Y + labelFsz +
+    (shortLines.length > 0 ? SEP + 1 + SEP + shortLines.length * (shortFsz + 4) - 4 : 0) +
+    PAD_Y;
+
+  // Anchor on inner edge (closest to center) at NODE_R + 14
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  const anchorX = CX + cosA * (NODE_R + 14), anchorY = CY + sinA * (NODE_R + 14);
+
+  let bx: number, by: number;
+  if (cosA > 0.15) {        bx = anchorX;         by = anchorY - bh / 2; }   // right
+  else if (cosA < -0.15) {  bx = anchorX - bw;    by = anchorY - bh / 2; }   // left
+  else if (sinA < 0)  {     bx = anchorX - bw / 2; by = anchorY - bh; }      // top
+  else                {     bx = anchorX - bw / 2; by = anchorY; }            // bottom
+
+  return { bx, by, bw, bh, labelLineW, numW, labelFsz, shortFsz, shortLines, PAD_X, PAD_Y, SEP };
 }
 
 function drawRadialLabel(
   ctx: DC,
-  elapsed: number,
   i: number,
   n: number,
   label: string,
+  short: string,
   enterT: number,
   alpha: number,
-  borderProgress: number,   // 0→1 left-to-right border draw
+  borderProgress: number,
   accent: string,
   r: ReturnType<typeof resolveOpts>,
-) {
-  const { cx, cy, nx, ny, angle } = labelPos(i, n);
-  const eased = easeOutBack(Math.min(enterT, 0.999));
-  const fsz   = r.radialFsz;
-  const ff    = `"Noto Sans SC", sans-serif`;
-  const numStr = String(i + 1).padStart(2, '0');
+): LabelBoxLayout {
+  const { angle } = labelPos(i, n);
+  const eased     = easeOutBack(Math.min(enterT, 0.999));
+  const numStr    = String(i + 1).padStart(2, '0');
+  const ff        = `"Noto Sans SC", sans-serif`;
 
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.font = `700 ${fsz}px ${ff}`;
+  const L = measureLabelBox(ctx, numStr, label, short, r.radialFsz, r.radialShortFsz, angle);
+  const { bx, by, bw, bh, numW, PAD_X, PAD_Y, SEP, shortLines } = L;
 
-  const { numW, labelW, totalW } = measureTextGroup(ctx, numStr, label, fsz);
-  const PAD_X = 16, PAD_Y = 10;
-  const boxH  = fsz + PAD_Y * 2;
+  // Slide-in offset
+  const slideOff = (1 - eased) * 65;
+  const sbx = bx + Math.cos(angle) * slideOff;
+  const sby = by + Math.sin(angle) * slideOff;
 
-  // Slide-in offset (comes from outside, moves to settled cx/cy)
-  const slideOff = (1 - eased) * 60;
-  const tx = cx + Math.cos(angle) * slideOff;
-  const ty = cy + Math.sin(angle) * slideOff;
+  ctx.save(); ctx.globalAlpha = alpha;
 
-  // Determine side: right (>0.15), left (<-0.15), center
-  const cosA = Math.cos(angle);
-  const isRight  = cosA > 0.15;
-  const isLeft   = cosA < -0.15;
-  const isCenter = !isRight && !isLeft;
-
-  // Compute group anchor such that text never overlaps
-  // Group: [numStr][GAP][label] drawn left-to-right regardless of side
-  let groupStartX: number;
-  if (isRight) {
-    // node is at left edge, text grows right
-    groupStartX = tx + 14;
-  } else if (isLeft) {
-    // node is at right edge, text grows left (reversed)
-    groupStartX = tx - 14 - totalW;
-  } else {
-    // top/bottom: center the group on tx
-    groupStartX = tx - totalW / 2;
-  }
-
-  const textY = ty;
-  const BOX_BORDER_R = 10;
-
-  // ── Border box (draws from left to right) ──────────────────────────────────
+  // Border draws left → right (clip to partial width)
   if (borderProgress > 0.02 && eased > 0.4) {
-    const bx  = groupStartX - PAD_X;
-    const by  = textY - fsz / 2 - PAD_Y;
-    const bw  = totalW + PAD_X * 2;
-    const clipW = bw * borderProgress;
-
     ctx.save();
-    ctx.beginPath();
-    ctx.rect(bx - 2, by - 2, clipW + 4, boxH + 4);
-    ctx.clip();
-    ctx.shadowColor  = accent;
-    ctx.shadowBlur   = 14;
-    ctx.strokeStyle  = accent;
-    ctx.lineWidth    = 2;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, bw, boxH, BOX_BORDER_R);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.restore();
+    ctx.beginPath(); ctx.rect(sbx - 2, sby - 2, (bw + 4) * borderProgress, bh + 4); ctx.clip();
+    ctx.shadowColor = accent; ctx.shadowBlur = 16;
+    ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(sbx, sby, bw, bh, 10); ctx.stroke();
+    ctx.shadowBlur = 0; ctx.restore();
   }
 
-  // ── Number (accent color) ──────────────────────────────────────────────────
-  ctx.font         = `700 ${fsz}px ${ff}`;
-  ctx.textAlign    = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle    = r.radialNumClr;
-  ctx.shadowColor  = r.radialNumClr;
-  ctx.shadowBlur   = 18;
-  ctx.fillText(numStr, groupStartX, textY);
+  if (eased > 0.3) {
+    const textA = clamp((eased - 0.3) / 0.7, 0, 1);
+    ctx.globalAlpha = alpha * textA;
 
-  // ── Label (white) ──────────────────────────────────────────────────────────
-  ctx.fillStyle   = r.radialClr;
-  ctx.shadowColor = r.radialClr;
-  ctx.shadowBlur  = 10;
-  ctx.fillText(label, groupStartX + numW + 6, textY);
-  ctx.shadowBlur = 0;
+    // Number in accent color
+    ctx.font = `700 ${r.radialFsz}px ${ff}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = r.radialNumClr; ctx.shadowColor = r.radialNumClr; ctx.shadowBlur = 16;
+    ctx.fillText(numStr, sbx + PAD_X, sby + PAD_Y);
 
+    // Label
+    ctx.fillStyle = r.radialClr; ctx.shadowColor = r.radialClr; ctx.shadowBlur = 8;
+    ctx.fillText(label, sbx + PAD_X + numW + 6, sby + PAD_Y);
+    ctx.shadowBlur = 0;
+
+    // Short sentence
+    if (shortLines.length > 0) {
+      const sepY = sby + PAD_Y + r.radialFsz + SEP;
+      ctx.save(); ctx.globalAlpha = alpha * textA * 0.4;
+      ctx.strokeStyle = accent; ctx.lineWidth = 1; ctx.setLineDash([3, 6]);
+      ctx.beginPath(); ctx.moveTo(sbx + PAD_X, sepY); ctx.lineTo(sbx + bw - PAD_X, sepY); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+
+      ctx.font = `600 ${r.radialShortFsz}px ${ff}`;
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillStyle = r.radialShortClr; ctx.shadowColor = accent; ctx.shadowBlur = 8;
+      shortLines.forEach((line, li) => ctx.fillText(line, sbx + PAD_X, sepY + SEP + li * (r.radialShortFsz + 4)));
+      ctx.shadowBlur = 0;
+    }
+  }
   ctx.restore();
+  return { ...L, bx: sbx, by: sby };
 }
 
-/** Draw the permanent dashed connector + node dot after scan settles */
-function drawConnector(
-  ctx: DC, i: number, n: number, alpha: number, accent: string,
-) {
+/** Draw dashed connector + node dot */
+function drawConnector(ctx: DC, i: number, n: number, alpha: number, accent: string) {
   if (alpha <= 0.05) return;
   const { nx, ny, angle } = labelPos(i, n);
-  const lineX0 = CX + Math.cos(angle) * INNER_R;
-  const lineY0 = CY + Math.sin(angle) * INNER_R;
-
+  const lx0 = CX + Math.cos(angle) * INNER_R, ly0 = CY + Math.sin(angle) * INNER_R;
   ctx.save();
   ctx.globalAlpha = alpha * 0.55;
   ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.shadowColor = accent; ctx.shadowBlur = 6;
   ctx.setLineDash([4, 8]);
-  ctx.beginPath(); ctx.moveTo(lineX0, lineY0); ctx.lineTo(nx, ny); ctx.stroke();
-  ctx.setLineDash([]); ctx.shadowBlur = 0;
-  ctx.globalAlpha = alpha;
+  ctx.beginPath(); ctx.moveTo(lx0, ly0); ctx.lineTo(nx, ny); ctx.stroke();
+  ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.globalAlpha = alpha;
   ctx.shadowColor = accent; ctx.shadowBlur = 14; ctx.fillStyle = accent;
-  ctx.beginPath(); ctx.arc(nx, ny, 7, 0, Math.PI * 2); ctx.fill();
-  ctx.shadowBlur = 0;
+  ctx.beginPath(); ctx.arc(nx, ny, 7, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0;
   ctx.restore();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PHASE 1b: SHORT SENTENCES AT KEYWORD POSITIONS
+// PHASE 2: BURST TRANSITION (text shatter)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function drawShortAtKeyword(
-  ctx: DC,
-  i: number,
-  n: number,
-  short: string,
-  enterT: number,
-  alpha: number,
-  accent: string,
-  r: ReturnType<typeof resolveOpts>,
+function drawBurstTransition(
+  ctx: DC, burstT: number, accent: string, burstFx: string,
+  textEntries: BurstEntry[],
 ) {
-  const { cx, cy, angle } = labelPos(i, n);
-  const fsz = r.radialFsz * 0.72;
-  const ff  = `"Noto Sans SC", sans-serif`;
-
-  // Position: slightly offset from keyword (below for most, above for top labels)
-  const sinA = Math.sin(angle);
-  const offsetY = sinA < -0.3 ? -(r.radialFsz + fsz) : r.radialFsz + 8;
-
-  const eased = easeOutCubic(Math.min(enterT, 1));
-  ctx.save();
-  ctx.globalAlpha = alpha * eased;
-  ctx.font        = `600 ${fsz}px ${ff}`;
-  ctx.textAlign   = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle   = hex2rgba(accent, 0.95);
-  ctx.shadowColor = accent;
-  ctx.shadowBlur  = 16;
-  ctx.fillText(short, cx, cy + offsetY);
-  ctx.shadowBlur = 0;
-  ctx.restore();
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// PHASE 2: BURST TRANSITION
-// ═══════════════════════════════════════════════════════════════════════════════
-
-function drawBurstTransition(ctx: DC, burstT: number, accent: string, burstFx: string) {
   if (burstT <= 0 || burstT >= 1) return;
+
   switch (burstFx) {
     case 'flash': {
-      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - burstT * 2.5); ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, CW, CH); ctx.restore(); break;
+      ctx.save(); ctx.globalAlpha = Math.max(0, 1 - burstT * 2.5);
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, CW, CH); ctx.restore();
+      break;
     }
     case 'wipe': {
       ctx.save(); ctx.globalAlpha = 1 - burstT;
-      const rw = burstT * Math.hypot(CW, CH) * 0.7;
-      ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(CX, CY, rw, 0, Math.PI * 2); ctx.fill(); ctx.restore(); break;
+      ctx.fillStyle = accent;
+      ctx.beginPath(); ctx.arc(CX, CY, burstT * Math.hypot(CW, CH) * 0.7, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      break;
     }
     case 'shatter':
     default: {
-      const eased = easeOutCubic(burstT), fadeA = 1 - burstT * burstT;
-      ctx.save();
-      for (let s = 0; s < 20; s++) {
-        const seed = s * 1234.5;
-        const angle = sf(seed * 1.1) * Math.PI * 2;
-        const dist  = 180 + sf(seed * 2.3) * 500;
-        const rot   = (sf(seed * 3.7) - 0.5) * eased * 1.8;
-        const w = 80 + sf(seed * 4.1) * 200, h = 40 + sf(seed * 5.3) * 100;
-        const ox = CX + sf(seed * 6.1) * CW - CW / 2, oy = CY + sf(seed * 7.2) * CH - CH / 2;
-        ctx.save();
-        ctx.globalAlpha = fadeA * 0.85;
-        ctx.translate(ox + Math.cos(angle) * dist * eased, oy + Math.sin(angle) * dist * eased);
-        ctx.rotate(rot);
-        ctx.fillStyle = hex2rgba(accent, 0.6 + sf(seed * 8.3) * 0.4); ctx.shadowColor = accent; ctx.shadowBlur = 18;
-        ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 6); ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
+      // Text characters shatter outward
+      drawTextBurst(ctx, textEntries, burstT, accent);
+      // White flash overlay
+      const flashA = Math.max(0, 0.6 - burstT * 1.8);
+      if (flashA > 0) {
+        ctx.save(); ctx.globalAlpha = flashA;
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, CW, CH);
+        ctx.restore();
       }
-      ctx.restore(); break;
+      break;
     }
   }
 }
@@ -794,16 +705,13 @@ function drawBurstTransition(ctx: DC, burstT: number, accent: string, burstFx: s
 // PHASE 3: KEYWORD BOX + DESC
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const KW_BOX_X   = 60;
-const KW_BOX_W   = 490;
-const KW_TOP_Y   = 100;
+const KW_BOX_X  = 60, KW_BOX_W = 490, KW_TOP_Y = 100;
 const DESC_COL_X = KW_BOX_X + KW_BOX_W + 48;
 const DESC_COL_W = CW - DESC_COL_X - 60;
 
-function itemRowY(i: number, n: number): number {
+function itemRowY(i: number, n: number) {
   const AVAIL = CH - KW_TOP_Y - 80;
-  const step  = Math.min(100, AVAIL / Math.max(n, 1));
-  return KW_TOP_Y + i * step + step * 0.5;
+  return KW_TOP_Y + (i + 0.5) * Math.min(100, AVAIL / Math.max(n, 1));
 }
 
 function drawKwBox(
@@ -816,14 +724,11 @@ function drawKwBox(
   const ff    = `"Noto Sans SC", sans-serif`;
 
   ctx.font = `700 ${fsz}px ${ff}`;
-  const numW  = ctx.measureText(numStr).width;
-  const labW  = ctx.measureText(label).width;
+  const numW = ctx.measureText(numStr).width, labW = ctx.measureText(label).width;
   const PAD_X = 24, PAD_Y = 14;
-  const textW = numW + 6 + labW;
-  const boxW  = Math.min(KW_BOX_W, textW + PAD_X * 2);
+  const boxW  = Math.min(KW_BOX_W, numW + 6 + labW + PAD_X * 2);
   const boxH  = fsz + PAD_Y * 2;
-  const bx    = KW_BOX_X, by = rowY - boxH / 2;
-  const bc    = r.kwBoxBorderClr;
+  const bx = KW_BOX_X, by = rowY - boxH / 2, bc = r.kwBoxBorderClr;
   const eased = easeOutBack(Math.min(enterT, 0.999));
   const alpha = clamp(enterT * 2, 0, 1);
 
@@ -832,12 +737,10 @@ function drawKwBox(
     ctx.fillStyle = hex2rgba(bc, r.kwBoxBgA);
     ctx.beginPath(); ctx.roundRect(bx, by, boxW * eased, boxH, r.kwBoxBR); ctx.fill();
   }
-  // Border draws from left
-  ctx.save();
-  ctx.beginPath(); ctx.rect(bx - 4, by - 4, (boxW + 8) * eased, boxH + 8); ctx.clip();
+  // Border draws left → right
+  ctx.save(); ctx.beginPath(); ctx.rect(bx - 4, by - 4, (boxW + 8) * eased, boxH + 8); ctx.clip();
   ctx.shadowColor = bc; ctx.shadowBlur = 18 + highlightT * 20; ctx.strokeStyle = bc; ctx.lineWidth = r.kwBoxBW;
-  ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, r.kwBoxBR); ctx.stroke();
-  ctx.shadowBlur = 0; ctx.restore();
+  ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, r.kwBoxBR); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
 
   if (eased > 0.3) {
     ctx.globalAlpha = alpha * clamp((eased - 0.3) / 0.7, 0, 1);
@@ -845,32 +748,30 @@ function drawKwBox(
     ctx.fillStyle = bc; ctx.shadowColor = bc; ctx.shadowBlur = 14 + highlightT * 10;
     ctx.fillText(numStr, bx + PAD_X, rowY);
     ctx.fillStyle = r.kwBoxClr; ctx.shadowColor = r.kwBoxClr; ctx.shadowBlur = 8;
-    ctx.fillText(label, bx + PAD_X + numW + 6, rowY);
-    ctx.shadowBlur = 0;
+    ctx.fillText(label, bx + PAD_X + numW + 6, rowY); ctx.shadowBlur = 0;
   }
   ctx.restore();
 }
 
 function drawDescItem(
-  ctx: DC, i: number, n: number, desc: string, te: number,
-  accent: string, r: ReturnType<typeof resolveOpts>,
+  ctx: DC, i: number, n: number, desc: string, te: number, accent: string, r: ReturnType<typeof resolveOpts>,
 ) {
-  const rowY  = itemRowY(i, n);
-  const fsz   = r.descFsz;
+  const rowY = itemRowY(i, n);
+  const fsz  = r.descFsz;
   ctx.font = `400 ${fsz}px "Noto Sans SC", sans-serif`;
   const lines = wrapText(ctx, desc, DESC_COL_W).slice(0, 3);
   const lineH = fsz + 8;
-  let alpha = 1, offsetX = 0, clipChars = desc.length;
+  let alpha = 1, offsetX = 0;
   switch (r.descEnter) {
     case 'fadeIn':     alpha = easeOutCubic(clamp(te / 500, 0, 1)); break;
     case 'slideRight': alpha = clamp(te / 400, 0, 1); offsetX = lerp(60, 0, easeOutCubic(clamp(te / 500, 0, 1))); break;
-    default:           clipChars = Math.min(Math.floor(te / 38), desc.length);
   }
+  const clipChars = r.descEnter === 'typewriter' ? Math.min(Math.floor(te / 38), desc.length) : desc.length;
   ctx.save(); ctx.globalAlpha = alpha;
   ctx.font = `400 ${fsz}px "Noto Sans SC", sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillStyle = r.descClr; ctx.shadowColor = accent; ctx.shadowBlur = 6;
-  let charCount = 0;
   const startY = rowY - ((lines.length - 1) * lineH) / 2;
+  let charCount = 0;
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li], lineY = startY + li * lineH;
     if (r.descEnter === 'typewriter') {
@@ -886,7 +787,7 @@ function drawDescItem(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// PHASE 4: GRID
+// PHASE 4: GRID (with text-burst explosion)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function drawGridCell(
@@ -895,60 +796,69 @@ function drawGridCell(
   r: ReturnType<typeof resolveOpts>, seed: number,
 ) {
   const { cx, cy, w, h } = cell;
-  let tx = 0, ty = 0, rot = 0, exAlpha = 1;
-  if (explodeT > 0) {
-    const et = easeOutCubic(explodeT);
-    const angle = sf(seed * 127.1) * Math.PI * 2;
-    const dist  = 280 + sf(seed * 311.7) * 500;
-    switch (r.gridExplode) {
-      case 'scatter':  tx = Math.cos(angle) * dist * et; ty = Math.sin(angle) * dist * et; rot = angle * et * 0.5; break;
-      case 'implode':  tx = (CX - cx) * et * 0.8; ty = (CY - cy) * et * 0.8; rot = et * 2; break;
-      default:         tx = Math.cos(angle) * dist * et; ty = Math.sin(angle) * dist * et - 100 * et; rot = (angle > Math.PI ? 1 : -1) * et * 1.5;
+
+  // ── Normal enter animation ────────────────────────────────────────────────
+  let entAlpha = 1;
+  if (explodeT <= 0) {
+    switch (r.gridEnter) {
+      case 'zoomIn':  entAlpha = clamp(enterT * 3, 0, 1); break;
+      case 'flipIn':  entAlpha = clamp(enterT * 2, 0, 1); break;
+      case 'slideUp': entAlpha = clamp(enterT * 2, 0, 1); break;
+      default:        entAlpha = easeOutCubic(enterT);
     }
-    exAlpha = Math.max(0, 1 - explodeT * explodeT);
-    if (exAlpha <= 0.01) return;
+    let scaleE = 1, slideOffY = 0;
+    switch (r.gridEnter) {
+      case 'zoomIn':  scaleE = lerp(0.1, 1, easeOutBack(Math.min(enterT, 0.999))); break;
+      case 'flipIn':  scaleE = Math.abs(Math.sin(enterT * Math.PI / 2)); break;
+      case 'slideUp': slideOffY = lerp(70, 0, easeOutCubic(enterT)); break;
+    }
+
+    ctx.save(); ctx.globalAlpha = entAlpha;
+    ctx.translate(cx, cy + slideOffY); ctx.scale(scaleE, scaleE);
+
+    // Seq number ABOVE cell
+    const numFsz = Math.min(32, h * 0.18);
+    ctx.font = `700 ${numFsz}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = r.gridNumClr; ctx.shadowColor = r.gridNumClr; ctx.shadowBlur = 12;
+    ctx.fillText(String(index + 1).padStart(2, '0'), 0, -h / 2 - numFsz * 0.7); ctx.shadowBlur = 0;
+
+    // Cell BG + border
+    const bg = ctx.createLinearGradient(-w / 2, -h / 2, -w / 2, h / 2);
+    bg.addColorStop(0, hex2rgba(r.gridBorderClr, 0.18)); bg.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = bg; ctx.shadowColor = r.gridBorderClr; ctx.shadowBlur = 20 + 8 * Math.sin(elapsed * 0.003 + seed);
+    ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.fill();
+    ctx.strokeStyle = r.gridBorderClr; ctx.lineWidth = 2.5; ctx.shadowBlur = 16;
+    ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.stroke(); ctx.shadowBlur = 0;
+
+    // Keyword text
+    const kwFsz = Math.min(r.gridKwFsz, h * 0.36);
+    ctx.font = `900 ${kwFsz}px "Noto Sans SC", sans-serif`; ctx.fillStyle = r.gridKwClr;
+    ctx.shadowColor = r.gridKwClr; ctx.shadowBlur = 14;
+    ctx.fillText(point.label, 0, -h * 0.1); ctx.shadowBlur = 0;
+
+    if (point.short) {
+      const sepY = h * 0.18;
+      ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = r.gridBorderClr; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(-w / 2 + 16, sepY); ctx.lineTo(w / 2 - 16, sepY); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+      const sFsz = Math.min(r.gridShortFsz, h * 0.22);
+      ctx.font = `600 ${sFsz}px "Noto Sans SC", sans-serif`; ctx.fillStyle = r.gridShortClr; ctx.shadowColor = r.gridBorderClr; ctx.shadowBlur = 8;
+      wrapText(ctx, point.short, w - 24).slice(0, 2).forEach((line, li) => ctx.fillText(line, 0, h * 0.35 + li * (sFsz + 5)));
+      ctx.shadowBlur = 0;
+    }
+    ctx.restore();
+    return;
   }
-  let scaleE = 1, entAlpha = 1;
-  switch (r.gridEnter) {
-    case 'zoomIn':  scaleE = lerp(0.1, 1, easeOutBack(Math.min(enterT, 0.999))); entAlpha = clamp(enterT * 3, 0, 1); break;
-    case 'flipIn':  scaleE = Math.abs(Math.sin(enterT * Math.PI / 2)); entAlpha = clamp(enterT * 2, 0, 1); break;
-    case 'slideUp': ty += lerp(70, 0, easeOutCubic(enterT)); entAlpha = clamp(enterT * 2, 0, 1); break;
-    default:        entAlpha = easeOutCubic(enterT);
-  }
-  if (Math.min(entAlpha, exAlpha) <= 0.01) return;
-  ctx.save(); ctx.globalAlpha = Math.min(entAlpha, exAlpha);
-  ctx.translate(cx + tx, cy + ty); ctx.rotate(rot); ctx.scale(scaleE, scaleE);
 
-  // Seq number ABOVE cell
-  const numFsz = Math.min(32, h * 0.18);
-  ctx.font = `700 ${numFsz}px monospace`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = r.gridNumClr; ctx.shadowColor = r.gridNumClr; ctx.shadowBlur = 12;
-  ctx.fillText(String(index + 1).padStart(2, '0'), 0, -h / 2 - numFsz * 0.7); ctx.shadowBlur = 0;
-
-  // Cell BG + border
-  const bg = ctx.createLinearGradient(-w / 2, -h / 2, -w / 2, h / 2);
-  bg.addColorStop(0, hex2rgba(r.gridBorderClr, 0.18)); bg.addColorStop(1, 'rgba(0,0,0,0.65)');
-  ctx.fillStyle = bg; ctx.shadowColor = r.gridBorderClr; ctx.shadowBlur = 20 + 8 * Math.sin(elapsed * 0.003 + seed);
-  ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.fill();
-  ctx.strokeStyle = r.gridBorderClr; ctx.lineWidth = 2.5; ctx.shadowBlur = 16;
-  ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.stroke(); ctx.shadowBlur = 0;
-
-  // Keyword
+  // ── Explosion: characters fly apart ──────────────────────────────────────
   const kwFsz = Math.min(r.gridKwFsz, h * 0.36);
-  ctx.font = `900 ${kwFsz}px "Noto Sans SC", sans-serif`; ctx.fillStyle = r.gridKwClr;
-  ctx.shadowColor = r.gridKwClr; ctx.shadowBlur = 14;
-  ctx.fillText(point.label, 0, -h * 0.1); ctx.shadowBlur = 0;
-
-  if (point.short) {
-    const sepY = h * 0.18;
-    ctx.save(); ctx.globalAlpha = 0.55; ctx.strokeStyle = r.gridBorderClr; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(-w / 2 + 16, sepY); ctx.lineTo(w / 2 - 16, sepY); ctx.stroke(); ctx.setLineDash([]); ctx.restore();
-    const sFsz = Math.min(r.gridShortFsz, h * 0.22);
-    ctx.font = `600 ${sFsz}px "Noto Sans SC", sans-serif`; ctx.fillStyle = r.gridShortClr; ctx.shadowColor = r.gridBorderClr; ctx.shadowBlur = 8;
-    wrapText(ctx, point.short, w - 24).slice(0, 2).forEach((line, li) => ctx.fillText(line, 0, h * 0.35 + li * (sFsz + 5)));
-    ctx.shadowBlur = 0;
-  }
-  ctx.restore();
+  drawTextBurst(ctx, [{
+    text:  point.label,
+    cx,
+    cy:    cy - h * 0.1,
+    fsz:   kwFsz,
+    color: r.gridKwClr,
+    seed,
+  }], explodeT, accent);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -970,22 +880,20 @@ export function drawAITechCards(
   const r        = resolveOpts(aitechOpts, accent);
   const PAT_R    = 155;
   const pattern  = pickPattern(displayN, r.centerPattern);
+  const SCAN_DUR = 400;
 
-  const { p1Start, p1bStart, p2Start, p3Start, p4Start } = aiTechPhases(displayN);
-  const SCAN_DUR = 400;  // ms for scan line to sweep to target
+  const { p1Start, p2Start, p3Start, p4Start } = aiTechPhases(displayN);
 
-  // Phase detection
   const inP4    = elapsed >= p4Start;
   const inP3    = !inP4 && elapsed >= p3Start;
   const inBurst = !inP3 && !inP4 && elapsed >= p2Start;
-  const inP1b   = !inBurst && !inP3 && !inP4 && elapsed >= p1bStart;
-  const inP1    = !inP1b && !inBurst && !inP3 && !inP4;
+  const inP1    = !inBurst && !inP3 && !inP4;
 
-  // ── PHASE 4: Grid ────────────────────────────────────────────────────────────
+  // ── PHASE 4: Grid ────────────────────────────────────────────────────────
   if (inP4) {
-    const cells   = computeGrid(displayN);
-    const allInMs = AT.gridStagger * (displayN - 1) + 400;
-    const exStart = p4Start + allInMs + 200 + AT.gridHold;
+    const cells    = computeGrid(displayN);
+    const allInMs  = AT.gridStagger * (displayN - 1) + 400;
+    const exStart  = p4Start + allInMs + 200 + AT.gridHold;
 
     const hdrAlpha = clamp((elapsed - p4Start) / 400, 0, 1);
     if (hdrAlpha > 0) {
@@ -995,7 +903,7 @@ export function drawAITechCards(
       ctx.fillText(content.title, CX, 90); ctx.shadowBlur = 0; ctx.restore();
     }
     for (let i = 0; i < displayN; i++) {
-      const te = elapsed - (p4Start + i * AT.gridStagger);
+      const te      = elapsed - (p4Start + i * AT.gridStagger);
       if (te <= 0) continue;
       const explodeT = elapsed >= exStart ? clamp((elapsed - exStart) / AT.explodeDur, 0, 1) : 0;
       drawGridCell(ctx, cells[i], content.points[i], i, clamp(te / 400, 0, 1), explodeT, elapsed, accent, r, i * 1234.5);
@@ -1003,24 +911,33 @@ export function drawAITechCards(
     return;
   }
 
-  // ── BURST TRANSITION ─────────────────────────────────────────────────────────
+  // ── BURST TRANSITION ─────────────────────────────────────────────────────
   if (inBurst) {
     const burstT = clamp((elapsed - p2Start) / AT.burstDur, 0, 1);
+
+    // Build text burst entries from all visible keyword labels
+    const burstEntries: BurstEntry[] = content.points.slice(0, displayN).map((pt, i) => {
+      const { cx, cy } = labelPos(i, displayN);
+      return { text: pt.label, cx, cy, fsz: r.radialFsz, color: r.radialClr, seed: i * 77.3 };
+    });
+
+    // Faded radial background
     const radialFade = 1 - easeOutCubic(burstT);
     if (radialFade > 0.02) {
       ctx.save(); ctx.globalAlpha = radialFade;
       for (let i = 0; i < displayN; i++) {
-        drawConnector(ctx, i, displayN, 0.8, accent);
-        drawRadialLabel(ctx, elapsed, i, displayN, content.points[i].label, 1, 0.7, 1, accent, r);
+        drawConnector(ctx, i, displayN, 0.7, accent);
+        drawRadialLabel(ctx, i, displayN, content.points[i].label, content.points[i].short ?? '', 1, 0.6, 1, accent, r);
       }
       drawCenterPattern(ctx, elapsed, CX, CY, PAT_R, accent, accent2, pattern, 1);
       ctx.restore();
     }
-    drawBurstTransition(ctx, burstT, accent, r.burstFx);
+
+    drawBurstTransition(ctx, burstT, accent, r.burstFx, burstEntries);
     return;
   }
 
-  // ── PHASE 3: Keyword box + desc ──────────────────────────────────────────────
+  // ── PHASE 3: Keyword boxes + desc ────────────────────────────────────────
   if (inP3) {
     const divAlpha = clamp((elapsed - p3Start) / 350, 0, 1);
     if (divAlpha > 0) {
@@ -1030,51 +947,20 @@ export function drawAITechCards(
       ctx.setLineDash([]); ctx.shadowBlur = 0; ctx.restore();
     }
     for (let i = 0; i < displayN; i++) {
-      const te        = elapsed - (p3Start + i * AT.descSlot);
-      const boxEnterT = te > 0 ? clamp(te / 450, 0, 1) : 0;
-      const boxAlpha  = te > 0 ? clamp(te / 300, 0, 1) : 0;
-      const isActive  = te >= 0 && (i === displayN - 1 || elapsed < p3Start + (i + 1) * AT.descSlot + 200);
+      const te       = elapsed - (p3Start + i * AT.descSlot);
+      const boxEnter = te > 0 ? clamp(te / 450, 0, 1) : 0;
+      const boxAlpha = te > 0 ? clamp(te / 300, 0, 1) : 0;
+      const isActive = te >= 0 && (i === displayN - 1 || elapsed < p3Start + (i + 1) * AT.descSlot + 200);
       if (boxAlpha > 0)
-        drawKwBox(ctx, i, displayN, content.points[i].label, boxEnterT, isActive ? clamp((te > 0 ? te : 0) / 300, 0, 1) : 0, accent, r);
+        drawKwBox(ctx, i, displayN, content.points[i].label, boxEnter, isActive ? clamp((te > 0 ? te : 0) / 300, 0, 1) : 0, accent, r);
       if (te > 0 && content.points[i].desc)
         drawDescItem(ctx, i, displayN, content.points[i].desc!, te, accent, r);
     }
     return;
   }
 
-  // ── PHASE 1b: Short sentences after all keywords ──────────────────────────────
-  if (inP1b) {
-    // Faint background rings
-    const ringFade = 0.35;
-    for (let ring = 1; ring <= 3; ring++) {
-      ctx.save(); ctx.globalAlpha = ringFade * (0.3 - ring * 0.04);
-      ctx.strokeStyle = ring % 2 === 0 ? accent : accent2; ctx.lineWidth = 1.2; ctx.setLineDash([4, 10]);
-      ctx.beginPath(); ctx.arc(CX, CY, RADIAL_R * (0.55 + ring * 0.16), 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]); ctx.restore();
-    }
-    // Center pattern
-    drawCenterPattern(ctx, elapsed, CX, CY, PAT_R, accent, accent2, pattern, 1);
-    // All settled keyword labels + connectors
-    for (let i = 0; i < displayN; i++) {
-      drawConnector(ctx, i, displayN, 1, accent);
-      drawRadialLabel(ctx, elapsed, i, displayN, content.points[i].label, 1, 1, 1, accent, r);
-    }
-    // Short sentences appear one by one
-    for (let i = 0; i < displayN; i++) {
-      const sStart = p1bStart + i * AT.shortSlot;
-      const te = elapsed - sStart;
-      if (te <= 0) continue;
-      const enterT = clamp(te / 400, 0, 1);
-      const alpha  = clamp(te / 250, 0, 1);
-      const point  = content.points[i];
-      if (point.short) {
-        drawShortAtKeyword(ctx, i, displayN, point.short, enterT, alpha, accent, r);
-      }
-    }
-    return;
-  }
-
-  // ── PHASE 1: Radial keywords with scan line ───────────────────────────────────
+  // ── PHASE 1: Radial keywords (label + short in same box) ─────────────────
+  if (!inP1) return;
 
   // Background rings
   const ringFade = clamp((elapsed - p1Start) / 600, 0, 1) * 0.35;
@@ -1091,26 +977,25 @@ export function drawAITechCards(
   const patAlpha = clamp((elapsed - p1Start) / 600, 0, 1);
   if (patAlpha > 0) drawCenterPattern(ctx, elapsed, CX, CY, PAT_R, accent, accent2, pattern, patAlpha);
 
-  // Keywords + scan lines
+  // Keywords one by one with scan line + box
   for (let i = 0; i < displayN; i++) {
-    const kStart = p1Start + i * AT.keywordSlot;
-    const te     = elapsed - kStart;
+    const kStart  = p1Start + i * AT.keywordSlot;
+    const te      = elapsed - kStart;
     if (te <= 0) continue;
 
-    const enterT   = clamp(te / 500, 0, 1);
-    const alpha    = clamp(te / 350, 0, 1);
-    const borderP  = clamp((te - 300) / 500, 0, 1);   // border starts 300ms after keyword begins
+    const enterT  = clamp(te / 500, 0, 1);
+    const alpha   = clamp(te / 350, 0, 1);
+    const borderP = clamp((te - 300) / 500, 0, 1);   // border animates 300ms after label
 
-    // Connector (fades in after scan)
-    const connAlpha = clamp((te - 350) / 400, 0, 1);
-    drawConnector(ctx, i, displayN, connAlpha, accent);
+    drawConnector(ctx, i, displayN, clamp((te - 350) / 400, 0, 1), accent);
 
-    // Scan line from center
-    const prevAngle = i === 0 ? labelPos(0, displayN).angle - Math.PI * 0.6 : labelPos(i - 1, displayN).angle;
-    const curAngle  = labelPos(i, displayN).angle;
-    const sweepT    = clamp(te / SCAN_DUR, 0, 1);
-    drawScanLine(ctx, elapsed, prevAngle, curAngle, sweepT, INNER_R, NODE_R + 25, accent);
+    // Scan line sweeps from prev keyword angle to current
+    const prevAngle = i === 0
+      ? labelPos(0, displayN).angle - Math.PI * 0.6
+      : labelPos(i - 1, displayN).angle;
+    const sweepT = clamp(te / SCAN_DUR, 0, 1);
+    drawScanLine(ctx, prevAngle, labelPos(i, displayN).angle, sweepT, INNER_R, NODE_R + 25, accent);
 
-    drawRadialLabel(ctx, elapsed, i, displayN, content.points[i].label, enterT, alpha, borderP, accent, r);
+    drawRadialLabel(ctx, i, displayN, content.points[i].label, content.points[i].short ?? '', enterT, alpha, borderP, accent, r);
   }
 }
