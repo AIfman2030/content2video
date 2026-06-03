@@ -80,6 +80,12 @@ export interface SubtitleOptions {
   enterAnim: SubtitleEnterAnim;
   linesPerSlide: 1 | 2 | 3 | 4 | 5 | 6;  // max visual lines per page
   highlights: SubtitleHighlight[];         // keyword → colour overrides
+  // New fields
+  customLines?: string[];          // per-line text overrides (1 override per content point)
+  lineSpacing?: number;            // extra px gap between lines (default 0)
+  gradientText?: boolean;          // enable left→right gradient on each line
+  gradientColorStart?: string;     // gradient start (empty = accentColor)
+  gradientColorEnd?: string;       // gradient end   (empty = defaultTextColor)
 }
 
 export const DEFAULT_SUBTITLE_OPTIONS: SubtitleOptions = {
@@ -91,6 +97,10 @@ export const DEFAULT_SUBTITLE_OPTIONS: SubtitleOptions = {
   enterAnim: 'slideUp',
   linesPerSlide: 3,
   highlights: [],
+  lineSpacing: 0,
+  gradientText: false,
+  gradientColorStart: '',
+  gradientColorEnd: '',
 };
 
 // ─── City style options ────────────────────────────────────────────────────────

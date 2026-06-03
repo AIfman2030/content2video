@@ -1,36 +1,37 @@
-// subtitle.ts – Movie end-credits style: one line at a time, continuous upward scroll.
+// subtitle.ts – Movie end-credits style: ONE complete sentence per line, upward scroll.
 //
 // Design:
-//  • All content lines collected and shown sequentially (no slide groups).
-//  • New line appears from below every LINE_INTERVAL ms, then scrolls upward.
-//  • `linesPerSlide` = visible window (how many past lines remain on screen at once).
-//  • After last line appears, hold everything visible for HOLD_AFTER ms.
-//  • Background is solid black (no particles, no gradient).
+//  • Each content point = exactly ONE display line (no wrapping, font auto-scales).
+//  • customLines[i] overrides the auto-generated text for that line.
+//  • New line appears every LINE_INTERVAL ms, then scrolls upward.
+//  • lineSpacing option controls gap between lines.
+//  • gradientText: each line can use a left→right gradient fill.
+//  • After last line, everything holds visible for HOLD_AFTER ms.
 
 import type { GeneratedContent, SubtitleOptions, SubtitleHighlight } from '../../types/video';
 import { DEFAULT_SUBTITLE_OPTIONS } from '../../types/video';
-import { CW, CH, clamp, easeOutCubic, wrapText } from './helpers';
+import { CW, CH, clamp, easeOutCubic } from './helpers';
 
 // ─── Timing ───────────────────────────────────────────────────────────────────
 const PRE_ROLL      = 600;    // ms before first line appears
 const LINE_INTERVAL = 1200;   // ms between each new line
 const LINE_ENTER    = 450;    // ms for entrance animation
 const LINE_YOFF     = 60;     // px starting offset for slideUp entrance
-const LINE_GAP      = 28;     // px between lines
-const HOLD_AFTER    = 2000;   // ms to hold all lines visible after last line appears
+const MAX_TEXT_W    = 1680;   // max px width — font auto-shrinks beyond this
+const HOLD_AFTER    = 2000;   // ms to hold all lines after last appears
 
-// ─── Font size by setting ────────────────────────────────────────────────────
+// ─── Font size by setting ─────────────────────────────────────────────────────
 function maxFszFor(fontSize: SubtitleOptions['fontSize']): number {
   switch (fontSize) {
     case 'sm': return 52;
     case 'md': return 68;
     case 'lg': return 88;
-    default:   return 68;  // 'auto'
+    default:   return 68;
   }
 }
 
-// ─── Build combined text per content point ────────────────────────────────────
-function buildPointText(pt: GeneratedContent['points'][number]): string {
+// ─── Build combined text per content point (exported for Index.tsx init) ─────
+export function buildPointText(pt: GeneratedContent['points'][number]): string {
   const parts: string[] = [];
   if (pt.short?.trim()) parts.push(pt.short.trim());
   if (pt.desc?.trim())  parts.push(pt.desc.trim());
@@ -38,39 +39,38 @@ function buildPointText(pt: GeneratedContent['points'][number]): string {
   return parts.join('，');
 }
 
-// ─── Collect all lines from content (requires canvas for text measurement) ───
+// ─── ONE line per content point (auto-shrink font to fit, no wrapping) ────────
 function getAllLines(
   ctx: CanvasRenderingContext2D,
   content: GeneratedContent,
-  fsz: number,
-): string[] {
-  ctx.font = `600 ${fsz}px "Noto Sans SC", sans-serif`;
-  const lines: string[] = [];
-  for (const pt of content.points) {
-    const text = buildPointText(pt);
-    if (text) lines.push(...wrapText(ctx, text, 1100));
-  }
-  return lines;
+  opts: SubtitleOptions,
+): Array<{ text: string; fsz: number }> {
+  const baseFsz = maxFszFor(opts.fontSize);
+  const result: Array<{ text: string; fsz: number }> = [];
+
+  content.points.forEach((pt, i) => {
+    const text = opts.customLines?.[i]?.trim() || buildPointText(pt);
+    if (!text) return;
+
+    ctx.font = `600 ${baseFsz}px "Noto Sans SC", sans-serif`;
+    const w   = ctx.measureText(text).width;
+    const fsz = w > MAX_TEXT_W ? Math.max(24, Math.floor(baseFsz * MAX_TEXT_W / w)) : baseFsz;
+    result.push({ text, fsz });
+  });
+
+  return result;
 }
 
-// ─── Total duration (no canvas context needed — uses char estimate) ───────────
+// ─── Total duration ───────────────────────────────────────────────────────────
 export function subtitleTotalMs(
   content: GeneratedContent,
   opts?: SubtitleOptions,
 ): number {
-  const fsz = maxFszFor(opts?.fontSize ?? 'auto');
-  // Approximate: 1 Chinese char ≈ fsz * 0.62 px wide at 1100px line width
-  const charsPerLine = Math.max(Math.round(1100 / (fsz * 0.62)), 5);
-  let lineCount = 0;
-  for (const pt of content.points) {
-    lineCount += Math.max(Math.ceil(buildPointText(pt).length / charsPerLine), 1);
-  }
-  // holdStart = after all lines have appeared + one extra interval to settle
-  const holdStart = PRE_ROLL + lineCount * LINE_INTERVAL;
-  return holdStart + HOLD_AFTER;
+  const N = content.points.filter(pt => buildPointText(pt).trim()).length;
+  return PRE_ROLL + N * LINE_INTERVAL + HOLD_AFTER;
 }
 
-// ─── Particles (kept for API compat, not used in rendering) ──────────────────
+// ─── Particles (API compat) ───────────────────────────────────────────────────
 export interface SubParticle {
   x0: number; y0: number;
   vx: number; vy: number;
@@ -78,7 +78,6 @@ export interface SubParticle {
 }
 
 export function initSubtitleParticles(rand: () => number): SubParticle[] {
-  // Still initialised by canvasEngine for API compatibility, but not drawn.
   return Array.from({ length: 40 }, () => ({
     x0: rand() * CW, y0: rand() * CH,
     vx: (rand() - 0.5) * 18, vy: (rand() - 0.5) * 18,
@@ -87,7 +86,7 @@ export function initSubtitleParticles(rand: () => number): SubParticle[] {
   }));
 }
 
-// ─── Account badge (top-left) ─────────────────────────────────────────────────
+// ─── Account badge ────────────────────────────────────────────────────────────
 function drawAccountBadge(
   ctx: CanvasRenderingContext2D,
   elapsed: number,
@@ -97,12 +96,12 @@ function drawAccountBadge(
   const a = clamp(elapsed / 600, 0, 1);
   if (a <= 0 || !titleText) return;
   ctx.save();
-  ctx.globalAlpha = a;
-  ctx.fillStyle   = titleColor;
-  ctx.shadowColor = `${titleColor}90`;
-  ctx.shadowBlur  = 10;
+  ctx.globalAlpha  = a;
+  ctx.fillStyle    = titleColor;
+  ctx.shadowColor  = `${titleColor}90`;
+  ctx.shadowBlur   = 10;
   ctx.fillRect(52, 46, 5, 58);
-  ctx.shadowBlur  = 0;
+  ctx.shadowBlur   = 0;
   ctx.font         = `700 42px "Noto Sans SC", sans-serif`;
   ctx.textAlign    = 'left';
   ctx.textBaseline = 'middle';
@@ -145,30 +144,52 @@ function lineAnimState(
   return { alpha: clamp(alpha, 0, 1), xOff, yOff, visibleChars: textLen };
 }
 
+// ─── Resolve line fill (flat color or L→R gradient) ──────────────────────────
+function lineColor(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  y: number,
+  opts: SubtitleOptions,
+  lineIndex: number,
+): string | CanvasGradient {
+  if (opts.gradientText) {
+    const w  = ctx.measureText(text).width;
+    const g  = ctx.createLinearGradient(cx - w / 2, y, cx + w / 2, y);
+    const c1 = opts.gradientColorStart || opts.accentColor;
+    const c2 = opts.gradientColorEnd   || opts.defaultTextColor;
+    g.addColorStop(0, c1);
+    g.addColorStop(1, c2);
+    return g;
+  }
+  return lineIndex % 2 === 0 ? opts.accentColor : opts.defaultTextColor;
+}
+
 // ─── Keyword-aware line renderer ──────────────────────────────────────────────
 function drawHighlightedLine(
   ctx: CanvasRenderingContext2D,
   text: string,
   cx: number,
   y: number,
-  defaultColor: string,
+  defaultFill: string | CanvasGradient,
   highlights: SubtitleHighlight[],
   glow: boolean,
+  glowColor: string,
 ) {
   const active = highlights.filter(h => h.text && text.includes(h.text));
 
   if (active.length === 0) {
-    ctx.fillStyle = defaultColor;
-    if (glow) { ctx.shadowColor = defaultColor; ctx.shadowBlur = 20; }
+    ctx.fillStyle = defaultFill;
+    if (glow) { ctx.shadowColor = glowColor; ctx.shadowBlur = 20; }
     ctx.fillText(text, cx, y);
     ctx.shadowBlur = 0;
     return;
   }
 
-  const totalW = ctx.measureText(text).width;
-  let curX     = cx - totalW / 2;
+  const totalW    = ctx.measureText(text).width;
+  let curX        = cx - totalW / 2;
   const origAlign = ctx.textAlign;
-  ctx.textAlign = 'left';
+  ctx.textAlign   = 'left';
 
   let remaining = text;
   while (remaining.length > 0) {
@@ -181,8 +202,8 @@ function drawHighlightedLine(
     if (matched !== null) {
       if (earliest > 0) {
         const seg = remaining.slice(0, earliest);
-        ctx.fillStyle = defaultColor;
-        if (glow) { ctx.shadowColor = defaultColor; ctx.shadowBlur = 20; }
+        ctx.fillStyle = defaultFill;
+        if (glow) { ctx.shadowColor = glowColor; ctx.shadowBlur = 20; }
         ctx.fillText(seg, curX, y);
         ctx.shadowBlur = 0;
         curX += ctx.measureText(seg).width;
@@ -193,8 +214,8 @@ function drawHighlightedLine(
       curX += ctx.measureText(matched.text).width;
       remaining = remaining.slice(earliest + matched.text.length);
     } else {
-      ctx.fillStyle = defaultColor;
-      if (glow) { ctx.shadowColor = defaultColor; ctx.shadowBlur = 20; }
+      ctx.fillStyle = defaultFill;
+      if (glow) { ctx.shadowColor = glowColor; ctx.shadowBlur = 20; }
       ctx.fillText(remaining, curX, y);
       ctx.shadowBlur = 0;
       break;
@@ -213,84 +234,69 @@ export function drawSubtitle(
 ) {
   const o: SubtitleOptions = opts ?? DEFAULT_SUBTITLE_OPTIONS;
 
-  // ── Solid black background ──────────────────────────────────────────────────
+  // ── Background ──────────────────────────────────────────────────────────────
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, CW, CH);
 
-  // ── Account badge (only if title is non-empty) ──────────────────────────────
+  // ── Account badge ──────────────────────────────────────────────────────────
   if (o.titleText?.trim()) {
     drawAccountBadge(ctx, elapsed, o.titleText, o.titleColor);
   }
 
-  // ── Layout ──────────────────────────────────────────────────────────────────
-  const fsz        = maxFszFor(o.fontSize);
-  const lineH      = fsz + LINE_GAP;
-  const maxVisible = o.linesPerSlide;  // visible window size
+  // ── Layout ─────────────────────────────────────────────────────────────────
+  const spacing    = o.lineSpacing ?? 0;
+  const maxVisible = o.linesPerSlide;
 
-  // Anchor Y: the settled position of the NEWEST line during the hold.
-  // We want it at CH/2 (center) so the visible block is well-centered.
-  const anchorY = Math.round(CH / 2 + lineH / 2);
-
-  // ── Collect all lines ───────────────────────────────────────────────────────
-  const allLines = getAllLines(ctx, content, fsz);
+  // Collect all lines (one per content point, font per-line auto-scaled)
+  const allLines = getAllLines(ctx, content, o);
   const N = allLines.length;
   if (N === 0) return;
 
-  // ── Hold logic ──────────────────────────────────────────────────────────────
-  // After all lines have appeared, freeze the scroll so the last state holds.
-  const holdStart = PRE_ROLL + N * LINE_INTERVAL;
-  const isHolding = elapsed >= holdStart;
+  // Derive a representative line height using the first line's font size
+  const baseFsz = allLines[0].fsz;
+  const lineH   = baseFsz + 28 + spacing;   // 28 = base gap, +lineSpacing extra
 
-  // Effective scroll progress (frozen during hold)
-  const scrollElapsed  = isHolding ? holdStart : elapsed;
+  const anchorY = Math.round(CH / 2 + lineH / 2);
+
+  // ── Hold logic ─────────────────────────────────────────────────────────────
+  const holdStart       = PRE_ROLL + N * LINE_INTERVAL;
+  const isHolding       = elapsed >= holdStart;
+  const scrollElapsed   = isHolding ? holdStart : elapsed;
   const displayProgress = (scrollElapsed - PRE_ROLL) / LINE_INTERVAL;
 
   if (displayProgress < 0) return;
 
-  // ── Draw lines ──────────────────────────────────────────────────────────────
+  // ── Draw lines ─────────────────────────────────────────────────────────────
   for (let i = 0; i < N; i++) {
-    // Skip lines not yet arrived
     if (i > displayProgress + 0.1) break;
 
-    // lineAge: 0 = just appeared, grows as scroll proceeds
+    const { text, fsz } = allLines[i];
     const lineAge = displayProgress - i;
+    const y       = anchorY - lineAge * lineH;
 
-    // Y: newest line (lineAge≈1 when frozen) is at anchorY.
-    // Each older line is lineH higher.
-    const y = anchorY - lineAge * lineH;
-
-    // Off-screen check
     if (y + fsz < 0 || y > CH + lineH) continue;
 
-    // ── Time since this line appeared ───────────────────────────────────────
     const lineTe = isHolding
-      ? LINE_INTERVAL  // fully entered
+      ? LINE_INTERVAL
       : (elapsed - PRE_ROLL) - i * LINE_INTERVAL;
 
-    // ── Entrance animation ──────────────────────────────────────────────────
     const { alpha: entryAlpha, xOff, yOff, visibleChars } =
-      lineAnimState(lineTe, o.enterAnim, allLines[i].length);
+      lineAnimState(lineTe, o.enterAnim, text.length);
 
-    // ── Window exit fade ────────────────────────────────────────────────────
-    // Lines older than maxVisible fade out (skip during hold for clean display)
     const exitAlpha = !isHolding && lineAge > maxVisible - 0.5
       ? clamp((maxVisible - lineAge) / 0.5, 0, 1)
       : 1;
-
-    // ── Top-of-screen fade ──────────────────────────────────────────────────
     const topFade = y < 90 ? clamp(y / 90, 0, 1) : 1;
 
     const alpha = entryAlpha * exitAlpha * topFade;
     if (alpha <= 0) continue;
 
-    // ── Line color ──────────────────────────────────────────────────────────
-    const color = i % 2 === 0 ? o.accentColor : o.defaultTextColor;
-    const glow  = i % 2 === 0;
+    const displayText = o.enterAnim === 'typewriter'
+      ? text.slice(0, visibleChars)
+      : text;
 
-    // ── Text (typewriter clips chars) ───────────────────────────────────────
-    const text = o.enterAnim === 'typewriter'
-      ? allLines[i].slice(0, visibleChars)
-      : allLines[i];
+    const glow      = i % 2 === 0;
+    const glowColor = i % 2 === 0 ? o.accentColor : o.defaultTextColor;
 
     ctx.save();
     ctx.globalAlpha  = alpha;
@@ -298,7 +304,8 @@ export function drawSubtitle(
     ctx.textAlign    = 'center';
     ctx.textBaseline = 'top';
 
-    drawHighlightedLine(ctx, text, CW / 2 + xOff, y + yOff, color, o.highlights ?? [], glow);
+    const fill = lineColor(ctx, displayText, CW / 2 + xOff, y + yOff, o, i);
+    drawHighlightedLine(ctx, displayText, CW / 2 + xOff, y + yOff, fill, o.highlights ?? [], glow, glowColor);
     ctx.restore();
   }
 }

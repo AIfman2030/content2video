@@ -144,6 +144,11 @@ export default function Index() {
         const result = parseSubtitleContent(text);
         setContent(result);
         setNatureContent(null);
+        // Initialize customLines so each line is editable
+        setSubtitleOptions(prev => ({
+          ...prev,
+          customLines: result.points.map(pt => (pt.desc ?? pt.short ?? pt.label ?? '').replace(/\n/g, ' ').trim()),
+        }));
       } else if (style === 'translation') {
         const englishText = await translateSentence(text.trim());
         const result: GeneratedContent = {

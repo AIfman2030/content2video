@@ -1340,6 +1340,77 @@ function SubtitlePanel({ opts, onChange, accentColor, onAccentColorChange }: {
         </p>
       </Row>
 
+      {/* ── Line spacing ─────────────────────────────────────────────────────── */}
+      <NumericSlider label="行间距" value={opts.lineSpacing ?? 0} min={0} max={120} step={4}
+        onChange={v => u({ lineSpacing: v })} />
+
+      {/* ── Gradient text ────────────────────────────────────────────────────── */}
+      <Row>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => u({ gradientText: !opts.gradientText })}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all text-left"
+            style={{
+              background: opts.gradientText ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${opts.gradientText ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.08)'}`,
+            }}
+          >
+            <div className="w-2 h-2 rounded-full" style={{ background: opts.gradientText ? opts.accentColor : 'rgba(255,255,255,0.2)' }} />
+            <span className="text-[11px] font-semibold" style={{ color: opts.gradientText ? '#fff' : 'rgba(255,255,255,0.4)' }}>渐变文字色</span>
+          </button>
+        </div>
+        {opts.gradientText && (
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>起始色</span>
+              <label className="relative w-6 h-6 rounded cursor-pointer flex-shrink-0 overflow-hidden" style={{ background: opts.gradientColorStart || opts.accentColor, border: '1px solid rgba(255,255,255,0.2)' }}>
+                <input type="color" value={opts.gradientColorStart || opts.accentColor} onChange={e => u({ gradientColorStart: e.target.value })} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+              </label>
+              <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.35)' }}>结束色</span>
+              <label className="relative w-6 h-6 rounded cursor-pointer flex-shrink-0 overflow-hidden" style={{ background: opts.gradientColorEnd || opts.defaultTextColor, border: '1px solid rgba(255,255,255,0.2)' }}>
+                <input type="color" value={opts.gradientColorEnd || opts.defaultTextColor} onChange={e => u({ gradientColorEnd: e.target.value })} className="absolute inset-0 opacity-0 w-full h-full cursor-pointer" />
+              </label>
+              <div className="flex-1 h-4 rounded" style={{ background: `linear-gradient(to right, ${opts.gradientColorStart || opts.accentColor}, ${opts.gradientColorEnd || opts.defaultTextColor})` }} />
+            </div>
+          </div>
+        )}
+      </Row>
+
+      {/* ── Per-line text editing ─────────────────────────────────────────────── */}
+      {(opts.customLines ?? []).length > 0 && (
+        <Row>
+          <Label>逐行文字编辑</Label>
+          <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            {(opts.customLines ?? []).map((line, i) => (
+              <div key={i} className="flex items-start gap-1.5">
+                <span className="text-[10px] font-mono mt-2 flex-shrink-0 w-5 text-right" style={{ color: 'rgba(255,255,255,0.25)' }}>{i + 1}</span>
+                <textarea
+                  value={line}
+                  onChange={e => {
+                    const next = [...(opts.customLines ?? [])];
+                    next[i] = e.target.value;
+                    u({ customLines: next });
+                  }}
+                  rows={2}
+                  placeholder="（留空则自动生成）"
+                  className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs text-white placeholder-white/20 outline-none resize-none transition-all"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.09)',
+                    lineHeight: '1.4',
+                  }}
+                  onFocus={e => (e.currentTarget.style.borderColor = opts.accentColor + '60')}
+                  onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)')}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            每行对应一个内容点，留空则使用自动生成的文字
+          </p>
+        </Row>
+      )}
+
     </div>
   );
 }
