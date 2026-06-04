@@ -1,10 +1,10 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
 import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions } from '../types/video';
-import { getThemeConfig } from './themes';
+import { getThemeConfig, pickChineseShapeByTitle } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
 
-import { CW, CH, seededRandom, T, totalDuration, aiTechPhases } from './engine/helpers';
+import { CW, CH, seededRandom, T, totalDuration, aiTechPhases, chineseSlideDuration } from './engine/helpers';
 import { initChineseEffects } from './engine/chinese';
 import { initCityEffects } from './engine/city';
 import { initAIEffects } from './engine/aitech';
@@ -98,7 +98,14 @@ export async function createAnimEngine(
   if (!isNature && !isSubtitle && !isTranslation && !isManga) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
-    const shapeId = shapeList[coverIndex % shapeList.length]?.id ?? shapeList[0].id;
+    // For Chinese: pick shape by content keywords; other styles cycle by coverIndex
+    const shapeId = style === 'chinese'
+      ? pickChineseShapeByTitle(
+          content.title ?? '',
+          content.points.map(p => p.label ?? ''),
+          coverIndex,
+        )
+      : shapeList[coverIndex % shapeList.length]?.id ?? shapeList[0].id;
     const shapeColor = style === 'city' ? '#f5d87a' : accent;
     const lineWidth = style === 'chinese' ? (chineseOptions?.lineWidth ?? 2) : 1.5;
     shapeImg = await loadShapeImage(style, shapeId, shapeColor, lineWidth);
@@ -139,7 +146,9 @@ export async function createAnimEngine(
             ? cityTotalMs(content.points.length)
             : style === 'aitech'
               ? aiTechPhases(content.points.length).total
-              : totalDuration(content.points.length);
+              : style === 'chinese'
+                ? chineseSlideDuration(content.points.length)
+                : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
   let lastElapsed = 0;
@@ -175,9 +184,17 @@ export async function createAnimEngine(
     }
 
     if (style === 'chinese' && chineseEffects) {
-      // Static black background (user request: no animated bg)
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, CW, CH);
+      // Clean dark gradient background (navy to near-black) matching reference design
+      const bg = ctx.createLinearGradient(0, 0, CW, CH);
+      bg.addColorStop(0, '#0b1126');
+      bg.addColorStop(0.55, '#080d1a');
+      bg.addColorStop(1, '#030508');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, CW, CH);
+      // Subtle center glow
+      const glow = ctx.createRadialGradient(CW * 0.5, CH * 0.5, 0, CW * 0.5, CH * 0.5, CW * 0.5);
+      glow.addColorStop(0, `${accent}0a`);
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow; ctx.fillRect(0, 0, CW, CH);
     } else if (style === 'city' && cityEffects) {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, CW, CH);
@@ -192,7 +209,9 @@ export async function createAnimEngine(
 
     const outroStart = (style === 'city'
       ? cityTotalMs(content.points.length)
-      : totalDuration(content.points.length)) - T.outroDur;
+      : style === 'chinese'
+        ? chineseSlideDuration(content.points.length)
+        : totalDuration(content.points.length)) - T.outroDur;
     // aitech has its own phase-5 outro built into drawAITechCards
     if (style !== 'aitech' && elapsed > outroStart) {
       drawOutro(ctx, elapsed - outroStart, content, accent, accent2, style);

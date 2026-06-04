@@ -1,7 +1,7 @@
 import { COVER_W, COVER_H, ICON_CX, ICON_CY, ICON_R, CoverOpts,
   hex2rgbaCover, drawRainbowBorder, registerCover } from './registry';
 import { loadShapeImage } from '../shapes';
-import { getShapeList } from '../themes';
+import { pickChineseShapeByTitle } from '../themes';
 
 const W = COVER_W, H = COVER_H;
 
@@ -13,13 +13,17 @@ function drawBg(ctx: CanvasRenderingContext2D) {
 }
 
 async function drawChinese(ctx: CanvasRenderingContext2D, opts: CoverOpts) {
-  const { coverIndex, accent } = opts;
+  const { coverIndex, accent, title, items } = opts;
   drawBg(ctx);
   drawRainbowBorder(ctx, W, H);
 
   try {
-    const shapes = getShapeList('chinese');
-    const shapeId = shapes[coverIndex % shapes.length]?.id ?? 'mountain';
+    // Pick shape based on content keywords — no more random circles
+    const shapeId = pickChineseShapeByTitle(
+      title ?? '',
+      items ?? [],
+      coverIndex,
+    );
     const img = await loadShapeImage('chinese', shapeId, accent, 3.0);
     const r = ICON_R;
 

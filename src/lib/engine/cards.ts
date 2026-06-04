@@ -5,6 +5,7 @@ import type {
 import { CW, CH, clamp, easeOutBack, easeOutCubic, lerp, hex2rgba, roundRect, T, PAGE_HOLD, PAGE_TRANS } from './helpers';
 import { drawCityCards } from './cards-city';
 import { drawAITechCards } from './cards-aitech';
+import { drawChineseCards } from './cards-chinese';
 
 // ── Card geometry helpers ──────────────────────────────────────────────────────
 function cardHeight(numLines: number): number {
@@ -266,10 +267,9 @@ export function drawCards(
   cityOptions?: CityOptions,
   aitechOptions?: AItechOptions,
 ) {
-  if (style === 'city')   { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex, cityOptions); return; }
-  if (style === 'aitech') { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon', aitechOptions); return; }
-
-  // ── Chinese / generic grid ──────────────────────────────────────────────────
+  if (style === 'city')    { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex, cityOptions); return; }
+  if (style === 'aitech')  { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon', aitechOptions); return; }
+  if (style === 'chinese') { drawChineseCards(ctx, elapsed, content, accent, accent2, shapeImg!, coverIndex, chineseOptions); return; }
   if (elapsed < T.cardBase) return;
 
   const lines     = resolveLines(chineseOptions);

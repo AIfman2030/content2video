@@ -101,6 +101,13 @@ export function totalDuration(pts: number) {
   return T.cardBase + numPages * (pageSlot + PAGE_HOLD) + T.cardReadDelay + T.outroDur;
 }
 
+// ── Chinese per-slide layout timing ───────────────────────────────────────────
+export const CHINESE_SLIDE_DUR = 2400;  // ms per slide (reused in cards-chinese.ts)
+
+export function chineseSlideDuration(pts: number) {
+  return T.cardBase + pts * CHINESE_SLIDE_DUR + T.cardReadDelay + T.outroDur;
+}
+
 // ── AI Tech 4-phase timing ─────────────────────────────────────────────────────
 export const AT = {
   keywordSlot: 900,    // ms per keyword in radial phase (label+short in same box)

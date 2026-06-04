@@ -238,3 +238,40 @@ export function getShapeList(style: StyleType): ShapeItem[] {
   if (style === 'translation') return [];
   return AI_SHAPES;
 }
+
+// ─── Content-aware shape picker for Chinese style ──────────────────────────────
+// Maps content keywords → most relevant shape, falls back to coverIndex cycling.
+const CHINESE_TOPIC_SHAPES: [string[], string][] = [
+  [['情感', '恋爱', '爱情', '感情', '心动', '暗恋', '脱单', '初恋', '暗恋', '恋人'], 'lotus'],
+  [['婚姻', '婚恋', '夫妻', '伴侣', '结婚', '婚礼', '离婚', '爱人'], 'peony'],
+  [['工作', '职场', '升职', '加薪', '跳槽', '事业', '老板', '员工', '职业'], 'mountain'],
+  [['赚钱', '理财', '投资', '财富', '收入', '薪资', '副业', '创收', '钱'], 'coin'],
+  [['健康', '养生', '减肥', '锻炼', '运动', '医', '身体', '亚健康', '保健'], 'taichi'],
+  [['朋友', '社交', '人际', '交往', '圈子', '朋友圈', '闺蜜'], 'crane'],
+  [['学习', '读书', '考试', '知识', '教育', '培训', '课程'], 'bamboo'],
+  [['孩子', '亲子', '家庭', '父母', '育儿', '成长', '教子'], 'pine'],
+  [['习惯', '自律', '自我', '改变', '提升', '觉醒', '成长'], 'bagua'],
+  [['成功', '梦想', '创业', '奋斗', '机遇', '未来', '目标', '理想'], 'starburst'],
+  [['中国', '传统', '国学', '文化', '历史', '古代', '古风'], 'dragon'],
+  [['喜庆', '节日', '春节', '新年', '过年', '祝福', '团圆', '元宵'], 'lantern'],
+  [['禅', '冥想', '修行', '佛', '道', '哲学', '觉悟', '修心'], 'taichi'],
+  [['运气', '福气', '招财', '好运', '风水', '吉祥'], 'fu'],
+  [['情绪', '焦虑', '压力', '内耗', '边界', '心理', '抑郁'], 'taichi'],
+  [['沟通', '表达', '说话', '语言', '谈判', '演讲', '话术'], 'seal'],
+  [['美食', '美容', '穿搭', '颜值', '生活方式', '时尚'], 'fan'],
+  [['女性', '女人', '女生', '妈妈', '姐姐', '她'], 'lotus'],
+  [['团队', '领导', '管理', '企业', '职业规划'], 'mountain'],
+  [['人性', '人心', '人生', '真相', '本质', '底层', '规律'], 'bagua'],
+];
+
+export function pickChineseShapeByTitle(
+  title: string,
+  items: string[],
+  coverIndex = 0,
+): string {
+  const text = title + items.join('');
+  for (const [keywords, shapeId] of CHINESE_TOPIC_SHAPES) {
+    if (keywords.some(kw => text.includes(kw))) return shapeId;
+  }
+  return CHINESE_SHAPES[coverIndex % CHINESE_SHAPES.length]?.id ?? 'mountain';
+}
