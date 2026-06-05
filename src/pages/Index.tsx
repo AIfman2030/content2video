@@ -64,6 +64,57 @@ function parseSubtitleContent(text: string): GeneratedContent {
   };
 }
 
+// ─── Raw mode: parse numbered text directly (no AI) ───────────────────────────
+function parseRawContent(text: string): GeneratedContent {
+  const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  // First non-numbered line is the title
+  let title = '内容';
+  let startIdx = 0;
+  if (rawLines.length > 0 && !/^\d{1,2}[.、）)]\s*/.test(rawLines[0])) {
+    title = rawLines[0];
+    startIdx = 1;
+  }
+
+  // Group lines by numbered item
+  const groups: { label: string; rest: string[] }[] = [];
+  let curLabel = '';
+  let curRest: string[] = [];
+
+  for (let i = startIdx; i < rawLines.length; i++) {
+    const line = rawLines[i];
+    const m = line.match(/^\d{1,2}[.、）)]\s*(.*)/);
+    if (m) {
+      if (curLabel) groups.push({ label: curLabel, rest: curRest });
+      curLabel = m[1].trim();
+      curRest = [];
+    } else if (curLabel) {
+      curRest.push(line);
+    }
+  }
+  if (curLabel) groups.push({ label: curLabel, rest: curRest });
+
+  // Fallback: no numbered items → treat each non-empty line as a point
+  if (groups.length === 0) {
+    return {
+      title,
+      points: rawLines.slice(startIdx).map(line => ({
+        label: line.slice(0, 20), short: line.slice(20, 50), desc: line, formatted: line,
+      })),
+    };
+  }
+
+  return {
+    title,
+    points: groups.map(g => ({
+      label: g.label,
+      short: g.rest[0] ?? '',
+      desc:  g.rest.slice(1).join('') || g.rest[0] || '',
+      formatted: [g.label, ...g.rest].join(' '),
+    })),
+  };
+}
+
 const BG_BY_STYLE: Record<StyleType, string> = {
   chinese:     'linear-gradient(160deg, #0a0a14 0%, #12121f 50%, #1a1a2e 100%)',
   city:        'linear-gradient(160deg, #0d1b2a 0%, #1a2a4a 50%, #0f1c30 100%)',
@@ -136,7 +187,7 @@ export default function Index() {
   };
 
   // ── Generate (non-manga styles) ───────────────────────────────────────────
-  const handleGenerate = async (text: string) => {
+  const handleGenerate = async (text: string, rawMode = false) => {
     setError('');
     setIsLoading(true);
     try {
@@ -161,6 +212,11 @@ export default function Index() {
         const nc = await extractNatureContent(text);
         setNatureContent(nc);
         setContent({ title: nc.title, points: [] });
+      } else if (rawMode) {
+        // Direct parse — no AI
+        const result = parseRawContent(text);
+        setContent(result);
+        setNatureContent(null);
       } else {
         const result = await extractContent(text);
         setContent(result);
@@ -177,7 +233,7 @@ export default function Index() {
   };
 
   // ── Generate manga style ──────────────────────────────────────────────────
-  const handleGenerateManga = async (text: string) => {
+  const handleGenerateManga = async (text: string, _rawMode?: boolean) => {
     if (!text.trim()) return;
     setError('');
     setMangaContent(null);
