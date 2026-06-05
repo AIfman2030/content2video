@@ -14,9 +14,10 @@ import {
 } from './helpers';
 
 const CX = CW / 2, CY = CH / 2;
-const RADIAL_R = 380;   // distance center → label anchor
-const NODE_R   = 348;   // distance center → circle node
-const INNER_R  = 165;   // inner edge of connector line
+const CY_R     = CY + 50;  // radial phase vertical center (shifted down to clear title header)
+const RADIAL_R = 315;   // distance center → label anchor
+const NODE_R   = 290;   // distance center → circle node
+const INNER_R  = 138;   // inner edge of connector line
 const MAX_BOX_W = 530;  // max radial label box width
 
 // ── Resolved options ───────────────────────────────────────────────────────────
@@ -54,14 +55,19 @@ function sf(seed: number) {
   return (((Math.sin(seed * 0.9999) * 43758.5) % 1) + 1) % 1;
 }
 
+// ── Multi-frequency flicker (0 → 1, irregular) ────────────────────────────────
+function flk(t: number, seed: number): number {
+  return Math.abs(Math.sin(t * 0.019 + seed) * Math.sin(t * 0.034 + seed * 2.3));
+}
+
 // ── Radial keyword positions ───────────────────────────────────────────────────
 function labelPos(i: number, n: number) {
   const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
   return {
-    cx:    CX + Math.cos(angle) * RADIAL_R,
-    cy:    CY + Math.sin(angle) * RADIAL_R,
-    nx:    CX + Math.cos(angle) * NODE_R,
-    ny:    CY + Math.sin(angle) * NODE_R,
+    cx:    CX   + Math.cos(angle) * RADIAL_R,
+    cy:    CY_R + Math.sin(angle) * RADIAL_R,
+    nx:    CX   + Math.cos(angle) * NODE_R,
+    ny:    CY_R + Math.sin(angle) * NODE_R,
     angle,
   };
 }
@@ -485,6 +491,7 @@ function drawScanLine(
   innerR: number,
   outerR: number,
   accent: string,
+  cy = CY,
 ) {
   if (sweepT <= 0) return;
   const SWEEP_DUR = 0.45;
@@ -499,13 +506,13 @@ function drawScanLine(
   }
   if (beamAlpha <= 0.01) return;
 
-  const tipX = CX + Math.cos(currentAngle) * outerR, tipY = CY + Math.sin(currentAngle) * outerR;
-  const basX = CX + Math.cos(currentAngle) * innerR, basY = CY + Math.sin(currentAngle) * innerR;
+  const tipX = CX + Math.cos(currentAngle) * outerR, tipY = cy + Math.sin(currentAngle) * outerR;
+  const basX = CX + Math.cos(currentAngle) * innerR, basY = cy + Math.sin(currentAngle) * innerR;
 
   ctx.save(); ctx.globalAlpha = beamAlpha;
 
   // Sweep trail
-  ctx.save(); ctx.translate(CX, CY);
+  ctx.save(); ctx.translate(CX, cy);
   const trailSector = Math.PI / 10;
   const sgrad = ctx.createLinearGradient(0, 0, outerR, 0);
   sgrad.addColorStop(0, hex2rgba(accent, 0)); sgrad.addColorStop(1, hex2rgba(accent, 0.22 * beamAlpha));
@@ -565,7 +572,7 @@ function measureLabelBox(
 
   // Anchor on inner edge (closest to center) at NODE_R + 14
   const cosA = Math.cos(angle), sinA = Math.sin(angle);
-  const anchorX = CX + cosA * (NODE_R + 14), anchorY = CY + sinA * (NODE_R + 14);
+  const anchorX = CX   + cosA * (NODE_R + 14), anchorY = CY_R + sinA * (NODE_R + 14);
 
   let bx: number, by: number;
   if (cosA > 0.15) {        bx = anchorX;         by = anchorY - bh / 2; }   // right
@@ -587,6 +594,7 @@ function drawRadialLabel(
   borderProgress: number,
   accent: string,
   r: ReturnType<typeof resolveOpts>,
+  elapsed = 0,
 ): LabelBoxLayout {
   const { angle } = labelPos(i, n);
   const eased     = easeOutBack(Math.min(enterT, 0.999));
@@ -603,13 +611,21 @@ function drawRadialLabel(
 
   ctx.save(); ctx.globalAlpha = alpha;
 
-  // Border draws left → right (clip to partial width)
+  // Border draws left → right (clip to partial width) + flickering glow
   if (borderProgress > 0.02 && eased > 0.4) {
+    const fk = flk(elapsed, i * 1.7);
     ctx.save();
     ctx.beginPath(); ctx.rect(sbx - 2, sby - 2, (bw + 4) * borderProgress, bh + 4); ctx.clip();
-    ctx.shadowColor = accent; ctx.shadowBlur = 16;
-    ctx.strokeStyle = accent; ctx.lineWidth = 2;
+    ctx.shadowColor = accent; ctx.shadowBlur = 14 + 28 * fk;
+    ctx.strokeStyle = accent; ctx.lineWidth = 1.5 + fk * 2;
     ctx.beginPath(); ctx.roundRect(sbx, sby, bw, bh, 10); ctx.stroke();
+    // Secondary cyan flicker pass
+    if (fk > 0.4) {
+      ctx.globalAlpha = alpha * fk * 0.55;
+      ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 20 * fk;
+      ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.roundRect(sbx, sby, bw, bh, 10); ctx.stroke();
+    }
     ctx.shadowBlur = 0; ctx.restore();
   }
 
@@ -650,7 +666,7 @@ function drawRadialLabel(
 function drawConnector(ctx: DC, i: number, n: number, alpha: number, accent: string) {
   if (alpha <= 0.05) return;
   const { nx, ny, angle } = labelPos(i, n);
-  const lx0 = CX + Math.cos(angle) * INNER_R, ly0 = CY + Math.sin(angle) * INNER_R;
+  const lx0 = CX + Math.cos(angle) * INNER_R, ly0 = CY_R + Math.sin(angle) * INNER_R;
   ctx.save();
   ctx.globalAlpha = alpha * 0.55;
   ctx.strokeStyle = accent; ctx.lineWidth = 1.5; ctx.shadowColor = accent; ctx.shadowBlur = 6;
@@ -705,7 +721,7 @@ function drawBurstTransition(
 // PHASE 3: KEYWORD BOX + DESC
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const KW_BOX_X  = 60, KW_BOX_W = 490, KW_TOP_Y = 100;
+const KW_BOX_X  = 60, KW_BOX_W = 490, KW_TOP_Y = 130;
 const DESC_COL_X = KW_BOX_X + KW_BOX_W + 48;
 const DESC_COL_W = CW - DESC_COL_X - 60;
 
@@ -717,6 +733,7 @@ function itemRowY(i: number, n: number) {
 function drawKwBox(
   ctx: DC, i: number, n: number, label: string,
   enterT: number, highlightT: number, accent: string, r: ReturnType<typeof resolveOpts>,
+  elapsed = 0,
 ) {
   const rowY  = itemRowY(i, n);
   const fsz   = r.kwBoxFsz;
@@ -731,16 +748,25 @@ function drawKwBox(
   const bx = KW_BOX_X, by = rowY - boxH / 2, bc = r.kwBoxBorderClr;
   const eased = easeOutBack(Math.min(enterT, 0.999));
   const alpha = clamp(enterT * 2, 0, 1);
+  const fk    = flk(elapsed, i * 2.1 + 0.5);
 
   ctx.save(); ctx.globalAlpha = alpha;
   if (r.kwBoxBgA > 0.01) {
     ctx.fillStyle = hex2rgba(bc, r.kwBoxBgA);
     ctx.beginPath(); ctx.roundRect(bx, by, boxW * eased, boxH, r.kwBoxBR); ctx.fill();
   }
-  // Border draws left → right
+  // Border draws left → right + flickering glow
   ctx.save(); ctx.beginPath(); ctx.rect(bx - 4, by - 4, (boxW + 8) * eased, boxH + 8); ctx.clip();
-  ctx.shadowColor = bc; ctx.shadowBlur = 18 + highlightT * 20; ctx.strokeStyle = bc; ctx.lineWidth = r.kwBoxBW;
-  ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, r.kwBoxBR); ctx.stroke(); ctx.shadowBlur = 0; ctx.restore();
+  ctx.shadowColor = bc; ctx.shadowBlur = 16 + highlightT * 20 + 28 * fk; ctx.strokeStyle = bc; ctx.lineWidth = r.kwBoxBW + fk * 2;
+  ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, r.kwBoxBR); ctx.stroke();
+  // Secondary electric glow on high flicker
+  if (fk > 0.45) {
+    ctx.globalAlpha = alpha * fk * 0.5;
+    ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 22 * fk;
+    ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(bx, by, boxW, boxH, r.kwBoxBR); ctx.stroke();
+  }
+  ctx.shadowBlur = 0; ctx.restore();
 
   if (eased > 0.3) {
     ctx.globalAlpha = alpha * clamp((eased - 0.3) / 0.7, 0, 1);
@@ -822,13 +848,26 @@ function drawGridCell(
     ctx.fillStyle = r.gridNumClr; ctx.shadowColor = r.gridNumClr; ctx.shadowBlur = 12;
     ctx.fillText(String(index + 1).padStart(2, '0'), 0, -h / 2 - numFsz * 0.7); ctx.shadowBlur = 0;
 
+    // Flickering border glow
+    const fk = flk(elapsed, seed);
+    const glowMain = 18 + 40 * fk;
+
     // Cell BG + border
     const bg = ctx.createLinearGradient(-w / 2, -h / 2, -w / 2, h / 2);
-    bg.addColorStop(0, hex2rgba(r.gridBorderClr, 0.18)); bg.addColorStop(1, 'rgba(0,0,0,0.65)');
-    ctx.fillStyle = bg; ctx.shadowColor = r.gridBorderClr; ctx.shadowBlur = 20 + 8 * Math.sin(elapsed * 0.003 + seed);
+    bg.addColorStop(0, hex2rgba(r.gridBorderClr, 0.18 + 0.12 * fk)); bg.addColorStop(1, 'rgba(0,0,0,0.65)');
+    ctx.fillStyle = bg; ctx.shadowColor = r.gridBorderClr; ctx.shadowBlur = glowMain;
     ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.fill();
-    ctx.strokeStyle = r.gridBorderClr; ctx.lineWidth = 2.5; ctx.shadowBlur = 16;
-    ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.strokeStyle = r.gridBorderClr; ctx.lineWidth = 2 + fk * 2.5; ctx.shadowBlur = glowMain;
+    ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.stroke();
+    // Secondary cyan flicker layer
+    if (fk > 0.35) {
+      ctx.save(); ctx.globalAlpha = entAlpha * fk * 0.6;
+      ctx.shadowColor = '#00d4ff'; ctx.shadowBlur = 28 * fk;
+      ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.roundRect(-w / 2, -h / 2, w, h, 12); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.shadowBlur = 0;
 
     // Keyword text
     const kwFsz = Math.min(r.gridKwFsz, h * 0.36);
@@ -895,13 +934,6 @@ export function drawAITechCards(
     const allInMs  = AT.gridStagger * (displayN - 1) + 400;
     const exStart  = p4Start + allInMs + 200 + AT.gridHold;
 
-    const hdrAlpha = clamp((elapsed - p4Start) / 400, 0, 1);
-    if (hdrAlpha > 0) {
-      ctx.save(); ctx.globalAlpha = hdrAlpha;
-      ctx.font = `700 52px "Noto Sans SC", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#ffffff'; ctx.shadowColor = accent; ctx.shadowBlur = 26;
-      ctx.fillText(content.title, CX, 90); ctx.shadowBlur = 0; ctx.restore();
-    }
     for (let i = 0; i < displayN; i++) {
       const te      = elapsed - (p4Start + i * AT.gridStagger);
       if (te <= 0) continue;
@@ -927,9 +959,9 @@ export function drawAITechCards(
       ctx.save(); ctx.globalAlpha = radialFade;
       for (let i = 0; i < displayN; i++) {
         drawConnector(ctx, i, displayN, 0.7, accent);
-        drawRadialLabel(ctx, i, displayN, content.points[i].label, content.points[i].short ?? '', 1, 0.6, 1, accent, r);
+        drawRadialLabel(ctx, i, displayN, content.points[i].label, content.points[i].short ?? '', 1, 0.6, 1, accent, r, elapsed);
       }
-      drawCenterPattern(ctx, elapsed, CX, CY, PAT_R, accent, accent2, pattern, 1);
+      drawCenterPattern(ctx, elapsed, CX, CY_R, PAT_R, accent, accent2, pattern, 1);
       ctx.restore();
     }
 
@@ -952,7 +984,7 @@ export function drawAITechCards(
       const boxAlpha = te > 0 ? clamp(te / 300, 0, 1) : 0;
       const isActive = te >= 0 && (i === displayN - 1 || elapsed < p3Start + (i + 1) * AT.descSlot + 200);
       if (boxAlpha > 0)
-        drawKwBox(ctx, i, displayN, content.points[i].label, boxEnter, isActive ? clamp((te > 0 ? te : 0) / 300, 0, 1) : 0, accent, r);
+        drawKwBox(ctx, i, displayN, content.points[i].label, boxEnter, isActive ? clamp((te > 0 ? te : 0) / 300, 0, 1) : 0, accent, r, elapsed);
       if (te > 0 && content.points[i].desc)
         drawDescItem(ctx, i, displayN, content.points[i].desc!, te, accent, r);
     }
@@ -968,14 +1000,14 @@ export function drawAITechCards(
     for (let ring = 1; ring <= 3; ring++) {
       ctx.save(); ctx.globalAlpha = ringFade * (0.3 - ring * 0.04);
       ctx.strokeStyle = ring % 2 === 0 ? accent : accent2; ctx.lineWidth = 1.2; ctx.setLineDash([4, 10]);
-      ctx.beginPath(); ctx.arc(CX, CY, RADIAL_R * (0.55 + ring * 0.16) * (1 + 0.02 * Math.sin(elapsed * 0.0008 + ring)), 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(CX, CY_R, RADIAL_R * (0.55 + ring * 0.16) * (1 + 0.02 * Math.sin(elapsed * 0.0008 + ring)), 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]); ctx.restore();
     }
   }
 
   // Center pattern
   const patAlpha = clamp((elapsed - p1Start) / 600, 0, 1);
-  if (patAlpha > 0) drawCenterPattern(ctx, elapsed, CX, CY, PAT_R, accent, accent2, pattern, patAlpha);
+  if (patAlpha > 0) drawCenterPattern(ctx, elapsed, CX, CY_R, PAT_R, accent, accent2, pattern, patAlpha);
 
   // Keywords one by one with scan line + box
   for (let i = 0; i < displayN; i++) {
@@ -994,8 +1026,8 @@ export function drawAITechCards(
       ? labelPos(0, displayN).angle - Math.PI * 0.6
       : labelPos(i - 1, displayN).angle;
     const sweepT = clamp(te / SCAN_DUR, 0, 1);
-    drawScanLine(ctx, prevAngle, labelPos(i, displayN).angle, sweepT, INNER_R, NODE_R + 25, accent);
+    drawScanLine(ctx, prevAngle, labelPos(i, displayN).angle, sweepT, INNER_R, NODE_R + 25, accent, CY_R);
 
-    drawRadialLabel(ctx, i, displayN, content.points[i].label, content.points[i].short ?? '', enterT, alpha, borderP, accent, r);
+    drawRadialLabel(ctx, i, displayN, content.points[i].label, content.points[i].short ?? '', enterT, alpha, borderP, accent, r, elapsed);
   }
 }
