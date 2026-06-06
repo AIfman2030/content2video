@@ -3,7 +3,7 @@ import { Loader2, Sparkles, Wand2, AlignLeft } from 'lucide-react';
 import type { StyleType } from '../types/video';
 
 // Styles that support raw-text direct mode (no AI extraction)
-const RAW_MODE_STYLES: StyleType[] = ['chinese', 'city', 'aitech'];
+const RAW_MODE_STYLES: StyleType[] = ['chinese', 'city', 'aitech', 'keyword'];
 
 interface Props {
   style: StyleType;

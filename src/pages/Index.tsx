@@ -3,11 +3,11 @@ import { Film, Key, Video } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions,
-  TitleOptions,
+  TitleOptions, KeywordOptions,
 } from '../types/video';
 import {
   DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS, DEFAULT_AITECH_OPTIONS,
-  DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, DEFAULT_TITLE_OPTIONS, type PetCoverConfig,
+  DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, DEFAULT_TITLE_OPTIONS, DEFAULT_KEYWORD_OPTIONS, type PetCoverConfig,
 } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
@@ -19,7 +19,7 @@ import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
 import StudioCanvas from '../components/StudioCanvas';
 import {
-  extractContent, extractNatureContent, translateSentence, getStoredApiKey,
+  extractContent, extractNatureContent, translateSentence, getStoredApiKey, extractKeywords,
 } from '../services/deepseek';
 import {
   generateMangaContent, type GenerationProgress,
@@ -123,6 +123,7 @@ const BG_BY_STYLE: Record<StyleType, string> = {
   subtitle:    'linear-gradient(160deg, #020204 0%, #07070f 50%, #0a0a12 100%)',
   translation: 'linear-gradient(160deg, #190404 0%, #3b0c0c 50%, #631414 100%)',
   manga:       'linear-gradient(160deg, #0e0818 0%, #1a0a2e 50%, #2d1b4e 100%)',
+  keyword:     'linear-gradient(160deg, #020610 0%, #081020 50%, #030810 100%)',
 };
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
@@ -133,6 +134,7 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   subtitle:    '#ffd700',
   translation: '#ffe44d',
   manga:       '#f59e0b',
+  keyword:     '#00d4ff',
 };
 
 // Dummy content used to trigger canvas engine for manga style
@@ -167,6 +169,7 @@ export default function Index() {
   const [cityOptions, setCityOptions] = useState<CityOptions>(DEFAULT_CITY_OPTIONS);
   const [natureOptions, setNatureOptions] = useState<NatureOptions>(DEFAULT_NATURE_OPTIONS);
   const [titleOptions, setTitleOptions] = useState<TitleOptions>(DEFAULT_TITLE_OPTIONS);
+  const [keywordOptions, setKeywordOptions] = useState<KeywordOptions>(DEFAULT_KEYWORD_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
   const [petCoverConfig, setPetCoverConfig] = useState<PetCoverConfig>(DEFAULT_PET_COVER_CONFIG);
 
@@ -212,6 +215,10 @@ export default function Index() {
         const nc = await extractNatureContent(text);
         setNatureContent(nc);
         setContent({ title: nc.title, points: [] });
+      } else if (style === 'keyword') {
+        const result = rawMode ? parseRawContent(text) : await extractKeywords(text);
+        setContent(result);
+        setNatureContent(null);
       } else if (rawMode) {
         // Direct parse — no AI
         const result = parseRawContent(text);
@@ -398,6 +405,8 @@ export default function Index() {
                 onNatureOptionsChange={setNatureOptions}
                 titleOptions={titleOptions}
                 onTitleOptionsChange={setTitleOptions}
+                keywordOptions={keywordOptions}
+                onKeywordOptionsChange={setKeywordOptions}
                 accentOverrides={accentOverrides}
                 onAccentOverrideChange={(sty, color) =>
                   setAccentOverrides(prev => ({ ...prev, [sty]: color }))
@@ -487,6 +496,7 @@ export default function Index() {
             aitechOptions={aitechOptions}
             natureOptions={natureOptions}
             titleOptions={titleOptions}
+            keywordOptions={keywordOptions}
           />
         </main>
       </div>
@@ -510,6 +520,7 @@ export default function Index() {
           petCoverConfig={petCoverConfig}
           natureOptions={natureOptions}
           titleOptions={titleOptions}
+          keywordOptions={keywordOptions}
         />
       )}
 

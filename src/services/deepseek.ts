@@ -161,3 +161,44 @@ export async function translateSentence(text: string): Promise<string> {
   const raw = await callDeepSeek(TRANSLATION_PROMPT, text, 250);
   return raw.trim().replace(/^["'\s]+|["'\s]+$/g, '');
 }
+
+// ─── Keyword Layout: extract central word + surrounding keywords ───────────────
+const KEYWORD_PROMPT = `你是一个关键词提炼专家。用户给你一段文章或话题，你要提炼出一个中心词（2-4个字）和20-28个围绕主题的关键词（每个1-6个字），以严格的JSON格式返回，不要有任何多余文字。
+
+输出格式（points第0个是中心词，其余是关键词）：
+{
+  "title": "标题（不超过15字）",
+  "points": [
+    {"label": "中心词", "short": "", "desc": "", "formatted": ""},
+    {"label": "关键词1", "short": "简短说明（4-8字，可选）", "desc": "", "formatted": ""},
+    {"label": "关键词2", "short": "简短说明", "desc": "", "formatted": ""}
+  ]
+}
+
+要求：
+- points[0].label 是从文章主题中提炼的中心词，2-4个字
+- points[1..n].label 每个关键词1-6个字，尽量简洁有力
+- 总关键词数量20-28个
+- short字段可以有简短说明（4-8字），也可以为空
+- 关键词要覆盖文章的核心概念、关键动作、价值观等维度`;
+
+export async function extractKeywords(text: string): Promise<GeneratedContent> {
+  const raw = await callDeepSeek(KEYWORD_PROMPT, text, 1400);
+  try {
+    const parsed = JSON.parse(raw) as { title: string; points: Array<{ label: string; short: string; desc: string; formatted: string }> };
+    if (!parsed.title || !Array.isArray(parsed.points) || parsed.points.length < 5) {
+      throw new Error('格式错误');
+    }
+    return {
+      title: parsed.title,
+      points: parsed.points.map(p => ({
+        label: p.label ?? '',
+        short: p.short ?? '',
+        desc: p.desc ?? '',
+        formatted: p.formatted ?? p.label ?? '',
+      })),
+    };
+  } catch {
+    throw new Error('关键词提炼失败，请重试');
+  }
+}

@@ -1,11 +1,12 @@
 import type {
   GeneratedContent, StyleType, PolyShape, ChineseOptions, CityOptions, AItechOptions,
-  ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim,
+  ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim, KeywordOptions,
 } from '../../types/video';
 import { CW, CH, clamp, easeOutBack, easeOutCubic, lerp, hex2rgba, roundRect, T, PAGE_HOLD, PAGE_TRANS } from './helpers';
 import { drawCityCards } from './cards-city';
 import { drawAITechCards } from './cards-aitech';
 import { drawChineseCards } from './cards-chinese';
+import { drawKeywordCards } from './cards-keyword';
 
 // ── Card geometry helpers ──────────────────────────────────────────────────────
 function cardHeight(numLines: number): number {
@@ -266,10 +267,12 @@ export function drawCards(
   chineseOptions?: ChineseOptions,
   cityOptions?: CityOptions,
   aitechOptions?: AItechOptions,
+  keywordOptions?: KeywordOptions,
 ) {
   if (style === 'city')    { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex, cityOptions); return; }
   if (style === 'aitech')  { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon', aitechOptions); return; }
   if (style === 'chinese') { drawChineseCards(ctx, elapsed, content, accent, accent2, shapeImg!, coverIndex, chineseOptions); return; }
+  if (style === 'keyword') { drawKeywordCards(ctx, elapsed, content, accent, accent2, keywordOptions); return; }
   if (elapsed < T.cardBase) return;
 
   const lines     = resolveLines(chineseOptions);

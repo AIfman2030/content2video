@@ -63,6 +63,14 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
     bg: 'linear-gradient(135deg,#1a0a2e,#2d1b4e)',
     accent: '#f59e0b',
   },
+  {
+    key: 'keyword',
+    name: '关键词',
+    desc: '主题发散 · 6种排列',
+    tag: '词云 / 网格 / 卡片等',
+    bg: 'linear-gradient(135deg,#020812,#081828)',
+    accent: '#00d4ff',
+  },
 ];
 
 export default function StyleSelector({ selected, onChange, compact = false }: Props) {

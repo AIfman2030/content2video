@@ -12,8 +12,9 @@ import type {
   PetCoverConfig, NatureOptions,
   ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim,
   TitleOptions, TitleLineConfig, TitleLineEnterAnim,
+  KeywordOptions, KeywordLayout,
 } from '../types/video';
-import { DEFAULT_CARD_LINES, DEFAULT_TITLE_OPTIONS, DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2 } from '../types/video';
+import { DEFAULT_CARD_LINES, DEFAULT_TITLE_OPTIONS, DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2, DEFAULT_KEYWORD_OPTIONS } from '../types/video';
 import CoverPicker from './CoverPicker';
 
 // ─── Props ─────────────────────────────────────────────────────────────────────
@@ -46,6 +47,9 @@ interface Props {
   // ── Title (all canvas styles) ───────────────────────────────────────────────
   titleOptions: TitleOptions;
   onTitleOptionsChange: (v: TitleOptions) => void;
+  // ── Keyword style ──────────────────────────────────────────────────────────
+  keywordOptions: KeywordOptions;
+  onKeywordOptionsChange: (v: KeywordOptions) => void;
 }
 
 // ─── Shared colour presets ─────────────────────────────────────────────────────
@@ -942,6 +946,92 @@ function CityPanel({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// KEYWORD PANEL
+// ─────────────────────────────────────────────────────────────────────────────
+function KeywordPanel({
+  keywordOptions, onKeywordOptionsChange, accentColor, onAccentColorChange,
+}: {
+  keywordOptions: KeywordOptions;
+  onKeywordOptionsChange: (v: KeywordOptions) => void;
+  accentColor: string;
+  onAccentColorChange: (c: string) => void;
+}) {
+  const upd = (patch: Partial<KeywordOptions>) => onKeywordOptionsChange({ ...keywordOptions, ...patch });
+
+  const LAYOUTS: { value: KeywordLayout; label: string }[] = [
+    { value: 'cloud',  label: '词云散布' },
+    { value: 'grid',   label: '表格网格' },
+    { value: 'radial', label: '同心圆环' },
+    { value: 'orbit',  label: '椭圆轨道' },
+    { value: 'card',   label: '编号卡片' },
+    { value: 'flow',   label: '瀑布流列' },
+  ];
+
+  return (
+    <div className="space-y-5">
+      {/* Layout picker */}
+      <div>
+        <p className="text-xs font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>排列样式</p>
+        <div className="grid grid-cols-3 gap-2">
+          {LAYOUTS.map(l => (
+            <button
+              key={l.value}
+              onClick={() => upd({ layout: l.value })}
+              className="rounded-xl py-2.5 text-xs font-semibold transition-all"
+              style={{
+                background: keywordOptions.layout === l.value ? `${accentColor}30` : 'rgba(255,255,255,0.05)',
+                borderWidth: 1,
+                borderStyle: 'solid',
+                borderColor: keywordOptions.layout === l.value ? accentColor : 'rgba(255,255,255,0.1)',
+                color: keywordOptions.layout === l.value ? accentColor : 'rgba(255,255,255,0.5)',
+              }}
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Accent color (matches main accent) */}
+      <div>
+        <p className="text-xs font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>主色 / 中心词颜色</p>
+        <div className="flex items-center gap-3">
+          <input type="color" value={accentColor} onChange={e => { onAccentColorChange(e.target.value); upd({ accentColor: e.target.value }); }}
+            className="w-9 h-9 rounded-lg cursor-pointer border-0" style={{ background: 'transparent' }} />
+          <span className="text-xs font-mono" style={{ color: 'rgba(255,255,255,0.4)' }}>{accentColor}</span>
+        </div>
+      </div>
+
+      <NumericSlider label="中心词字号" value={keywordOptions.centerFontSize ?? 120} min={60} max={200} step={4} onChange={v => upd({ centerFontSize: v })} />
+      <NumericSlider label="关键词字号" value={keywordOptions.keywordFontSize ?? 48}  min={24} max={96}  step={2} onChange={v => upd({ keywordFontSize: v })} />
+      <NumericSlider label="出现间隔" value={keywordOptions.staggerMs ?? 180} min={60} max={600} step={20} unit="ms" onChange={v => upd({ staggerMs: v })} />
+
+      <div>
+        <p className="text-xs font-semibold mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>字体粗细</p>
+        <div className="flex gap-2">
+          {([400, 600, 700, 800] as const).map(w => (
+            <button key={w} onClick={() => upd({ fontWeight: w })}
+              className="flex-1 rounded-xl py-2 text-xs font-medium transition-all"
+              style={{
+                background: (keywordOptions.fontWeight ?? 700) === w ? `${accentColor}28` : 'rgba(255,255,255,0.05)',
+                borderWidth: 1, borderStyle: 'solid',
+                borderColor: (keywordOptions.fontWeight ?? 700) === w ? accentColor : 'rgba(255,255,255,0.1)',
+                color: (keywordOptions.fontWeight ?? 700) === w ? accentColor : 'rgba(255,255,255,0.4)',
+              }}>
+              {w}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <OptionalColorPicker label="关键词文字颜色（空=白色）" value={keywordOptions.keywordColor ?? ''} placeholder="#ffffff" onChange={c => upd({ keywordColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="卡片边框颜色（空=主色）"   value={keywordOptions.cardBorderColor ?? ''} placeholder="同主色" onChange={c => upd({ cardBorderColor: c })} accent={accentColor} />
+      <OptionalColorPicker label="网格线颜色（空=主色）"     value={keywordOptions.gridLineColor ?? ''} placeholder="同主色" onChange={c => upd({ gridLineColor: c })} accent={accentColor} />
+    </div>
+  );
+}
+
 function AItechPanel({ coverIndex, onCoverIndexChange, aitechOptions, onAitechOptionsChange, accentColor, onAccentColorChange, style, petCoverConfig, onPetCoverConfigChange, titleForPetCover }: {
   coverIndex: number; onCoverIndexChange: (v: number) => void;
   aitechOptions: AItechOptions; onAitechOptionsChange: (v: AItechOptions) => void;
@@ -1737,6 +1827,7 @@ export default function StyleConfigPanel({
   petCoverConfig, onPetCoverConfigChange, titleForPetCover,
   natureOptions, onNatureOptionsChange,
   titleOptions, onTitleOptionsChange,
+  keywordOptions, onKeywordOptionsChange,
 }: Props) {
   const ov = accentOverrides[style];
 
@@ -1843,6 +1934,18 @@ export default function StyleConfigPanel({
 
     case 'manga':
       return <MangaPanel opts={mangaOptions} onChange={onMangaOptionsChange} />;
+
+    case 'keyword': {
+      const accentColor = ov ?? '#00d4ff';
+      return (
+        <KeywordPanel
+          keywordOptions={keywordOptions}
+          onKeywordOptionsChange={onKeywordOptionsChange}
+          accentColor={accentColor}
+          onAccentColorChange={c => onAccentOverrideChange('keyword', c)}
+        />
+      );
+    }
 
     default:
       return null;

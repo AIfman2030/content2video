@@ -1,4 +1,4 @@
-export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga';
+export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga' | 'keyword';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
@@ -326,4 +326,31 @@ export const DEFAULT_TITLE_OPTIONS: TitleOptions = {
   subtitleColor: 'rgba(180,200,255,0.75)',
   subtitleFontSize: 40,
   headerFontSize: 60,
+};
+
+// ─── Keyword Layout Options ────────────────────────────────────────────────────
+export type KeywordLayout = 'cloud' | 'grid' | 'radial' | 'orbit' | 'card' | 'flow';
+
+export interface KeywordOptions {
+  layout: KeywordLayout;
+  accentColor: string;
+  bgColor?: string;             // '' = auto dark (#050508)
+  centerFontSize: number;       // center keyword size (default 120)
+  centerColor?: string;         // '' = accent
+  keywordFontSize: number;      // surrounding keywords size (default 48)
+  keywordColor?: string;        // '' = '#ffffff'
+  fontFamily?: string;          // '' = "Noto Sans SC"
+  fontWeight?: 400 | 600 | 700 | 800;
+  staggerMs: number;            // ms between keyword appearances (default 180)
+  gridLineColor?: string;       // for grid layout
+  cardBorderColor?: string;     // for card layout
+}
+
+export const DEFAULT_KEYWORD_OPTIONS: KeywordOptions = {
+  layout: 'cloud',
+  accentColor: '#00d4ff',
+  centerFontSize: 120,
+  keywordFontSize: 48,
+  staggerMs: 180,
+  fontWeight: 700,
 };

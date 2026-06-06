@@ -8,6 +8,7 @@ import './cover/city-cover';
 import './cover/aitech-cover';
 import './cover/nature-cover';
 import './cover/subtitle-cover';
+import './cover/keyword-cover';
 
 import { COVER_REGISTRY, COVER_W, COVER_H, CoverOpts } from './cover/registry';
 import { drawPetCover } from './cover/pet-cover';

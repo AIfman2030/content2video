@@ -1,10 +1,10 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions, KeywordOptions } from '../types/video';
 import { getThemeConfig, pickChineseShapeByTitle } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
 
-import { CW, CH, seededRandom, T, totalDuration, aiTechPhases, chineseSlideDuration } from './engine/helpers';
+import { CW, CH, seededRandom, T, totalDuration, aiTechPhases, chineseSlideDuration, keywordTotalMs } from './engine/helpers';
 import { initChineseEffects } from './engine/chinese';
 import { initCityEffects } from './engine/city';
 import { initAIEffects } from './engine/aitech';
@@ -81,6 +81,7 @@ export async function createAnimEngine(
   aitechOptions?: AItechOptions,
   natureOptions?: NatureOptions,
   titleOptions?: TitleOptions,
+  keywordOptions?: KeywordOptions,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
   // Allow per-style accent override (affects BG, title, overlays, shape decoration)
@@ -91,11 +92,13 @@ export async function createAnimEngine(
   const isTranslation = style === 'translation';
   const isManga       = style === 'manga';
 
+  const isKeyword     = style === 'keyword';
+
   const rand = seededRandom(coverIndex * 31 + content.points.length * 17 + 7);
 
-  // Shape image not needed for nature, subtitle, translation, or manga styles
+  // Shape image not needed for nature, subtitle, translation, manga, or keyword styles
   let shapeImg: HTMLImageElement | null = null;
-  if (!isNature && !isSubtitle && !isTranslation && !isManga) {
+  if (!isNature && !isSubtitle && !isTranslation && !isManga && !isKeyword) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     // For Chinese: pick shape by content keywords; other styles cycle by coverIndex
@@ -148,7 +151,9 @@ export async function createAnimEngine(
               ? aiTechPhases(content.points.length).total
               : style === 'chinese'
                 ? chineseSlideDuration(content.points.length)
-                : totalDuration(content.points.length);
+                : style === 'keyword'
+                  ? keywordTotalMs(content.points.length, keywordOptions?.staggerMs)
+                  : totalDuration(content.points.length);
 
   let rafId = 0, startTime = 0, running = false;
   let lastElapsed = 0;
@@ -201,19 +206,31 @@ export async function createAnimEngine(
     } else if (style === 'aitech' && aiEffects) {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, CW, CH);
+    } else if (style === 'keyword') {
+      const bg2 = ctx.createLinearGradient(0, 0, CW, CH);
+      bg2.addColorStop(0, '#030510');
+      bg2.addColorStop(0.5, '#080c1a');
+      bg2.addColorStop(1, '#040508');
+      ctx.fillStyle = bg2; ctx.fillRect(0, 0, CW, CH);
+      const glow2 = ctx.createRadialGradient(CW * 0.5, CH * 0.5, 0, CW * 0.5, CH * 0.5, 680);
+      glow2.addColorStop(0, `${accent}15`);
+      glow2.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow2; ctx.fillRect(0, 0, CW, CH);
     }
 
     // Shape decoration removed — background is plain black
     drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
-    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions);
+    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions, keywordOptions);
 
     const outroStart = (style === 'city'
       ? cityTotalMs(content.points.length)
       : style === 'chinese'
         ? chineseSlideDuration(content.points.length)
-        : totalDuration(content.points.length)) - T.outroDur;
-    // aitech has its own phase-5 outro built into drawAITechCards
-    if (style !== 'aitech' && elapsed > outroStart) {
+        : style === 'keyword'
+          ? keywordTotalMs(content.points.length, keywordOptions?.staggerMs)
+          : totalDuration(content.points.length)) - T.outroDur;
+    // aitech has its own phase-5 outro; keyword just holds last frame
+    if (style !== 'aitech' && style !== 'keyword' && elapsed > outroStart) {
       drawOutro(ctx, elapsed - outroStart, content, accent, accent2, style);
     }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Play, Pause, RotateCcw, Loader2 } from 'lucide-react';
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions, KeywordOptions } from '../types/video';
 import { createAnimEngine, CW, CH, type AnimEngine } from '../lib/canvasEngine';
 
 interface Props {
@@ -19,6 +19,7 @@ interface Props {
   aitechOptions?: AItechOptions;
   natureOptions?: NatureOptions;
   titleOptions?: TitleOptions;
+  keywordOptions?: KeywordOptions;
 }
 
 function fmtMs(ms: number): string {
@@ -29,7 +30,7 @@ function fmtMs(ms: number): string {
 
 export default function StudioCanvas({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, accent,
-  subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions,
+  subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions, keywordOptions,
 }: Props) {
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   const engineRef   = useRef<AnimEngine | null>(null);
@@ -74,9 +75,10 @@ export default function StudioCanvas({
     aitechOpts?: AItechOptions,
     natOpts?: NatureOptions,
     titleOpts?: TitleOptions,
+    kwOpts?: KeywordOptions,
   ) => {
     let cancelled = false;
-    createAnimEngine(canvas, c, sty, ci, cho, aio, nat ?? undefined, undefined, subOpts, accOverride, cito, mangaCnt, mangaOpts, aitechOpts, natOpts, titleOpts)
+    createAnimEngine(canvas, c, sty, ci, cho, aio, nat ?? undefined, undefined, subOpts, accOverride, cito, mangaCnt, mangaOpts, aitechOpts, natOpts, titleOpts, kwOpts)
       .then(eng => { if (cancelled) { eng.stop(); return; } onDone(eng); })
       .catch(err => { if (!cancelled) onFail(String(err)); });
     return () => { cancelled = true; };
@@ -107,7 +109,7 @@ export default function StudioCanvas({
         startSync();
       },
       (err) => { setInitError(err); setRefreshing(false); },
-      cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions,
+      cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions, keywordOptions,
     );
     return cancel;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -140,13 +142,13 @@ export default function StudioCanvas({
           startSync();
         },
         (err) => { setInitError(err); setRefreshing(false); },
-        cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions,
+        cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions, keywordOptions,
       );
     }, 400);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverIndex, chineseOptions, aiOptions, style, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions]);
+  }, [coverIndex, chineseOptions, aiOptions, style, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions, keywordOptions]);
 
   // ── Play / Pause ───────────────────────────────────────────────────────────
   const handlePlayPause = useCallback(() => {
