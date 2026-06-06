@@ -480,6 +480,57 @@ function drawTextBurst(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// SMOKE / MIST CLOUDS (for explosion outro)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Draws expanding smoke puffs around a center point as content dissolves.
+ * smokeT 0→1: puffs expand outward, slowly drift up, then fade.
+ */
+function drawSmokeClouds(
+  ctx: DC, cx: number, cy: number, smokeT: number, seed: number,
+) {
+  if (smokeT <= 0) return;
+  const PUFFS = 10;
+  ctx.save();
+  for (let p = 0; p < PUFFS; p++) {
+    const ps     = seed + p * 61.3;
+    const delay  = sf(ps * 1.9) * 0.28;
+    const pt     = Math.max(0, (smokeT - delay) / (1 - delay));
+    if (pt <= 0) continue;
+
+    const ang    = sf(ps) * Math.PI * 2;
+    const travel = 50 + sf(ps * 2.1) * 150;
+    const px     = cx + Math.cos(ang) * travel * pt;
+    const py     = cy + Math.sin(ang) * travel * pt - pt * pt * 80; // drift upward
+    const radius = 28 + sf(ps * 3.4) * 55 + pt * 90;
+    const alpha  = (1 - pt * pt) * 0.28 * (0.5 + sf(ps * 7.1) * 0.5);
+    if (alpha < 0.01) continue;
+
+    // Inner bright core blending into dark haze edge
+    const g = ctx.createRadialGradient(px, py, 0, px, py, radius);
+    g.addColorStop(0,   `rgba(210,210,240,${alpha * 1.6})`);
+    g.addColorStop(0.35,`rgba(160,140,200,${alpha})`);
+    g.addColorStop(0.7, `rgba(80,60,120,${alpha * 0.5})`);
+    g.addColorStop(1,   'rgba(10,5,20,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(px, py, radius, 0, Math.PI * 2); ctx.fill();
+  }
+  // Dense central mist — lingers at origin a bit before dissipating
+  const mistT    = Math.max(0, smokeT - 0.1);
+  const mistAlpha = Math.max(0, (0.5 - mistT) * 0.5);
+  if (mistAlpha > 0.01) {
+    const mg = ctx.createRadialGradient(cx, cy, 0, cx, cy, 80 + mistT * 120);
+    mg.addColorStop(0,   `rgba(200,190,230,${mistAlpha * 1.4})`);
+    mg.addColorStop(0.6, `rgba(120,100,180,${mistAlpha * 0.6})`);
+    mg.addColorStop(1,   'rgba(0,0,0,0)');
+    ctx.fillStyle = mg;
+    ctx.beginPath(); ctx.arc(cx, cy, 80 + mistT * 120, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // SCAN LINE FROM CENTER
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -705,6 +756,10 @@ function drawBurstTransition(
     default: {
       // Text characters shatter outward
       drawTextBurst(ctx, textEntries, burstT, accent);
+      // Smoke puffs at each entry origin
+      for (const entry of textEntries) {
+        drawSmokeClouds(ctx, entry.cx, entry.cy, burstT, entry.seed * 1.5);
+      }
       // White flash overlay
       const flashA = Math.max(0, 0.6 - burstT * 1.8);
       if (flashA > 0) {
@@ -888,7 +943,7 @@ function drawGridCell(
     return;
   }
 
-  // ── Explosion: characters fly apart ──────────────────────────────────────
+  // ── Explosion: characters fly apart + smoke clouds ───────────────────────
   const kwFsz = Math.min(r.gridKwFsz, h * 0.36);
   drawTextBurst(ctx, [{
     text:  point.label,
@@ -898,6 +953,7 @@ function drawGridCell(
     color: r.gridKwClr,
     seed,
   }], explodeT, accent);
+  drawSmokeClouds(ctx, cx, cy, explodeT, seed * 2.7);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

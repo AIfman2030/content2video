@@ -110,16 +110,17 @@ export function chineseSlideDuration(pts: number) {
 
 // ── AI Tech 4-phase timing ─────────────────────────────────────────────────────
 export const AT = {
-  keywordSlot: 900,    // ms per keyword in radial phase (label+short in same box)
-  burstDur:    600,    // flip/shatter transition
-  descSlot:    800,    // ms per desc item
-  gridStagger:  90,    // ms stagger between grid cells
-  gridHold:   1200,    // hold after all cells visible
-  explodeDur:  900,    // explosion outro
+  titleHold:  1000,    // pause after title settles (new)
+  keywordSlot: 1100,   // ms per keyword in radial phase  (was 900)
+  burstDur:    720,    // flip/shatter transition          (was 600)
+  descSlot:   1000,    // ms per desc item                 (was 800)
+  gridStagger: 110,    // ms stagger between grid cells    (was  90)
+  gridHold:   3200,    // hold after all cells visible     (was 1200, +2000 for 2-sec pause)
+  explodeDur: 1600,    // explosion outro                  (was 900, longer for smoke)
 };
 
 export function aiTechPhases(n: number) {
-  const p1Start = T.cardBase;
+  const p1Start = T.cardBase + AT.titleHold;               // pause after title settles
   const p2Start = p1Start + n * AT.keywordSlot;           // burst transition
   const p3Start = p2Start + AT.burstDur;                  // desc phase
   const p4Start = p3Start + n * AT.descSlot + 400;        // grid phase
