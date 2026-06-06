@@ -219,7 +219,10 @@ export async function createAnimEngine(
     }
 
     // Shape decoration removed — background is plain black
-    drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
+    // For keyword style: title is handled internally (no header)
+    if (!isKeyword) {
+      drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
+    }
     drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions, keywordOptions);
 
     const outroStart = (style === 'city'

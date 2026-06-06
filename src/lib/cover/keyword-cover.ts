@@ -61,8 +61,8 @@ async function drawKeywordCover(ctx: DC, opts: CoverOpts) {
   }
   ctx.setLineDash([]); ctx.restore();
 
-  // ── Center keyword (from title first word) ──────────────────────────────────
-  const centerWord = (items[0] ?? title.slice(0, 4) ?? '词云');
+  // ── Center keyword (title IS the center theme word) ──────────────────────────
+  const centerWord = title || (items[0] ?? '词云');
   ctx.save();
   ctx.font = `800 180px "Noto Sans SC", sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';

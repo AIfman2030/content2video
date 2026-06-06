@@ -109,12 +109,13 @@ export function chineseSlideDuration(pts: number) {
 }
 
 // ── Keyword Layout timing ──────────────────────────────────────────────────────
-export const KW_TITLE_HOLD = 200;   // pause after title header settles
-export const KW_CENTER_DUR = 500;   // center keyword entrance animation ms
-export const KW_HOLD_MS    = 2800;  // hold after all keywords visible
+export const KW_START_DELAY = 500;  // initial delay before keyword animation (no title wait)
+export const KW_TITLE_HOLD  = 200;  // (legacy, kept for compat)
+export const KW_CENTER_DUR  = 600;  // center keyword entrance animation ms
+export const KW_HOLD_MS     = 2800; // hold after all keywords visible
 
-export function keywordTotalMs(n: number, staggerMs = 180): number {
-  return T.cardBase + KW_TITLE_HOLD + KW_CENTER_DUR + n * staggerMs + KW_HOLD_MS + T.outroDur;
+export function keywordTotalMs(n: number, staggerMs = 280): number {
+  return KW_START_DELAY + KW_CENTER_DUR + n * staggerMs + KW_HOLD_MS + T.outroDur;
 }
 
 // ── AI Tech 4-phase timing ─────────────────────────────────────────────────────

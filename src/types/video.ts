@@ -351,6 +351,6 @@ export const DEFAULT_KEYWORD_OPTIONS: KeywordOptions = {
   accentColor: '#00d4ff',
   centerFontSize: 120,
   keywordFontSize: 48,
-  staggerMs: 180,
+  staggerMs: 280,
   fontWeight: 700,
 };
