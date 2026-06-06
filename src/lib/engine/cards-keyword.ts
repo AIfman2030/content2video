@@ -8,9 +8,9 @@
  *  - Collision-aware placement (no overlapping words)
  */
 
-import type { GeneratedContent, KeywordOptions } from '../../types/video';
+import type { GeneratedContent, KeywordOptions, KeywordCenterAnim } from '../../types/video';
 import {
-  CW, CH, clamp, lerp, easeOutCubic, easeOutBack, hex2rgba,
+  CW, CH, clamp, lerp, easeOutCubic, easeOutBack,
   KW_START_DELAY, KW_CENTER_DUR,
 } from './helpers';
 
@@ -35,9 +35,10 @@ function ro(opts: KeywordOptions | undefined, accent: string) {
     kwColor:      o.keywordColor     ?? '#ffffff',
     ff:           o.fontFamily       ? `"${o.fontFamily}", sans-serif` : '"Noto Sans SC", sans-serif',
     fw:           o.fontWeight       ?? 700,
-    stagger:      o.staggerMs        ?? 280,   // default 280ms (slower, readable)
+    stagger:      o.staggerMs        ?? 280,
     gridLine:     o.gridLineColor    || ac,
     cardBorder:   o.cardBorderColor  || ac,
+    centerAnim:   (o.centerEnterAnim ?? 'scale') as KeywordCenterAnim,
   };
 }
 
@@ -207,8 +208,10 @@ function computeRadial(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SHARED: draw center word (title at canvas center)
+// CENTER WORD ANIMATIONS (7 effects)
 // ─────────────────────────────────────────────────────────────────────────────
+
+const GLITCH_CHARS = '▓░█■□◆◇▲△▼▽◉○●◎';
 
 function drawCenterWord(
   ctx: DC, elapsed: number, text: string, p0: number, r: ReturnType<typeof ro>,
@@ -216,18 +219,141 @@ function drawCenterWord(
 ) {
   const t = clamp((elapsed - p0) / KW_CENTER_DUR, 0, 1);
   if (t <= 0) return;
-  const sc = easeOutBack(Math.min(t, 0.999));
+
   ctx.save();
-  ctx.globalAlpha = clamp(t * 2, 0, 1);
-  ctx.translate(CX, cy);
-  ctx.scale(sc, sc);
   ctx.font = `800 ${r.centerFsz}px ${r.ff}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = r.centerColor;
   ctx.shadowColor = r.accent;
-  ctx.shadowBlur = 55;
-  ctx.fillText(text, 0, 0);
+
+  switch (r.centerAnim) {
+
+    // ── 1. SCALE (default, easeOutBack) ────────────────────────────────────
+    case 'scale': {
+      const sc = easeOutBack(Math.min(t, 0.999));
+      ctx.globalAlpha = clamp(t * 2, 0, 1);
+      ctx.shadowBlur = 55;
+      ctx.translate(CX, cy); ctx.scale(sc, sc);
+      ctx.fillText(text, 0, 0);
+      break;
+    }
+
+    // ── 2. TYPEWRITER ──────────────────────────────────────────────────────
+    case 'typewriter': {
+      const visible = Math.ceil(t * text.length);
+      const shown   = text.slice(0, visible);
+      const cursor  = visible < text.length && Math.floor((elapsed - p0) / 300) % 2 === 0 ? '|' : '';
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 40;
+      ctx.fillText(shown + cursor, CX, cy);
+      break;
+    }
+
+    // ── 3. FLY DOWN (drops from sky with bounce) ───────────────────────────
+    case 'flydown': {
+      const eased = easeOutBack(Math.min(t, 0.999));
+      const startY = cy - CH * 0.75;
+      const ky     = lerp(startY, cy, eased);
+      ctx.globalAlpha = clamp(t * 3, 0, 1);
+      ctx.shadowBlur = 50;
+      ctx.fillText(text, CX, ky);
+      break;
+    }
+
+    // ── 4. GLITCH (scramble → solidify) ───────────────────────────────────
+    case 'glitch': {
+      if (t > 0.75) {
+        // Solid phase
+        const fadeIn = clamp((t - 0.75) / 0.25, 0, 1);
+        ctx.globalAlpha = fadeIn;
+        ctx.shadowBlur = 50;
+        ctx.fillText(text, CX, cy);
+      } else {
+        // Glitch phase: draw scrambled chars with offset copies
+        const solidChars = Math.floor(t / 0.75 * text.length);
+        let display = '';
+        for (let i = 0; i < text.length; i++) {
+          if (i < solidChars) {
+            display += text[i];
+          } else {
+            // Pseudo-random per frame using elapsed
+            const seed = (elapsed * 0.013 + i * 7.3) % 1;
+            display += seed > 0.5 ? GLITCH_CHARS[Math.floor(seed * GLITCH_CHARS.length)] : text[i];
+          }
+        }
+        // RGB-split shadow for glitch aesthetic
+        ctx.globalAlpha = 0.85;
+        ctx.shadowBlur = 15;
+        ctx.fillStyle = '#ff0044'; ctx.fillText(display, CX - 4, cy - 2);
+        ctx.fillStyle = '#00ffcc'; ctx.fillText(display, CX + 4, cy + 2);
+        ctx.fillStyle = r.centerColor; ctx.fillText(display, CX, cy);
+      }
+      break;
+    }
+
+    // ── 5. EXPLODE (chars fly in from scattered positions) ─────────────────
+    case 'explode': {
+      const eased = easeOutCubic(Math.min(t, 1));
+      // Measure each char width (approximate)
+      const charW    = r.centerFsz * 0.92;
+      const totalW   = text.length * charW;
+      const startX   = CX - totalW / 2 + charW / 2;
+      ctx.shadowBlur = 40;
+      ctx.globalAlpha = clamp(t * 2, 0, 1);
+      for (let i = 0; i < text.length; i++) {
+        const finalX = startX + i * charW;
+        const angle  = sf(i * 4.1 + 1) * Math.PI * 2;
+        const dist   = 500 + sf(i * 2.3 + 2) * 400;
+        const ox     = Math.cos(angle) * dist;
+        const oy     = Math.sin(angle) * dist;
+        ctx.fillText(text[i], lerp(finalX + ox, finalX, eased), lerp(cy + oy, cy, eased));
+      }
+      break;
+    }
+
+    // ── 6. BLUR (sharpens from blurry) ────────────────────────────────────
+    case 'blur': {
+      const blurPx = Math.round((1 - easeOutCubic(t)) * 28);
+      ctx.globalAlpha = clamp(t * 1.5, 0, 1);
+      ctx.filter    = blurPx > 0 ? `blur(${blurPx}px)` : 'none';
+      ctx.shadowBlur = 50;
+      ctx.fillText(text, CX, cy);
+      ctx.filter = 'none';
+      break;
+    }
+
+    // ── 7. WAVE (chars appear in a sine wave, settle to baseline) ──────────
+    case 'wave': {
+      const charW    = r.centerFsz * 0.92;
+      const totalW   = text.length * charW;
+      const startX   = CX - totalW / 2 + charW / 2;
+      ctx.shadowBlur = 45;
+      for (let i = 0; i < text.length; i++) {
+        // Each char appears with a delay proportional to position
+        const charT = clamp((t - i * 0.12) / 0.55, 0, 1);
+        if (charT <= 0) continue;
+        const waveOffset = Math.sin(i * 0.8 - elapsed * 0.006) * (1 - charT) * 50;
+        const sc         = easeOutBack(Math.min(charT, 0.999));
+        ctx.globalAlpha  = charT;
+        ctx.save();
+        ctx.translate(startX + i * charW, cy + waveOffset);
+        ctx.scale(sc, sc);
+        ctx.fillText(text[i], 0, 0);
+        ctx.restore();
+      }
+      break;
+    }
+
+    default: {
+      const sc = easeOutBack(Math.min(t, 0.999));
+      ctx.globalAlpha = clamp(t * 2, 0, 1);
+      ctx.shadowBlur = 55;
+      ctx.translate(CX, cy); ctx.scale(sc, sc);
+      ctx.fillText(text, 0, 0);
+    }
+  }
+
   ctx.shadowBlur = 0;
   ctx.restore();
 }
@@ -559,22 +685,12 @@ function drawCard(
     ctx.fillStyle = bc;
     ctx.fillText(String(i + 1).padStart(2, '0'), 0, -hh + 22);
 
-    const hasShort = Boolean(pts[i].short);
+    // Keyword only — no short description
     ctx.font = `800 ${Math.min(r.kwFsz + 10, 72)}px ${r.ff}`;
     ctx.fillStyle = r.kwColor;
     ctx.shadowColor = bc; ctx.shadowBlur = 18;
-    ctx.fillText(pts[i].label, 0, hasShort ? -6 : 8);
+    ctx.fillText(pts[i].label, 0, 8);
     ctx.shadowBlur = 0;
-
-    if (hasShort) {
-      ctx.strokeStyle = hex2rgba(bc, 0.45); ctx.lineWidth = 1.2;
-      ctx.setLineDash([4, 7]);
-      ctx.beginPath(); ctx.moveTo(-hw + 26, 20); ctx.lineTo(hw - 26, 20); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.font = `400 ${Math.round(r.kwFsz * 0.58)}px ${r.ff}`;
-      ctx.fillStyle = hex2rgba(r.kwColor, 0.65);
-      ctx.fillText(pts[i].short, 0, 42);
-    }
     ctx.restore();
   }
 }

@@ -12,7 +12,7 @@ import type {
   PetCoverConfig, NatureOptions,
   ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim,
   TitleOptions, TitleLineConfig, TitleLineEnterAnim,
-  KeywordOptions, KeywordLayout,
+  KeywordOptions, KeywordLayout, KeywordCenterAnim,
 } from '../types/video';
 import { DEFAULT_CARD_LINES, DEFAULT_TITLE_OPTIONS, DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2, DEFAULT_KEYWORD_OPTIONS } from '../types/video';
 import CoverPicker from './CoverPicker';
@@ -1006,6 +1006,37 @@ function KeywordPanel({
       <NumericSlider label="中心词字号" value={keywordOptions.centerFontSize ?? 120} min={60} max={200} step={4} onChange={v => upd({ centerFontSize: v })} />
       <NumericSlider label="关键词字号" value={keywordOptions.keywordFontSize ?? 48}  min={24} max={96}  step={2} onChange={v => upd({ keywordFontSize: v })} />
       <NumericSlider label="出现间隔" value={keywordOptions.staggerMs ?? 180} min={60} max={600} step={20} unit="ms" onChange={v => upd({ staggerMs: v })} />
+
+      {/* Center word entrance animation selector */}
+      <div>
+        <p className="text-xs font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>中心词出场动效</p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {([
+            { key: 'scale',      label: '缩放',   sub: '弹入' },
+            { key: 'typewriter', label: '打字机', sub: '逐字' },
+            { key: 'flydown',    label: '飞入',   sub: '天降' },
+            { key: 'glitch',     label: '故障',   sub: '乱码' },
+            { key: 'explode',    label: '聚合',   sub: '爆炸' },
+            { key: 'blur',       label: '对焦',   sub: '虚化' },
+            { key: 'wave',       label: '波浪',   sub: '逐字' },
+          ] as { key: KeywordCenterAnim; label: string; sub: string }[]).map(({ key, label, sub }) => {
+            const active = (keywordOptions.centerEnterAnim ?? 'scale') === key;
+            return (
+              <button key={key} onClick={() => upd({ centerEnterAnim: key })}
+                className="flex flex-col items-center rounded-xl py-2 text-xs transition-all"
+                style={{
+                  background: active ? `${accentColor}22` : 'rgba(255,255,255,0.05)',
+                  borderWidth: 1, borderStyle: 'solid',
+                  borderColor: active ? accentColor : 'rgba(255,255,255,0.08)',
+                  color: active ? accentColor : 'rgba(255,255,255,0.45)',
+                }}>
+                <span className="font-semibold">{label}</span>
+                <span className="text-[10px] opacity-60 mt-0.5">{sub}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       <div>
         <p className="text-xs font-semibold mb-1.5" style={{ color: 'rgba(255,255,255,0.45)' }}>字体粗细</p>

@@ -169,32 +169,33 @@ const KEYWORD_PROMPT = `你是一个关键词提炼专家。用户给你一段�
 {
   "title": "中心主题词（2-6字，精炼有力）",
   "points": [
-    {"label": "关键词1", "short": "简短说明（4-8字，可选）", "desc": "", "formatted": ""},
+    {"label": "关键词1", "short": "", "desc": "", "formatted": ""},
     {"label": "关键词2", "short": "", "desc": "", "formatted": ""}
   ]
 }
 
 要求：
 - title 是文章核心主题，2-6个字，简洁有力，将作为大字出现在画面中央
-- points 中每个关键词 1-6 个字，尽量简洁
+- points 中每个关键词 1-6 个字，尽量简洁，只写关键词本身，不要任何说明或短句
 - 总关键词数量 18-26 个
-- short 字段可填简短说明（4-8字），也可为空
+- short/desc/formatted 保持空字符串
 - 关键词要覆盖文章的核心概念、关键动作、价值观等维度`;
 
 export async function extractKeywords(text: string): Promise<GeneratedContent> {
-  const raw = await callDeepSeek(KEYWORD_PROMPT, text, 1200);
+  const raw = await callDeepSeek(KEYWORD_PROMPT, text, 900);
   try {
-    const parsed = JSON.parse(raw) as { title: string; points: Array<{ label: string; short: string; desc: string; formatted: string }> };
+    const m = raw.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(m ? m[0] : raw) as { title: string; points: Array<{ label: string; short: string; desc: string; formatted: string }> };
     if (!parsed.title || !Array.isArray(parsed.points) || parsed.points.length < 5) {
       throw new Error('格式错误');
     }
     return {
       title: parsed.title,
       points: parsed.points.map(p => ({
-        label: (p.label ?? '').trim(),
-        short: p.short ?? '',
-        desc: p.desc ?? '',
-        formatted: p.formatted ?? p.label ?? '',
+        label:     (p.label ?? '').trim(),
+        short:     '',
+        desc:      '',
+        formatted: (p.label ?? '').trim(),
       })).filter(p => p.label.length > 0),
     };
   } catch {

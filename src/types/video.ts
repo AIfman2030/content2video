@@ -330,20 +330,22 @@ export const DEFAULT_TITLE_OPTIONS: TitleOptions = {
 
 // ─── Keyword Layout Options ────────────────────────────────────────────────────
 export type KeywordLayout = 'cloud' | 'grid' | 'radial' | 'orbit' | 'card' | 'flow';
+export type KeywordCenterAnim = 'scale' | 'typewriter' | 'flydown' | 'glitch' | 'explode' | 'blur' | 'wave';
 
 export interface KeywordOptions {
   layout: KeywordLayout;
   accentColor: string;
-  bgColor?: string;             // '' = auto dark (#050508)
-  centerFontSize: number;       // center keyword size (default 120)
-  centerColor?: string;         // '' = accent
-  keywordFontSize: number;      // surrounding keywords size (default 48)
-  keywordColor?: string;        // '' = '#ffffff'
-  fontFamily?: string;          // '' = "Noto Sans SC"
+  bgColor?: string;
+  centerFontSize: number;
+  centerColor?: string;
+  keywordFontSize: number;
+  keywordColor?: string;
+  fontFamily?: string;
   fontWeight?: 400 | 600 | 700 | 800;
-  staggerMs: number;            // ms between keyword appearances (default 180)
-  gridLineColor?: string;       // for grid layout
-  cardBorderColor?: string;     // for card layout
+  staggerMs: number;
+  gridLineColor?: string;
+  cardBorderColor?: string;
+  centerEnterAnim?: KeywordCenterAnim;   // center word entrance animation
 }
 
 export const DEFAULT_KEYWORD_OPTIONS: KeywordOptions = {
@@ -353,4 +355,5 @@ export const DEFAULT_KEYWORD_OPTIONS: KeywordOptions = {
   keywordFontSize: 48,
   staggerMs: 280,
   fontWeight: 700,
+  centerEnterAnim: 'scale',
 };
