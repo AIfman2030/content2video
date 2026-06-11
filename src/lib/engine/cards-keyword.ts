@@ -22,6 +22,9 @@ function sf(seed: number): number {
   return (((Math.sin(seed * 0.9999) * 43758.5) % 1) + 1) % 1;
 }
 
+// ── Easing helpers ────────────────────────────────────────────────────────────
+function easeInCubic(t: number): number { return t * t * t; }
+
 // ── Options resolver ──────────────────────────────────────────────────────────
 function ro(opts: KeywordOptions | undefined, accent: string) {
   const o = opts ?? {} as KeywordOptions;
@@ -66,81 +69,88 @@ function makeRect(cx: number, cy: number, w: number, h: number): Rect {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CLOUD LAYOUT – PLACEMENT CACHE (deterministic, collision-free)
+// CLOUD LAYOUT v2 — INFINITE CONTINUOUS FLOW
+// Words appear large (2.5×) and shrink to final size while fading in,
+// then hold briefly, then fade out. N_SLOTS is auto-calculated from canvas
+// area ÷ average word area so the canvas is always visually full.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface PlacedKw { x: number; y: number; fsz: number }
+const CLOUD_ENTER_DUR = 450;   // ms: scale 2.5→1, alpha 0→1
+const CLOUD_HOLD_DUR  = 700;   // ms: full opacity, normal scale
+const CLOUD_FADE_DUR  = 450;   // ms: alpha 1→0 (scale stays 1)
+const CLOUD_LIFE      = CLOUD_ENTER_DUR + CLOUD_HOLD_DUR + CLOUD_FADE_DUR; // 1600ms
 
-const CLOUD_CACHE = new Map<string, PlacedKw[]>();
+// Average fraction of slots that contribute visible pixels at any moment
+const CLOUD_VIS_FRAC = (CLOUD_ENTER_DUR * 0.5 + CLOUD_HOLD_DUR + CLOUD_FADE_DUR * 0.5) / CLOUD_LIFE; // ≈ 0.72
 
-function computeCloud(
-  centerWord: string, keywords: string[], centerFsz: number, kwFsz: number,
-): PlacedKw[] {
-  const key = `${centerWord}|${keywords.join('|')}|${centerFsz}|${kwFsz}`;
-  const cached = CLOUD_CACHE.get(key);
-  if (cached) return cached;
+interface CloudSlotDef { x: number; y: number; fsz: number; }
 
-  const placed: Rect[] = [];
+/** Deterministic seeded PRNG */
+function cloudRng(seed: number) {
+  let s = (seed | 0) >>> 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 0x100000000;
+  };
+}
 
-  // Reserve center-word bounding box
-  const cw2 = tw(centerWord, centerFsz), ch2 = th(centerFsz);
-  placed.push(makeRect(CX, CY, cw2 + 36, ch2 + 20));
+const CLOUD_SLOT_CACHE = new Map<number, CloudSlotDef[]>();
 
-  const result: PlacedKw[] = [];
-  const XSCALE = 1.55;         // stretch horizontally to use full 1920 width
-  const PAD_L  = 60, PAD_R = 60, PAD_T = 55, PAD_B = 55;
+/**
+ * Compute N_SLOTS and their positions based on canvas size and font size.
+ * Larger font → fewer slots (words are bigger so fewer fit).
+ */
+function computeCloudSlots(kwFsz: number): CloudSlotDef[] {
+  const avgFsz    = kwFsz * 1.18;        // representative avg of size mix
+  const avgChars  = 3.5;                 // typical Chinese keyword chars
+  const spacingK  = 3.2;                 // generous gap (1 word per 3.2× word area)
+  const wordArea  = avgChars * avgFsz * avgFsz * 1.8 * spacingK;
+  const nVisible  = (CW * CH) / wordArea;
+  const nSlots    = Math.min(80, Math.max(20, Math.ceil(nVisible / CLOUD_VIS_FRAC)));
 
-  for (let i = 0; i < keywords.length; i++) {
-    const kw   = keywords[i];
-    // Keyword size decreases with index (inner = larger, outer = smaller)
-    const fszScale = i < 7 ? 1.00 : i < 15 ? 0.78 : 0.60;
-    const fsz  = Math.round(kwFsz * fszScale);
-    const w    = tw(kw, fsz);
-    const h    = th(fsz);
+  // Grid proportional to canvas aspect ratio
+  const ratio = CW / CH;
+  const cols  = Math.ceil(Math.sqrt(nSlots * ratio));
+  const rows  = Math.ceil(nSlots / cols);
+  const cellW = CW / cols, cellH = CH / rows;
 
-    // Spread preferred angles evenly (with a slight seed offset for organic look)
-    const prefAngle = (i / keywords.length) * Math.PI * 2 - Math.PI / 2 + (sf(i * 2.7 + 1) - 0.5) * 0.6;
+  // Four font sizes for organic variety
+  const sizes = [
+    Math.max(22, Math.round(kwFsz * 0.70)),
+    kwFsz,
+    Math.round(kwFsz * 1.22),
+    Math.round(kwFsz * 1.52),
+  ];
 
-    let found = false;
-    const STEP_R = 40;
-    const STEP_A = Math.PI / 12;  // 15° per angular step
+  const rand  = cloudRng(0xDEADBEEF);
+  const slots: CloudSlotDef[] = [];
 
-    outer:
-    for (let r = 190; r <= 680; r += STEP_R) {
-      // Alternate CW / CCW per keyword for organic scatter
-      for (let step = 0; step < 24; step++) {
-        const da    = step * STEP_A * (i % 2 === 0 ? 1 : -1);
-        const angle = prefAngle + da;
-        const kx    = CX + Math.cos(angle) * r * XSCALE;
-        const ky    = CY + Math.sin(angle) * r;
-
-        // Canvas bounds check (full canvas, no header zone)
-        if (kx - w / 2 < PAD_L || kx + w / 2 > CW - PAD_R) continue;
-        if (ky - h / 2 < PAD_T || ky + h / 2 > CH - PAD_B) continue;
-
-        const rect = makeRect(kx, ky, w + 10, h + 6);
-        if (!placed.some(p => overlaps(p, rect))) {
-          placed.push(rect);
-          result.push({ x: kx, y: ky, fsz });
-          found = true;
-          break outer;
-        }
-      }
-    }
-
-    if (!found) {
-      // Absolute fallback: just beyond canvas right, won't be visible
-      result.push({ x: CW + 200, y: CY, fsz });
+  outer:
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      if (slots.length >= nSlots) break outer;
+      const x   = (col + 0.06 + rand() * 0.88) * cellW;
+      const y   = (row + 0.06 + rand() * 0.88) * cellH;
+      const fsz = sizes[Math.floor(rand() * sizes.length)];
+      slots.push({ x, y, fsz });
     }
   }
 
-  CLOUD_CACHE.set(key, result);
-  return result;
+  return slots;
+}
+
+function getCloudSlots(kwFsz: number): CloudSlotDef[] {
+  if (CLOUD_SLOT_CACHE.has(kwFsz)) return CLOUD_SLOT_CACHE.get(kwFsz)!;
+  const s = computeCloudSlots(kwFsz);
+  CLOUD_SLOT_CACHE.set(kwFsz, s);
+  return s;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // RADIAL LAYOUT – PLACEMENT CACHE (collision-aware)
 // ─────────────────────────────────────────────────────────────────────────────
+
+interface PlacedKw { x: number; y: number; fsz: number }
 
 const RADIAL_CACHE = new Map<string, PlacedKw[]>();
 
@@ -359,7 +369,7 @@ function drawCenterWord(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LAYOUT 1: CLOUD
+// LAYOUT 1: CLOUD — continuous infinite flow
 // ─────────────────────────────────────────────────────────────────────────────
 
 function drawCloud(
@@ -367,34 +377,75 @@ function drawCloud(
   r: ReturnType<typeof ro>, p0: number,
 ) {
   const centerWord = content.title;
-  const kws = content.points.map(p => p.label).filter(Boolean);
+  const pts = content.points.filter(p => p.label.trim());
+  if (!pts.length) { drawCenterWord(ctx, elapsed, centerWord, p0, r); return; }
 
-  // Pre-compute collision-free positions
-  const positions = computeCloud(centerWord, kws, r.centerFsz, r.kwFsz);
+  const slots = getCloudSlots(r.kwFsz);
+  const N     = slots.length;
+  const t     = elapsed - p0;
 
-  // Surrounding keywords
-  const kwStart = p0 + KW_CENTER_DUR;
-  for (let i = 0; i < kws.length; i++) {
-    const te = elapsed - (kwStart + i * r.stagger);
-    if (te <= 0) continue;
-    const alpha = clamp(te / 450, 0, 1);
-    const pos   = positions[i];
-    if (!pos || pos.x > CW) continue;
+  // ── Per-slot animation state ──────────────────────────────────────────────
+  interface SlotState {
+    si: number; phaseTime: number; kwIdx: number;
+    phase: 0 | 1 | 2;   // 0=entering 1=holding 2=fading
+    alpha: number; scale: number;
+  }
+  const states: SlotState[] = [];
 
-    // Depth fade: outer keywords slightly more transparent
-    const depth = 0.55 + 0.45 * (1 - i / Math.max(kws.length, 1) * 0.55);
+  for (let s = 0; s < N; s++) {
+    // Pre-stagger: distribute all slots evenly across one full cycle
+    // so canvas looks full from frame 0.
+    const staggerOffset = (s / N) * CLOUD_LIFE;
+    const effectiveT    = t + staggerOffset;
+    if (effectiveT < 0) continue;
 
-    ctx.save();
-    ctx.globalAlpha = alpha * depth;
-    ctx.font = `${r.fw} ${pos.fsz}px ${r.ff}`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = r.kwColor;
-    ctx.fillText(kws[i], pos.x, pos.y);
-    ctx.restore();
+    const phaseTime = effectiveT % CLOUD_LIFE;
+    const cycleIdx  = Math.floor(effectiveT / CLOUD_LIFE);
+    // Each cycle advances through all keywords in order
+    const kwIdx = (s + cycleIdx * N) % pts.length;
+
+    let alpha = 1, scale = 1;
+    let phase: 0 | 1 | 2 = 1;
+
+    if (phaseTime < CLOUD_ENTER_DUR) {
+      phase = 0;
+      const tp = phaseTime / CLOUD_ENTER_DUR;
+      alpha = tp;
+      scale = lerp(2.5, 1, easeOutCubic(tp));
+    } else if (phaseTime < CLOUD_ENTER_DUR + CLOUD_HOLD_DUR) {
+      phase = 1; alpha = 1; scale = 1;
+    } else {
+      phase = 2;
+      const tp = (phaseTime - CLOUD_ENTER_DUR - CLOUD_HOLD_DUR) / CLOUD_FADE_DUR;
+      alpha = 1 - easeInCubic(tp);
+      scale = 1;
+    }
+
+    states.push({ si: s, phaseTime, kwIdx, phase, alpha, scale });
   }
 
-  // Center word drawn LAST so it's always on top
+  // ── Draw in z-order: fading first, holding second, entering last (on top) ──
+  for (const targetPhase of [2, 1, 0] as const) {
+    for (const st of states) {
+      if (st.phase !== targetPhase || st.alpha <= 0.005) continue;
+      const slot = slots[st.si];
+      const fsz  = Math.round(slot.fsz * st.scale);
+
+      ctx.save();
+      ctx.globalAlpha    = st.alpha;
+      ctx.font           = `${r.fw} ${fsz}px ${r.ff}`;
+      ctx.textAlign      = 'center';
+      ctx.textBaseline   = 'middle';
+      ctx.fillStyle      = r.kwColor;
+      ctx.shadowColor    = r.accent;
+      // Glow strongest on entering words (they are biggest and newest)
+      ctx.shadowBlur     = st.phase === 0 ? Math.round(18 * st.scale) : 5;
+      ctx.fillText(pts[st.kwIdx].label, slot.x, slot.y);
+      ctx.restore();
+    }
+  }
+
+  // Center word drawn last — always on top
   drawCenterWord(ctx, elapsed, centerWord, p0, r);
 }
 
