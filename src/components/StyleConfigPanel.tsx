@@ -1634,6 +1634,47 @@ function MangaPanel({ opts, onChange }: {
 
   return (
     <div className="space-y-4">
+      {/* ── Mode: 普通 / RAP ── */}
+      <div>
+        <p className="text-xs font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>内容模式</p>
+        <div className="grid grid-cols-2 gap-2">
+          {([
+            { value: false, label: '漫画字幕', sub: '普通配音' },
+            { value: true,  label: 'RAP 模式', sub: '说唱歌词' },
+          ] as { value: boolean; label: string; sub: string }[]).map(m => (
+            <button
+              key={String(m.value)}
+              onClick={() => {
+                const newRap = m.value;
+                u({
+                  rapMode: newRap,
+                  // Auto-set faster TTS rate for RAP rhythm, reset for normal
+                  ttsRate: newRap
+                    ? (opts.ttsRate === 1.0 ? 1.3 : opts.ttsRate)
+                    : (opts.ttsRate === 1.3 ? 1.0 : opts.ttsRate),
+                });
+              }}
+              className="rounded-xl py-2.5 text-xs font-semibold transition-all"
+              style={{
+                background: (opts.rapMode ?? false) === m.value ? 'rgba(234,179,8,0.18)' : 'rgba(255,255,255,0.05)',
+                borderWidth: 1,
+                borderStyle: 'solid',
+                borderColor: (opts.rapMode ?? false) === m.value ? '#eab308' : 'rgba(255,255,255,0.1)',
+                color: (opts.rapMode ?? false) === m.value ? '#eab308' : 'rgba(255,255,255,0.5)',
+              }}
+            >
+              <div>{m.label}</div>
+              <div className="text-[10px] font-normal mt-0.5 opacity-70">{m.sub}</div>
+            </button>
+          ))}
+        </div>
+        {(opts.rapMode ?? false) && (
+          <p className="text-[10px] mt-2 leading-relaxed" style={{ color: 'rgba(255,255,255,0.35)' }}>
+            AI 将根据内容生成押韵中文 RAP 歌词，配图为嘻哈街头风格
+          </p>
+        )}
+      </div>
+
       {/* ── Disclaimer ── */}
       <Row>
         <Label>免责声明文字（顶部）</Label>
@@ -1664,7 +1705,7 @@ function MangaPanel({ opts, onChange }: {
             {opts.ttsEnabled
               ? <Mic size={13} style={{ color: '#a855f7' }} />
               : <MicOff size={13} style={{ color: 'rgba(255,255,255,0.3)' }} />}
-            <Label>配音朗读</Label>
+            <Label>{(opts.rapMode ?? false) ? 'RAP 朗读配音' : '配音朗读'}</Label>
           </div>
           <div
             className="relative w-9 h-5 rounded-full transition-colors"

@@ -337,7 +337,9 @@ export default function VideoGenerator({
                 className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
                 style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, color: '#fff', boxShadow: `0 4px 24px ${accent}55` }}>
                 {style === 'manga' && mangaOptions?.ttsEnabled ? <Mic size={15} /> : <Video size={15} />}
-                {style === 'manga' && mangaOptions?.ttsEnabled ? '配音录制视频' : '全屏录制视频'}
+                {style === 'manga' && mangaOptions?.ttsEnabled
+                  ? (mangaOptions?.rapMode ? 'RAP 配音录制' : '配音录制视频')
+                  : '全屏录制视频'}
               </button>
             ) : (
               <>

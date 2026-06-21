@@ -232,6 +232,7 @@ export interface MangaOptions {
   ttsCustomVoice: string;      // custom voice ID; if non-empty, overrides ttsVoice
   ttsRate: number;             // speech rate multiplier: 0.5 ~ 2.0, default 1.0
   ttsVolume: number;           // audio volume 0-100, default 80
+  rapMode: boolean;            // RAP mode: generates rap lyrics + hip-hop visuals
 }
 
 export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
@@ -243,6 +244,7 @@ export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
   ttsCustomVoice: '',
   ttsRate: 1.0,
   ttsVolume: 80,
+  rapMode: false,
 };
 
 // ─── Content / generator ──────────────────────────────────────────────────────

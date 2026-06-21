@@ -250,7 +250,7 @@ export default function Index() {
       const result = await generateMangaContent(
         text,
         (p) => setMangaProgress(p),
-        mangaOptions.disclaimer,
+        { disclaimer: mangaOptions.disclaimer, rapMode: mangaOptions.rapMode ?? false },
       );
       setMangaContent(result);
       setMangaProgress(null);

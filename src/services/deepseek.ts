@@ -157,6 +157,41 @@ export async function extractMangaScript(text: string): Promise<{ subtitle: stri
   return parsed.segments;
 }
 
+// ─── RAP Script ──────────────────────────────────────────────────────────────
+
+const RAP_SCRIPT_PROMPT = `你是一个专业的中文 RAP 词人。用户给你一段文字或话题，你要将其核心观点改写成地道的中文 RAP 歌词，每一行是一个 bar，在视频中逐段展示。
+
+返回格式（严格JSON，不要任何多余文字）：
+{
+  "segments": [
+    {
+      "subtitle": "RAP 歌词一行（8-14字，押韵有节拍感）",
+      "scene": "hip hop urban street art illustration, [brief English scene description], neon lights, graffiti, cinematic"
+    }
+  ]
+}
+
+要求：
+- 生成 10~14 个 bar，每个 bar 一个 segment
+- 每段字幕 8-14 个汉字，节拍感强，口语化，有力量感
+- 押韵规则：每两行押尾韵（AABB 格式优先），听起来要顺口
+- 内容忠实于输入文字的核心观点，但要用街头说唱的语气和表达方式
+- 每段 scene 用简洁英文描述对应的嘻哈街头画面（如 graffiti wall, neon city night, rapper silhouette, urban rooftop 等）
+- 图像风格全部为 hip hop street art anime style，色彩鲜艳，有冲击力
+- 只返回JSON，不要任何其他文字`;
+
+export async function extractRapScript(text: string): Promise<{ subtitle: string; scene: string }[]> {
+  if (text.length < 10) throw new Error('内容太短');
+  const raw = await callDeepSeek(RAP_SCRIPT_PROMPT, text, 1400);
+  let parsed: { segments: { subtitle: string; scene: string }[] };
+  try { parsed = parseJsonFromAI(raw) as typeof parsed; }
+  catch { throw new Error('AI 返回格式错误，请重试'); }
+  if (!Array.isArray(parsed.segments) || parsed.segments.length === 0) {
+    throw new Error('AI 返回数据不完整，请重试');
+  }
+  return parsed.segments;
+}
+
 export async function translateSentence(text: string): Promise<string> {
   const raw = await callDeepSeek(TRANSLATION_PROMPT, text, 250);
   return raw.trim().replace(/^["'\s]+|["'\s]+$/g, '');

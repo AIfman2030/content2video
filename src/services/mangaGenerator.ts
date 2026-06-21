@@ -1,6 +1,6 @@
 // mangaGenerator.ts — Orchestrates script + parallel image generation for manga style.
 // Images are generated via direct browser fetch to Ark API (no edge function needed).
-import { extractMangaScript } from './deepseek';
+import { extractMangaScript, extractRapScript } from './deepseek';
 import { generateArkImage } from './ark';
 import type { MangaContent, MangaSegment } from '../types/video';
 
@@ -18,14 +18,27 @@ export interface GenerationProgress {
   }>;
 }
 
+export interface MangaGenerateOptions {
+  disclaimer?: string;
+  rapMode?: boolean;
+}
+
 export async function generateMangaContent(
   inputText: string,
   onProgress: (p: GenerationProgress) => void,
-  disclaimer = '仅代表个人观点，无任何不良导向',
+  disclaimerOrOpts: string | MangaGenerateOptions = '仅代表个人观点，无任何不良导向',
 ): Promise<MangaContent> {
-  // ── Phase 1: Extract subtitle script ──────────────────────────────────────
+  const opts: MangaGenerateOptions = typeof disclaimerOrOpts === 'string'
+    ? { disclaimer: disclaimerOrOpts }
+    : disclaimerOrOpts;
+  const disclaimer = opts.disclaimer ?? '仅代表个人观点，无任何不良导向';
+  const rapMode    = opts.rapMode ?? false;
+
+  // ── Phase 1: Extract subtitle / RAP script ────────────────────────────────
   onProgress({ phase: 'script', total: 0, done: 0, segments: [] });
-  const rawSegments = await extractMangaScript(inputText);
+  const rawSegments = rapMode
+    ? await extractRapScript(inputText)
+    : await extractMangaScript(inputText);
 
   const progressSegments: GenerationProgress['segments'] = rawSegments.map(s => ({
     text: s.subtitle,
