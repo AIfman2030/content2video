@@ -36,12 +36,20 @@ const PREVIEW_H = Math.round(512 * CH / CW);
 
 type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'done';
 
-// ── Persist download state on window — survives Vite HMR module re-execution ─
+// ── Persist ALL critical state on window — survives Vite HMR module re-execution ─
 // Module-level `const` is reset on every hot-update, but `window` is not.
-interface WinStore { webmUrl: string; mp4Url: string; convError: string; }
+// `phase` MUST be persisted — without it, HMR resets phase to 'cover' which
+// looks like the overlay "automatically closes" during MP4 conversion.
+interface WinStore {
+  webmUrl: string;
+  mp4Url: string;
+  convError: string;
+  phase: 'cover' | 'video';
+}
 const ws = (): WinStore => {
   const w = window as Record<string, unknown>;
-  if (!w['__vrVidStore__']) w['__vrVidStore__'] = { webmUrl: '', mp4Url: '', convError: '' };
+  if (!w['__vrVidStore__'])
+    w['__vrVidStore__'] = { webmUrl: '', mp4Url: '', convError: '', phase: 'cover' };
   return w['__vrVidStore__'] as WinStore;
 };
 
@@ -74,7 +82,7 @@ export default function VideoGenerator({
   const mangaContentRef  = useRef(mangaContent);
   mangaContentRef.current  = mangaContent;
 
-  const [phase, setPhase]           = useState<'cover' | 'video'>('cover');
+  const [phase, setPhase]           = useState<'cover' | 'video'>(ws().phase ?? 'cover');
   const [engineReady, setEngineReady] = useState(false);
   const [recordState, setRecordState] = useState<RecordState>(ws().mp4Url || ws().webmUrl ? 'done' : 'idle');
   const [progress, setProgress]     = useState(0);
@@ -150,6 +158,7 @@ export default function VideoGenerator({
   }, []);
 
   const handleContinue = useCallback(() => {
+    ws().phase = 'video';
     setPhase('video');
     engineRef.current?.restart();
   }, []);
@@ -384,6 +393,13 @@ export default function VideoGenerator({
     setRecordState('idle'); setProgress(0);
   }, []);
 
+  const handleClose = useCallback(() => {
+    // Reset persisted phase so next open starts from cover
+    ws().phase = 'cover';
+    ws().webmUrl = ''; ws().mp4Url = ''; ws().convError = '';
+    onClose();
+  }, [onClose]);
+
   const showControls = !isBusy;
 
   return (
@@ -400,10 +416,10 @@ export default function VideoGenerator({
               content={content} natureContent={natureContent ?? null}
               style={style} coverIndex={coverIndex}
               chineseOptions={chineseOptions} petCoverConfig={petCoverConfig}
-              onContinue={handleContinue} onBack={onClose}
+              onContinue={handleContinue} onBack={handleClose}
             />
           </div>
-          <button onClick={onClose}
+          <button onClick={handleClose}
             className="absolute top-5 right-6 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors flex items-center justify-center">
             <X size={18} />
           </button>
@@ -506,7 +522,7 @@ export default function VideoGenerator({
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-10 pointer-events-none"
           style={{ zIndex: 2, display: showControls ? 'flex' : 'none' }}>
 
-          <button onClick={onClose}
+          <button onClick={handleClose}
             className="absolute top-5 right-6 flex items-center justify-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors pointer-events-auto">
             <X size={18} />
           </button>
