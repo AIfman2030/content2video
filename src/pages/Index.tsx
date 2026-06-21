@@ -531,7 +531,7 @@ export default function Index() {
       </div>
 
       {/* ── Full-screen Recording Overlay ───────────────────────────────────── */}
-      {showRecorder && hasRecordableContent && (
+      {showRecorder && (
         <VideoGenerator
           content={canvasContent ?? MANGA_DUMMY_CONTENT}
           style={style}

@@ -14,6 +14,10 @@ async function loadFFmpeg(): Promise<FFmpeg> {
   }
 
   const ff = new FFmpeg();
+  // Capture FFmpeg stderr output for debugging
+  ff.on('log', ({ type, message }) => {
+    if (type === 'fferr') console.debug('[FFmpeg]', message);
+  });
   loadPromise = ff.load({
     coreURL: await toBlobURL(`${CDN}/ffmpeg-core.js`, 'text/javascript'),
     wasmURL: await toBlobURL(`${CDN}/ffmpeg-core.wasm`, 'application/wasm'),
@@ -59,25 +63,23 @@ export async function webmToMp4(
   const inputData = await fetchFile(webmBlob);
   await ff.writeFile('input.webm', inputData);
 
-  // First attempt: H.264 + optional AAC.
-  // -fflags +genpts fixes MediaRecorder WebM timestamp issues.
+  // Attempt 1: H.264 video-only (canvas capture has no audio stream)
   let exitCode = await ff.exec([
     '-fflags', '+genpts',
     '-i', 'input.webm',
     '-map', '0:v:0',
-    '-map', '0:a:0?',
     ...H264_ARGS,
-    '-c:a', 'aac',
+    '-an',
     'output.mp4',
   ]);
 
-  // Second attempt: video-only (no audio)
+  // Attempt 2: relaxed — let FFmpeg auto-select, force even dimensions
   if (exitCode !== 0) {
     try { await ff.deleteFile('output.mp4'); } catch { /* may not exist */ }
     exitCode = await ff.exec([
-      '-fflags', '+genpts',
+      '-fflags', '+genpts+igndts',
       '-i', 'input.webm',
-      '-map', '0:v:0',
+      '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
       ...H264_ARGS,
       '-an',
       'output.mp4',
@@ -85,10 +87,11 @@ export async function webmToMp4(
   }
 
   if (exitCode !== 0) {
+    console.error('[FFmpeg] Both conversion attempts failed with exit code', exitCode);
     try { await ff.deleteFile('input.webm'); } catch { /* ignore */ }
     try { await ff.deleteFile('output.mp4'); } catch { /* ignore */ }
     resetInstance();
-    throw new Error(`FFmpeg conversion failed (exit code ${exitCode})`);
+    throw new Error(`FFmpeg conversion failed (exit code ${exitCode}). Check browser console for FFmpeg logs.`);
   }
 
   const data = await ff.readFile('output.mp4');
