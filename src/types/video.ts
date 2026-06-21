@@ -329,7 +329,7 @@ export const DEFAULT_TITLE_OPTIONS: TitleOptions = {
 };
 
 // ─── Keyword Layout Options ────────────────────────────────────────────────────
-export type KeywordLayout = 'cloud' | 'grid' | 'radial' | 'orbit' | 'card' | 'flow' | 'hexgrid' | 'colorgrid';
+export type KeywordLayout = 'grid' | 'radial' | 'card' | 'flow' | 'hexgrid' | 'colorgrid';
 export type KeywordCenterAnim = 'scale' | 'typewriter' | 'flydown' | 'glitch' | 'explode' | 'blur' | 'wave';
 
 export interface KeywordOptions {
@@ -349,7 +349,7 @@ export interface KeywordOptions {
 }
 
 export const DEFAULT_KEYWORD_OPTIONS: KeywordOptions = {
-  layout: 'cloud',
+  layout: 'grid',
   accentColor: '#00d4ff',
   centerFontSize: 120,
   keywordFontSize: 48,
