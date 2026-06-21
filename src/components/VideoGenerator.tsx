@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music } from 'lucide-react';
+import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music, AlertCircle } from 'lucide-react';
 import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, PetCoverConfig, NatureOptions, TitleOptions, KeywordOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
@@ -44,10 +44,17 @@ export default function VideoGenerator({
   const [ttsStep, setTtsStep] = useState({ done: 0, total: 0 });
   const [downloadUrl, setDownloadUrl] = useState('');
   const [initError, setInitError] = useState('');
+  const [convError, setConvError] = useState(''); // full-screen conversion error
   const engineRef = useRef<Awaited<ReturnType<typeof createAnimEngine>> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Audio cache (for preview playback) ────────────────────────────────────
+  const audioElRef      = useRef<HTMLAudioElement | null>(null); // for RAP / blob
+  const rapBlobUrlRef   = useRef<string | null>(null);           // cached blob URL for RAP
+  const ttsRawMp3sRef   = useRef<(ArrayBuffer | null)[] | null>(null); // cached TTS mp3s
+  const ttsStopRef      = useRef<(() => void) | null>(null);    // stop fn for AudioContext
 
   // Keep latest mangaOptions/mangaContent accessible in callbacks without re-creating them
   const mangaOptionsRef = useRef(mangaOptions);
@@ -73,8 +80,19 @@ export default function VideoGenerator({
     createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions, keywordOptions)
       .then(engine => { engineRef.current = engine; setEngineReady(true); engine.start(); })
       .catch(err => setInitError(String(err)));
-    return () => { engineRef.current?.stop(); };
+    return () => {
+      engineRef.current?.stop();
+      // Clean up audio on unmount
+      audioElRef.current?.pause();
+      ttsStopRef.current?.();
+      if (rapBlobUrlRef.current) URL.revokeObjectURL(rapBlobUrlRef.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const stopAllAudio = useCallback(() => {
+    if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null; }
+    if (ttsStopRef.current) { ttsStopRef.current(); ttsStopRef.current = null; }
   }, []);
 
   const handleContinue = useCallback(() => {
@@ -82,16 +100,71 @@ export default function VideoGenerator({
     engineRef.current?.restart();
   }, []);
 
-  const handlePreview = useCallback(() => {
+  // ── Preview: restart animation + play cached audio ─────────────────────────
+  const handlePreview = useCallback(async () => {
+    stopAllAudio();
     engineRef.current?.stop(); engineRef.current?.start();
-    setRecordState('idle'); setProgress(0); setInitError('');
-  }, []);
+    setRecordState('idle'); setProgress(0); setInitError(''); setConvError('');
+
+    const mc   = mangaContentRef.current;
+    const opts = mangaOptionsRef.current;
+
+    // RAP mode: play Suno audio
+    if (opts?.rapMode && mc?.rapAudioUrl) {
+      // Ensure blob URL is cached (fetch through proxy if needed)
+      if (!rapBlobUrlRef.current) {
+        try {
+          const buf = await fetchAudioAsBuffer(mc.rapAudioUrl);
+          rapBlobUrlRef.current = URL.createObjectURL(new Blob([buf], { type: 'audio/mpeg' }));
+        } catch (e) {
+          console.warn('Preview RAP audio fetch failed:', e);
+        }
+      }
+      if (rapBlobUrlRef.current) {
+        const audio = new Audio(rapBlobUrlRef.current);
+        audioElRef.current = audio;
+        audio.play().catch(e => console.warn('Audio play failed:', e));
+      }
+      return;
+    }
+
+    // TTS mode: play cached mp3 segments via AudioContext
+    const cachedMp3s = ttsRawMp3sRef.current;
+    if (cachedMp3s?.some(b => b !== null) && opts) {
+      const slideDurationSec = (opts.slideDurationMs ?? 4000) / 1000;
+      type ACtx = typeof AudioContext;
+      const CtxCls: ACtx = window.AudioContext ?? (window as unknown as { webkitAudioContext: ACtx }).webkitAudioContext;
+      const ctx = new CtxCls();
+      const sources: AudioBufferSourceNode[] = [];
+
+      let offset = ctx.currentTime + 0.05;
+      for (const mp3 of cachedMp3s) {
+        if (mp3) {
+          try {
+            const decoded = await ctx.decodeAudioData(mp3.slice(0)); // slice to avoid detach issues
+            const src = ctx.createBufferSource();
+            src.buffer = decoded;
+            src.connect(ctx.destination);
+            src.start(offset);
+            sources.push(src);
+          } catch { /* ignore decode error for this segment */ }
+        }
+        offset += slideDurationSec;
+      }
+
+      ttsStopRef.current = () => {
+        sources.forEach(s => { try { s.stop(); } catch { /* already stopped */ } });
+        ctx.close().catch(() => {});
+      };
+    }
+  }, [stopAllAudio]);
 
   const handleRecord = useCallback(async () => {
     const canvas = canvasRef.current, engine = engineRef.current;
     if (!canvas || !engine) return;
 
-    setInitError('');
+    stopAllAudio();
+    setInitError(''); setConvError('');
     chunksRef.current = [];
 
     const opts = mangaOptionsRef.current;
@@ -107,6 +180,9 @@ export default function VideoGenerator({
       setProgress(0);
       try {
         rapAudioBuffer = await fetchAudioAsBuffer(mc!.rapAudioUrl!);
+        // Cache as blob URL for preview
+        if (rapBlobUrlRef.current) URL.revokeObjectURL(rapBlobUrlRef.current);
+        rapBlobUrlRef.current = URL.createObjectURL(new Blob([rapAudioBuffer], { type: 'audio/mpeg' }));
         setTtsStep({ done: 1, total: 1 });
         setProgress(100);
       } catch (e) {
@@ -116,11 +192,9 @@ export default function VideoGenerator({
     }
 
     // ── Phase A: Pre-generate TTS audio (collect raw MP3 bytes) ───────────
-    // We store raw MP3 ArrayBuffers here and let FFmpeg do the muxing later.
-    // This completely avoids browser AudioContext / autoplay-policy issues.
     const rawMp3s: (ArrayBuffer | null)[] = [];
     let hasTtsAudio = false;
-    let ttsVolume = 80; // captured for use in onstop
+    let ttsVolume = 80;
 
     if (isMangaTts) {
       const segments = mc!.segments;
@@ -152,15 +226,14 @@ export default function VideoGenerator({
       );
       rawMp3s.push(...results);
       hasTtsAudio = rawMp3s.some(b => b !== null);
+      ttsRawMp3sRef.current = rawMp3s; // cache for preview
 
       if (!hasTtsAudio) {
-        // Show warning but still proceed with video-only recording as fallback
         setInitError('语音合成失败，将录制无声视频。');
       }
     }
 
     // ── Phase B: Record canvas video-only stream ───────────────────────────
-    // No AudioContext needed — audio will be merged by FFmpeg after recording.
     setRecordState('recording');
     setProgress(0);
 
@@ -179,15 +252,15 @@ export default function VideoGenerator({
       setProgress(0);
       const videoBlob = new Blob(chunksRef.current, { type: mimeType });
       try {
+        console.log('[VideoGenerator] Starting MP4 conversion, videoBlob size:', videoBlob.size,
+          'rapAudioBuffer:', rapAudioBuffer?.byteLength, 'hasTtsAudio:', hasTtsAudio);
         let mp4: Blob;
         if (rapAudioBuffer) {
-          // ── RAP mode: single Suno audio track from start ─────────────────
           const audioSegments = [{ mp3: rapAudioBuffer, startMs: 0 }];
           mp4 = await webmToMp4WithAudio(
             videoBlob, audioSegments, r => setProgress(Math.round(r * 100)), opts?.ttsVolume ?? 85,
           );
         } else if (hasTtsAudio) {
-          // ── FFmpeg audio merge: each MP3 segment time-shifted by i * slideDurationMs
           const slideDurationMs = opts!.slideDurationMs ?? 4000;
           const audioSegments = rawMp3s.map((mp3, i) =>
             mp3 ? { mp3, startMs: i * slideDurationMs } : null,
@@ -198,12 +271,13 @@ export default function VideoGenerator({
         } else {
           mp4 = await webmToMp4(videoBlob, r => setProgress(Math.round(r * 100)));
         }
+        console.log('[VideoGenerator] MP4 conversion done, size:', mp4.size);
         setDownloadUrl(URL.createObjectURL(mp4));
         setProgress(100);
         setRecordState('done');
       } catch (err) {
-        console.error('MP4 conversion failed:', err);
-        setInitError(`视频转换失败: ${err instanceof Error ? err.message : String(err)}`);
+        console.error('[VideoGenerator] MP4 conversion failed:', err);
+        setConvError(`视频转换失败: ${err instanceof Error ? err.message : String(err)}`);
         setRecordState('idle');
         setProgress(0);
       }
@@ -225,7 +299,7 @@ export default function VideoGenerator({
     };
 
     startRecording();
-  }, [style]);
+  }, [style, stopAllAudio]);
 
   const handleDownload = useCallback(() => {
     if (!downloadUrl) return;
@@ -350,10 +424,39 @@ export default function VideoGenerator({
         </div>
       )}
 
+      {/* ── Full-screen conversion error overlay ── */}
+      {convError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-6" style={{ zIndex: 20 }}>
+          <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-500/30">
+            <AlertCircle size={26} className="text-red-400" />
+          </div>
+          <div className="text-center max-w-xs space-y-1.5">
+            <p className="text-white/90 text-base font-medium">转换失败</p>
+            <p className="text-red-300/80 text-sm leading-relaxed">{convError}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { setConvError(''); }}
+              className="px-5 py-2 rounded-xl text-sm font-medium transition-all"
+              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)' }}
+            >
+              关闭
+            </button>
+            <button
+              onClick={() => { setConvError(''); handleRecord(); }}
+              className="px-5 py-2 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, color: '#fff' }}
+            >
+              重试
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Controls (video phase, hidden while busy) */}
       {phase === 'video' && (
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-10 pointer-events-none"
-          style={{ zIndex: 2, display: showControls ? 'flex' : 'none' }}>
+          style={{ zIndex: 2, display: showControls && !convError ? 'flex' : 'none' }}>
           <button onClick={onClose}
             className="absolute top-5 right-6 flex items-center justify-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors pointer-events-auto">
             <X size={18} />
@@ -362,7 +465,7 @@ export default function VideoGenerator({
             <button onClick={handlePreview} disabled={!engineReady}
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-40"
               style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.75)' }}>
-              <Play size={15} />预览
+              <Play size={15} />预览{(rapBlobUrlRef.current || ttsRawMp3sRef.current?.some(Boolean)) ? ' ♪' : ''}
             </button>
             {!isDone ? (
               <button onClick={handleRecord} disabled={!engineReady}
