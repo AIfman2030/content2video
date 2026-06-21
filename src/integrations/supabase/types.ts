@@ -3109,7 +3109,33 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      suno_tasks: {
+        Row: {
+          audio_url: string | null
+          created_at: string
+          error_msg: string | null
+          status: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          audio_url?: string | null
+          created_at?: string
+          error_msg?: string | null
+          status?: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          audio_url?: string | null
+          created_at?: string
+          error_msg?: string | null
+          status?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -3159,7 +3185,7 @@ export type Database = {
         }
         Relationships: []
       }
-      messages_2026_04_22: {
+      messages_2026_05_18: {
         Row: {
           event: string | null
           extension: string
@@ -3192,7 +3218,7 @@ export type Database = {
         }
         Relationships: []
       }
-      messages_2026_04_23: {
+      messages_2026_05_19: {
         Row: {
           event: string | null
           extension: string
@@ -3225,7 +3251,7 @@ export type Database = {
         }
         Relationships: []
       }
-      messages_2026_04_24: {
+      messages_2026_05_20: {
         Row: {
           event: string | null
           extension: string
@@ -3258,7 +3284,7 @@ export type Database = {
         }
         Relationships: []
       }
-      messages_2026_04_25: {
+      messages_2026_05_21: {
         Row: {
           event: string | null
           extension: string
@@ -3291,7 +3317,7 @@ export type Database = {
         }
         Relationships: []
       }
-      messages_2026_04_26: {
+      messages_2026_05_22: {
         Row: {
           event: string | null
           extension: string

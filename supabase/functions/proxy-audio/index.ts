@@ -1,58 +1,38 @@
-// proxy-audio — Fetches a remote audio URL server-side (no CORS issues)
-// and streams the bytes back to the browser.
-// Query param: ?url=<encoded-audio-url>
+// proxy-audio: Server-side fetch for remote audio URLs (avoids browser CORS)
+// GET ?url={encoded-url} → returns audio bytes
 
-Deno.serve(async (req: Request) => {
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  };
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
-  const url = new URL(req.url);
-  const targetUrl = url.searchParams.get('url');
-
-  if (!targetUrl) {
-    return new Response(JSON.stringify({ error: 'Missing ?url parameter' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  const url = new URL(req.url).searchParams.get('url');
+  if (!url) {
+    return new Response(JSON.stringify({ error: 'url param required' }), {
+      status: 400, headers: { ...CORS, 'Content-Type': 'application/json' },
     });
   }
 
   try {
-    const upstream = await fetch(targetUrl, {
+    const upstream = await fetch(decodeURIComponent(url));
+    if (!upstream.ok) throw new Error(`Upstream ${upstream.status}`);
+
+    const contentType = upstream.headers.get('content-type') || 'audio/mpeg';
+    const body = await upstream.arrayBuffer();
+
+    return new Response(body, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; AudioProxy/1.0)',
-      },
-    });
-
-    if (!upstream.ok) {
-      return new Response(
-        JSON.stringify({ error: `Upstream returned ${upstream.status}` }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-      );
-    }
-
-    const contentType = upstream.headers.get('Content-Type') ?? 'audio/mpeg';
-    const data = await upstream.arrayBuffer();
-
-    return new Response(data, {
-      status: 200,
-      headers: {
-        ...corsHeaders,
+        ...CORS,
         'Content-Type': contentType,
-        'Content-Length': String(data.byteLength),
         'Cache-Control': 'public, max-age=3600',
       },
     });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
-    );
+    return new Response(JSON.stringify({ error: String(err) }), {
+      status: 502, headers: { ...CORS, 'Content-Type': 'application/json' },
+    });
   }
 });

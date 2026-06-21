@@ -1,0 +1,22 @@
+-- Store Suno generation results from webhook callbacks
+CREATE TABLE IF NOT EXISTS suno_tasks (
+  task_id    TEXT PRIMARY KEY,
+  status     TEXT NOT NULL DEFAULT 'PENDING',
+  audio_url  TEXT,
+  error_msg  TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE suno_tasks ENABLE ROW LEVEL SECURITY;
+
+-- Allow anonymous reads (frontend polling)
+CREATE POLICY "anon_read_suno_tasks" ON suno_tasks
+  FOR SELECT USING (true);
+
+-- Only service role can insert/update (from Edge Function)
+CREATE POLICY "service_insert_suno_tasks" ON suno_tasks
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "service_update_suno_tasks" ON suno_tasks
+  FOR UPDATE USING (true);
