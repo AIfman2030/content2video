@@ -169,20 +169,21 @@ const KEYWORD_PROMPT = `你是一个关键词提炼专家。用户给你一段�
 {
   "title": "中心主题词（2-6字，精炼有力）",
   "points": [
-    {"label": "关键词1", "short": "", "desc": "", "formatted": ""},
-    {"label": "关键词2", "short": "", "desc": "", "formatted": ""}
+    {"label": "关键词1", "short": "简短行动短语（3-7字）", "desc": "", "formatted": ""},
+    {"label": "关键词2", "short": "简短行动短语（3-7字）", "desc": "", "formatted": ""}
   ]
 }
 
 要求：
 - title 是文章核心主题，2-6个字，简洁有力，将作为大字出现在画面中央
-- points 中每个关键词 1-6 个字，尽量简洁，只写关键词本身，不要任何说明或短句
+- label 每个关键词 2-6 个字，简洁精炼
+- short 每个关键词配一个简短的行动短语或补充说明，3-7个字（如"快刀斩乱麻"、"借势登高"）
 - 总关键词数量 18-26 个
-- short/desc/formatted 保持空字符串
+- desc/formatted 保持空字符串
 - 关键词要覆盖文章的核心概念、关键动作、价值观等维度`;
 
 export async function extractKeywords(text: string): Promise<GeneratedContent> {
-  const raw = await callDeepSeek(KEYWORD_PROMPT, text, 900);
+  const raw = await callDeepSeek(KEYWORD_PROMPT, text, 1200);
   try {
     const m = raw.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse(m ? m[0] : raw) as { title: string; points: Array<{ label: string; short: string; desc: string; formatted: string }> };
@@ -193,7 +194,7 @@ export async function extractKeywords(text: string): Promise<GeneratedContent> {
       title: parsed.title,
       points: parsed.points.map(p => ({
         label:     (p.label ?? '').trim(),
-        short:     '',
+        short:     (p.short ?? '').trim(),
         desc:      '',
         formatted: (p.label ?? '').trim(),
       })).filter(p => p.label.length > 0),

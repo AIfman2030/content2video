@@ -820,6 +820,209 @@ function drawFlow(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SHARED HELPER: Dynamic column count
+// ─────────────────────────────────────────────────────────────────────────────
+function autoColumns(n: number, availW: number, availH: number, targetAR = 1.55): number {
+  const raw = Math.sqrt(n * availW / availH / targetAR);
+  return Math.max(3, Math.min(8, Math.round(raw)));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAYOUT 7: HEXGRID — dark cards with accent border, keyword + short phrase
+// ─────────────────────────────────────────────────────────────────────────────
+function drawHexgrid(
+  ctx: DC, elapsed: number, content: GeneratedContent,
+  r: ReturnType<typeof ro>, p0: number,
+) {
+  const pts = content.points.filter(p => p.label);
+  if (!pts.length) return;
+
+  const MARGIN_H = 64, GAP = 18, HEADER_H = 140, MARGIN_V = 56;
+  const availW = CW - MARGIN_H * 2;
+  const availH = CH - HEADER_H - MARGIN_V;
+  const COLS   = autoColumns(pts.length, availW, availH);
+  const ROWS   = Math.ceil(pts.length / COLS);
+  const cardW  = (availW - GAP * (COLS - 1)) / COLS;
+  const cardH  = (availH - GAP * (ROWS - 1)) / ROWS;
+  const bc     = r.cardBorder;
+
+  // Title header
+  const titleA = clamp((elapsed - p0) / 450, 0, 1);
+  if (titleA > 0) {
+    ctx.save();
+    ctx.globalAlpha = titleA;
+    ctx.font = `800 62px ${r.ff}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = r.centerColor;
+    ctx.shadowColor = r.accent; ctx.shadowBlur = 28;
+    ctx.fillText(content.title, CX, 74);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  const kwStart = p0 + 400;
+  for (let i = 0; i < pts.length; i++) {
+    const te    = elapsed - (kwStart + i * r.stagger);
+    if (te <= 0) continue;
+    const alpha = clamp(te / 300, 0, 1);
+    const sc    = lerp(0.82, 1, easeOutBack(Math.min(clamp(te / 400, 0, 1), 0.999)));
+
+    const col = i % COLS, row = Math.floor(i / COLS);
+    const cx  = MARGIN_H + col * (cardW + GAP);
+    const cy  = HEADER_H + row * (cardH + GAP);
+    const hw  = cardW / 2, hh = cardH / 2;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(cx + hw, cy + hh);
+    ctx.scale(sc, sc);
+
+    // Background
+    const bg = ctx.createLinearGradient(-hw, -hh, hw, hh);
+    bg.addColorStop(0, 'rgba(12,12,26,0.96)');
+    bg.addColorStop(1, 'rgba(5,5,14,0.88)');
+    ctx.fillStyle = bg;
+    ctx.beginPath(); ctx.roundRect(-hw, -hh, cardW, cardH, 12); ctx.fill();
+
+    // Glowing border
+    ctx.shadowColor = bc; ctx.shadowBlur = 20;
+    ctx.strokeStyle = bc; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.roundRect(-hw, -hh, cardW, cardH, 12); ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Top accent bar
+    ctx.fillStyle = bc;
+    ctx.beginPath(); ctx.roundRect(-hw, -hh, cardW, 3, [2, 2, 0, 0]); ctx.fill();
+
+    // Number (top-left, accent color)
+    ctx.font = `600 20px monospace`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = bc;
+    ctx.globalAlpha = alpha * 0.8;
+    ctx.fillText(String(i + 1).padStart(2, '0'), -hw + 12, -hh + 10);
+    ctx.globalAlpha = alpha;
+
+    // Keyword (center or upper-center)
+    const hasShort = (pts[i].short ?? '').trim().length > 0;
+    const kwFsz    = Math.min(r.kwFsz + 4, 68);
+    ctx.font        = `800 ${kwFsz}px ${r.ff}`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle   = r.kwColor;
+    ctx.shadowColor = bc; ctx.shadowBlur = 14;
+    ctx.fillText(pts[i].label, 0, hasShort ? -hh * 0.18 : 2);
+    ctx.shadowBlur  = 0;
+
+    // Short phrase (below keyword)
+    if (hasShort) {
+      const shortFsz = Math.max(20, Math.round(kwFsz * 0.50));
+      ctx.font      = `400 ${shortFsz}px ${r.ff}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillText(pts[i].short, 0, hh * 0.40);
+    }
+
+    ctx.restore();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LAYOUT 8: COLORGRID — solid color tiles, dynamic columns, keyword + short
+// ─────────────────────────────────────────────────────────────────────────────
+const COLORGRID_PALETTE = [
+  '#22c55e', '#06b6d4', '#3b82f6', '#0ea5e9',
+  '#ec4899', '#8b5cf6', '#f43f5e', '#10b981',
+  '#f97316', '#eab308', '#6366f1', '#14b8a6',
+  '#a855f7', '#0891b2', '#059669', '#e11d48',
+];
+
+function drawColorgrid(
+  ctx: DC, elapsed: number, content: GeneratedContent,
+  r: ReturnType<typeof ro>, p0: number,
+) {
+  const pts = content.points.filter(p => p.label);
+  if (!pts.length) return;
+
+  const MARGIN_H = 64, GAP = 16, HEADER_H = 140, MARGIN_V = 56;
+  const availW = CW - MARGIN_H * 2;
+  const availH = CH - HEADER_H - MARGIN_V;
+  const COLS   = autoColumns(pts.length, availW, availH);
+  const ROWS   = Math.ceil(pts.length / COLS);
+  const cardW  = (availW - GAP * (COLS - 1)) / COLS;
+  const cardH  = (availH - GAP * (ROWS - 1)) / ROWS;
+
+  // Title header
+  const titleA = clamp((elapsed - p0) / 450, 0, 1);
+  if (titleA > 0) {
+    ctx.save();
+    ctx.globalAlpha = titleA;
+    ctx.font = `800 62px ${r.ff}`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = r.centerColor;
+    ctx.shadowColor = r.accent; ctx.shadowBlur = 28;
+    ctx.fillText(content.title, CX, 74);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  const kwStart = p0 + 400;
+  for (let i = 0; i < pts.length; i++) {
+    const te    = elapsed - (kwStart + i * r.stagger);
+    if (te <= 0) continue;
+    const alpha = clamp(te / 300, 0, 1);
+    const sc    = lerp(0.82, 1, easeOutBack(Math.min(clamp(te / 400, 0, 1), 0.999)));
+
+    const col   = i % COLS, row = Math.floor(i / COLS);
+    const cx    = MARGIN_H + col * (cardW + GAP);
+    const cy    = HEADER_H + row * (cardH + GAP);
+    const hw    = cardW / 2, hh = cardH / 2;
+    const color = COLORGRID_PALETTE[i % COLORGRID_PALETTE.length];
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(cx + hw, cy + hh);
+    ctx.scale(sc, sc);
+
+    // Solid color fill
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.roundRect(-hw, -hh, cardW, cardH, 12); ctx.fill();
+
+    // Subtle dark vignette at bottom for readability
+    const vignette = ctx.createLinearGradient(-hw, 0, -hw, hh);
+    vignette.addColorStop(0, 'rgba(0,0,0,0)');
+    vignette.addColorStop(1, 'rgba(0,0,0,0.38)');
+    ctx.fillStyle = vignette;
+    ctx.beginPath(); ctx.roundRect(-hw, -hh, cardW, cardH, 12); ctx.fill();
+
+    // Number (top-right, semi-transparent white)
+    ctx.font = `600 20px monospace`;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.fillText(String(i + 1), hw - 12, -hh + 10);
+
+    // Keyword (centered or upper-center)
+    const hasShort = (pts[i].short ?? '').trim().length > 0;
+    const kwFsz    = Math.min(r.kwFsz + 4, 68);
+    ctx.font        = `800 ${kwFsz}px ${r.ff}`;
+    ctx.textAlign   = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle   = '#ffffff';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10;
+    ctx.fillText(pts[i].label, 0, hasShort ? -hh * 0.18 : 2);
+    ctx.shadowBlur  = 0;
+
+    // Short phrase in parentheses (bottom)
+    if (hasShort) {
+      const shortFsz = Math.max(20, Math.round(kwFsz * 0.50));
+      ctx.font      = `400 ${shortFsz}px ${r.ff}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(255,255,255,0.88)';
+      ctx.fillText(`（${pts[i].short}）`, 0, hh * 0.40);
+    }
+
+    ctx.restore();
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MAIN ENTRY
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -839,12 +1042,14 @@ export function drawKeywordCards(
   void accent2; // reserved
 
   switch (r.layout) {
-    case 'cloud':  drawCloud(ctx, elapsed, content, r, p0);  break;
-    case 'grid':   drawGrid(ctx, elapsed, content, r, p0);   break;
-    case 'radial': drawRadial(ctx, elapsed, content, r, p0); break;
-    case 'orbit':  drawOrbit(ctx, elapsed, content, r, p0);  break;
-    case 'card':   drawCard(ctx, elapsed, content, r, p0);   break;
-    case 'flow':   drawFlow(ctx, elapsed, content, r, p0);   break;
+    case 'cloud':     drawCloud(ctx, elapsed, content, r, p0);    break;
+    case 'grid':      drawGrid(ctx, elapsed, content, r, p0);     break;
+    case 'radial':    drawRadial(ctx, elapsed, content, r, p0);   break;
+    case 'orbit':     drawOrbit(ctx, elapsed, content, r, p0);    break;
+    case 'card':      drawCard(ctx, elapsed, content, r, p0);     break;
+    case 'flow':      drawFlow(ctx, elapsed, content, r, p0);     break;
+    case 'hexgrid':   drawHexgrid(ctx, elapsed, content, r, p0);  break;
+    case 'colorgrid': drawColorgrid(ctx, elapsed, content, r, p0);break;
     default:       drawCloud(ctx, elapsed, content, r, p0);  break;
   }
 }

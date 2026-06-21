@@ -960,12 +960,14 @@ function KeywordPanel({
   const upd = (patch: Partial<KeywordOptions>) => onKeywordOptionsChange({ ...keywordOptions, ...patch });
 
   const LAYOUTS: { value: KeywordLayout; label: string }[] = [
-    { value: 'cloud',  label: '词云散布' },
-    { value: 'grid',   label: '表格网格' },
-    { value: 'radial', label: '同心圆环' },
-    { value: 'orbit',  label: '椭圆轨道' },
-    { value: 'card',   label: '编号卡片' },
-    { value: 'flow',   label: '瀑布流列' },
+    { value: 'cloud',     label: '词云散布' },
+    { value: 'grid',      label: '表格网格' },
+    { value: 'radial',    label: '同心圆环' },
+    { value: 'orbit',     label: '椭圆轨道' },
+    { value: 'card',      label: '编号卡片' },
+    { value: 'flow',      label: '瀑布流列' },
+    { value: 'hexgrid',   label: '边框卡片' },
+    { value: 'colorgrid', label: '彩色卡片' },
   ];
 
   return (
@@ -973,7 +975,7 @@ function KeywordPanel({
       {/* Layout picker */}
       <div>
         <p className="text-xs font-semibold mb-2" style={{ color: 'rgba(255,255,255,0.45)' }}>排列样式</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {LAYOUTS.map(l => (
             <button
               key={l.value}

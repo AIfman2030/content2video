@@ -329,7 +329,7 @@ export const DEFAULT_TITLE_OPTIONS: TitleOptions = {
 };
 
 // ─── Keyword Layout Options ────────────────────────────────────────────────────
-export type KeywordLayout = 'cloud' | 'grid' | 'radial' | 'orbit' | 'card' | 'flow';
+export type KeywordLayout = 'cloud' | 'grid' | 'radial' | 'orbit' | 'card' | 'flow' | 'hexgrid' | 'colorgrid';
 export type KeywordCenterAnim = 'scale' | 'typewriter' | 'flydown' | 'glitch' | 'explode' | 'blur' | 'wave';
 
 export interface KeywordOptions {
