@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { Film, Key, Video } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
@@ -143,6 +143,8 @@ const MANGA_DUMMY_CONTENT: GeneratedContent = {
   points: [],
 };
 
+const MANGA_STORAGE_KEY = 'vreel_manga_content_v1';
+
 export default function Index() {
   const [style, setStyle] = useState<StyleType>('chinese');
   const [isLoading, setIsLoading] = useState(false);
@@ -177,6 +179,33 @@ export default function Index() {
     ? subtitleOptions.accentColor
     : (accentOverrides[style] ?? ACCENT_BY_STYLE[style]);
   const bg = BG_BY_STYLE[style];
+
+  // ── Persist manga content to localStorage (survives page refresh) ─────────
+
+  useEffect(() => {
+    // Restore saved manga content on mount
+    try {
+      const raw = localStorage.getItem(MANGA_STORAGE_KEY);
+      if (!raw) return;
+      const saved: MangaContent = JSON.parse(raw);
+      if (saved?.segments?.length) {
+        setStyle('manga');
+        setMangaContent(saved);
+        setContent(MANGA_DUMMY_CONTENT);
+      }
+    } catch { /* ignore parse errors */ }
+  }, []);
+
+  useEffect(() => {
+    // Save / clear on change
+    try {
+      if (mangaContent) {
+        localStorage.setItem(MANGA_STORAGE_KEY, JSON.stringify(mangaContent));
+      } else {
+        localStorage.removeItem(MANGA_STORAGE_KEY);
+      }
+    } catch { /* ignore quota errors */ }
+  }, [mangaContent]);
 
   // ── When style changes, reset content + config ───────────────────────────
   const handleStyleChange = (s: StyleType) => {
