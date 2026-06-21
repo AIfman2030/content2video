@@ -1,5 +1,5 @@
 // MangaGenerationProgress.tsx
-// Shows the two-phase generation progress: script extraction + per-segment image generation.
+// Shows generation progress: script → images → music (RAP mode).
 import { Loader2, CheckCircle, XCircle, Clock, Music } from 'lucide-react';
 import type { GenerationProgress } from '../services/mangaGenerator';
 
