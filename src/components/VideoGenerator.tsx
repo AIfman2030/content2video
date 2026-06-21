@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music, AlertCircle } from 'lucide-react';
+import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music, AlertCircle, FileVideo } from 'lucide-react';
 import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, PetCoverConfig, NatureOptions, TitleOptions, KeywordOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
@@ -31,61 +31,79 @@ const PREVIEW_W = 512;
 const PREVIEW_H = Math.round(512 * CH / CW);
 type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'done';
 
+// ── Module-level store: survives React hot-reload (HMR) ─────────────────────
+// Without this, a code change during FFmpeg conversion resets all useState,
+// losing the download URL even if conversion succeeded.
+const _store = {
+  webmUrl: '',          // Immediate download (available right after recording)
+  mp4Url: '',           // Available after FFmpeg conversion
+  webmBlob: null as Blob | null,
+  title: '',
+  phase: 'cover' as 'cover' | 'video',
+  convError: '',
+};
+
 export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
   subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions,
   petCoverConfig, natureOptions, titleOptions, keywordOptions,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [phase, setPhase] = useState<'cover' | 'video'>('cover');
+  const [phase, setPhase] = useState<'cover' | 'video'>(_store.phase);
   const [engineReady, setEngineReady] = useState(false);
-  const [recordState, setRecordState] = useState<RecordState>('idle');
+  const [recordState, setRecordState] = useState<RecordState>(_store.mp4Url ? 'done' : 'idle');
   const [progress, setProgress] = useState(0);
   const [ttsStep, setTtsStep] = useState({ done: 0, total: 0 });
-  const [downloadUrl, setDownloadUrl] = useState('');
+  const [webmUrl, setWebmUrl] = useState(_store.webmUrl);   // instant download
+  const [mp4Url, setMp4Url] = useState(_store.mp4Url);      // after FFmpeg
   const [initError, setInitError] = useState('');
-  const [convError, setConvError] = useState(''); // full-screen conversion error
+  const [convError, setConvError] = useState(_store.convError);
   const engineRef = useRef<Awaited<ReturnType<typeof createAnimEngine>> | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ── Audio cache (for preview playback) ────────────────────────────────────
-  const audioElRef      = useRef<HTMLAudioElement | null>(null); // for RAP / blob
-  const rapBlobUrlRef   = useRef<string | null>(null);           // cached blob URL for RAP
-  const ttsRawMp3sRef   = useRef<(ArrayBuffer | null)[] | null>(null); // cached TTS mp3s
-  const ttsStopRef      = useRef<(() => void) | null>(null);    // stop fn for AudioContext
+  // ── Audio cache (for preview playback) ───────────────────────────────────
+  const audioElRef    = useRef<HTMLAudioElement | null>(null);
+  const rapBlobUrlRef = useRef<string | null>(null);
+  const ttsRawMp3sRef = useRef<(ArrayBuffer | null)[] | null>(null);
+  const ttsStopRef    = useRef<(() => void) | null>(null);
 
-  // Keep latest mangaOptions/mangaContent accessible in callbacks without re-creating them
+  // Latest opts/content accessible in async callbacks (avoid stale closure)
   const mangaOptionsRef = useRef(mangaOptions);
   mangaOptionsRef.current = mangaOptions;
   const mangaContentRef = useRef(mangaContent);
   mangaContentRef.current = mangaContent;
 
   const isGeneratingAudio = recordState === 'generating_audio';
-  const isRecording = recordState === 'recording';
-  const isConverting = recordState === 'converting';
-  const isDone = recordState === 'done';
-  const isBusy = isGeneratingAudio || isRecording || isConverting;
-  const aspect = CW / CH;
+  const isRecording       = recordState === 'recording';
+  const isConverting      = recordState === 'converting';
+  const isDone            = recordState === 'done';
+  const isBusy            = isGeneratingAudio || isRecording || isConverting;
+  const aspect            = CW / CH;
 
   const accent = style === 'chinese' ? '#e74c3c'
     : style === 'city' ? '#f5d87a'
     : style === 'nature' ? '#4ade80' : '#a855f7';
 
-  // Init engine once
+  // Init engine once on mount
   useEffect(() => {
     if (!canvasRef.current) return;
     setEngineReady(false); setInitError('');
-    createAnimEngine(canvasRef.current, content, style, coverIndex, chineseOptions, aiOptions, natureContent, undefined, subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions, aitechOptions, natureOptions, titleOptions, keywordOptions)
+    createAnimEngine(
+      canvasRef.current, content, style, coverIndex,
+      chineseOptions, aiOptions, natureContent, undefined,
+      subtitleOptions, accentOverride, cityOptions,
+      mangaContent, mangaOptions, aitechOptions,
+      natureOptions, titleOptions, keywordOptions,
+    )
       .then(engine => { engineRef.current = engine; setEngineReady(true); engine.start(); })
       .catch(err => setInitError(String(err)));
+
     return () => {
       engineRef.current?.stop();
-      // Clean up audio on unmount
       audioElRef.current?.pause();
       ttsStopRef.current?.();
-      if (rapBlobUrlRef.current) URL.revokeObjectURL(rapBlobUrlRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -96,35 +114,40 @@ export default function VideoGenerator({
   }, []);
 
   const handleContinue = useCallback(() => {
+    _store.phase = 'video';
     setPhase('video');
     engineRef.current?.restart();
   }, []);
 
-  // ── Preview: restart animation + play cached audio ─────────────────────────
+  // ── Preview: restart animation + play cached audio ────────────────────────
   const handlePreview = useCallback(async () => {
     stopAllAudio();
     engineRef.current?.stop(); engineRef.current?.start();
-    setRecordState('idle'); setProgress(0); setInitError(''); setConvError('');
+    setRecordState(prevState => prevState === 'done' ? 'done' : 'idle');
+    setProgress(0); setInitError(''); setConvError(''); _store.convError = '';
 
     const mc   = mangaContentRef.current;
     const opts = mangaOptionsRef.current;
 
-    // RAP mode: play Suno audio
-    if (opts?.rapMode && mc?.rapAudioUrl) {
-      // Ensure blob URL is cached (fetch through proxy if needed)
+    // RAP mode: play Suno audio if available
+    if (opts?.rapMode) {
+      if (!mc?.rapAudioUrl) {
+        setInitError('RAP 音乐尚未生成（Suno API 需要有效认证）。请检查 suno-api 部署配置。');
+        return;
+      }
       if (!rapBlobUrlRef.current) {
         try {
           const buf = await fetchAudioAsBuffer(mc.rapAudioUrl);
           rapBlobUrlRef.current = URL.createObjectURL(new Blob([buf], { type: 'audio/mpeg' }));
         } catch (e) {
           console.warn('Preview RAP audio fetch failed:', e);
+          setInitError('RAP 音频加载失败，请检查网络连接。');
+          return;
         }
       }
-      if (rapBlobUrlRef.current) {
-        const audio = new Audio(rapBlobUrlRef.current);
-        audioElRef.current = audio;
-        audio.play().catch(e => console.warn('Audio play failed:', e));
-      }
+      const audio = new Audio(rapBlobUrlRef.current);
+      audioElRef.current = audio;
+      audio.play().catch(e => console.warn('Audio play failed:', e));
       return;
     }
 
@@ -136,22 +159,18 @@ export default function VideoGenerator({
       const CtxCls: ACtx = window.AudioContext ?? (window as unknown as { webkitAudioContext: ACtx }).webkitAudioContext;
       const ctx = new CtxCls();
       const sources: AudioBufferSourceNode[] = [];
-
       let offset = ctx.currentTime + 0.05;
       for (const mp3 of cachedMp3s) {
         if (mp3) {
           try {
-            const decoded = await ctx.decodeAudioData(mp3.slice(0)); // slice to avoid detach issues
+            const decoded = await ctx.decodeAudioData(mp3.slice(0));
             const src = ctx.createBufferSource();
-            src.buffer = decoded;
-            src.connect(ctx.destination);
-            src.start(offset);
+            src.buffer = decoded; src.connect(ctx.destination); src.start(offset);
             sources.push(src);
-          } catch { /* ignore decode error for this segment */ }
+          } catch { /* ignore segment decode error */ }
         }
         offset += slideDurationSec;
       }
-
       ttsStopRef.current = () => {
         sources.forEach(s => { try { s.stop(); } catch { /* already stopped */ } });
         ctx.close().catch(() => {});
@@ -164,48 +183,46 @@ export default function VideoGenerator({
     if (!canvas || !engine) return;
 
     stopAllAudio();
-    setInitError(''); setConvError('');
+    // Reset state
+    setInitError(''); setConvError(''); _store.convError = '';
+    setWebmUrl(''); setMp4Url(''); _store.webmUrl = ''; _store.mp4Url = '';
+    setRecordState('idle');
     chunksRef.current = [];
 
     const opts = mangaOptionsRef.current;
-    const mc = mangaContentRef.current;
+    const mc   = mangaContentRef.current;
     const isRapMode  = style === 'manga' && (opts?.rapMode ?? false) && !!mc?.rapAudioUrl;
-    const isMangaTts = style === 'manga' && opts?.ttsEnabled && mc?.segments?.length && !isRapMode;
+    const isMangaTts = style === 'manga' && !!opts?.ttsEnabled && !!mc?.segments?.length && !isRapMode;
 
-    // ── Phase A-RAP: Fetch pre-generated Suno RAP audio ───────────────────
+    // ── Phase A-RAP: Fetch Suno RAP audio ──────────────────────────────────
     let rapAudioBuffer: ArrayBuffer | null = null;
     if (isRapMode) {
       setRecordState('generating_audio');
-      setTtsStep({ done: 0, total: 1 });
-      setProgress(0);
+      setTtsStep({ done: 0, total: 1 }); setProgress(0);
       try {
         rapAudioBuffer = await fetchAudioAsBuffer(mc!.rapAudioUrl!);
-        // Cache as blob URL for preview
         if (rapBlobUrlRef.current) URL.revokeObjectURL(rapBlobUrlRef.current);
         rapBlobUrlRef.current = URL.createObjectURL(new Blob([rapAudioBuffer], { type: 'audio/mpeg' }));
-        setTtsStep({ done: 1, total: 1 });
-        setProgress(100);
+        setTtsStep({ done: 1, total: 1 }); setProgress(100);
       } catch (e) {
         console.warn('RAP audio fetch failed:', e);
         setInitError('RAP 音频下载失败，将录制无声视频。');
       }
     }
 
-    // ── Phase A: Pre-generate TTS audio (collect raw MP3 bytes) ───────────
+    // ── Phase A-TTS: Generate TTS audio ────────────────────────────────────
     const rawMp3s: (ArrayBuffer | null)[] = [];
     let hasTtsAudio = false;
     let ttsVolume = 80;
 
     if (isMangaTts) {
       const segments = mc!.segments;
-      const customVoice = opts!.ttsCustomVoice?.trim() ?? '';
-      const voice = customVoice || (opts!.ttsVoice ?? 'longxiaochun');
-      const rate  = opts!.ttsRate   ?? 1.0;
-      ttsVolume   = opts!.ttsVolume ?? 80;
+      const voice = opts!.ttsCustomVoice?.trim() || opts!.ttsVoice || 'longxiaochun';
+      const rate = opts!.ttsRate ?? 1.0;
+      ttsVolume  = opts!.ttsVolume ?? 80;
 
       setRecordState('generating_audio');
-      setTtsStep({ done: 0, total: segments.length });
-      setProgress(0);
+      setTtsStep({ done: 0, total: segments.length }); setProgress(0);
 
       let doneCount = 0;
       const results = await Promise.all(
@@ -222,92 +239,105 @@ export default function VideoGenerator({
             setTtsStep({ done: doneCount, total: segments.length });
             return null;
           }
-        })
+        }),
       );
       rawMp3s.push(...results);
       hasTtsAudio = rawMp3s.some(b => b !== null);
-      ttsRawMp3sRef.current = rawMp3s; // cache for preview
-
-      if (!hasTtsAudio) {
-        setInitError('语音合成失败，将录制无声视频。');
-      }
+      ttsRawMp3sRef.current = rawMp3s;
+      if (!hasTtsAudio) setInitError('语音合成失败，将录制无声视频。');
     }
 
-    // ── Phase B: Record canvas video-only stream ───────────────────────────
-    setRecordState('recording');
-    setProgress(0);
+    // ── Phase B: Canvas recording ───────────────────────────────────────────
+    setRecordState('recording'); setProgress(0);
 
     const videoStream = canvas.captureStream(30);
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-      ? 'video/webm;codecs=vp9'
+    // Prefer VP8 — better FFmpeg WASM compatibility than VP9
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+      ? 'video/webm;codecs=vp8'
       : 'video/webm';
 
     const recorder = new MediaRecorder(videoStream, { mimeType });
     recorderRef.current = recorder;
 
     recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+
     recorder.onstop = async () => {
       if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+
+      const videoBlob = new Blob(chunksRef.current, { type: mimeType });
+      console.log('[VideoGenerator] Recording done. Blob size:', videoBlob.size, 'bytes, mimeType:', mimeType);
+
+      // ── Step 1: Offer immediate WebM download (no conversion needed) ──────
+      const immediateWebmUrl = URL.createObjectURL(videoBlob);
+      _store.webmUrl  = immediateWebmUrl;
+      _store.webmBlob = videoBlob;
+      _store.title    = content.title;
+      setWebmUrl(immediateWebmUrl);
       setRecordState('converting');
       setProgress(0);
-      const videoBlob = new Blob(chunksRef.current, { type: mimeType });
+
+      // ── Step 2: Convert to MP4 in background ──────────────────────────────
       try {
-        console.log('[VideoGenerator] Starting MP4 conversion, videoBlob size:', videoBlob.size,
-          'rapAudioBuffer:', rapAudioBuffer?.byteLength, 'hasTtsAudio:', hasTtsAudio);
         let mp4: Blob;
         if (rapAudioBuffer) {
-          const audioSegments = [{ mp3: rapAudioBuffer, startMs: 0 }];
           mp4 = await webmToMp4WithAudio(
-            videoBlob, audioSegments, r => setProgress(Math.round(r * 100)), opts?.ttsVolume ?? 85,
+            videoBlob, [{ mp3: rapAudioBuffer, startMs: 0 }],
+            r => setProgress(Math.round(r * 100)), opts?.ttsVolume ?? 85,
           );
         } else if (hasTtsAudio) {
           const slideDurationMs = opts!.slideDurationMs ?? 4000;
-          const audioSegments = rawMp3s.map((mp3, i) =>
-            mp3 ? { mp3, startMs: i * slideDurationMs } : null,
-          );
+          const audioSegs = rawMp3s.map((mp3, i) => mp3 ? { mp3, startMs: i * slideDurationMs } : null);
           mp4 = await webmToMp4WithAudio(
-            videoBlob, audioSegments, r => setProgress(Math.round(r * 100)), ttsVolume,
+            videoBlob, audioSegs,
+            r => setProgress(Math.round(r * 100)), ttsVolume,
           );
         } else {
           mp4 = await webmToMp4(videoBlob, r => setProgress(Math.round(r * 100)));
         }
-        console.log('[VideoGenerator] MP4 conversion done, size:', mp4.size);
-        setDownloadUrl(URL.createObjectURL(mp4));
+        const url = URL.createObjectURL(mp4);
+        _store.mp4Url = url;
+        setMp4Url(url);
         setProgress(100);
         setRecordState('done');
+        console.log('[VideoGenerator] MP4 ready, size:', mp4.size);
       } catch (err) {
         console.error('[VideoGenerator] MP4 conversion failed:', err);
-        setConvError(`视频转换失败: ${err instanceof Error ? err.message : String(err)}`);
-        setRecordState('idle');
-        setProgress(0);
+        const msg = `MP4 转换失败: ${err instanceof Error ? err.message : String(err)}`;
+        _store.convError = msg;
+        setConvError(msg);
+        setRecordState('done'); // still done — WebM is available
       }
     };
 
     const total = engine.getTotalMs();
-    const startRecording = () => {
-      const t0 = performance.now();
-      progressTimerRef.current = setInterval(
-        () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100,
-      );
-      recorder.start(100);
-      engine.restart(() => {
-        setTimeout(() => {
-          recorder.stop();
-          if (progressTimerRef.current) clearInterval(progressTimerRef.current);
-        }, 500);
-      });
-    };
+    const t0 = performance.now();
+    progressTimerRef.current = setInterval(
+      () => setProgress(Math.min(99, ((performance.now() - t0) / total) * 100)), 100,
+    );
+    recorder.start(100);
+    engine.restart(() => {
+      setTimeout(() => {
+        recorder.stop();
+        if (progressTimerRef.current) clearInterval(progressTimerRef.current);
+      }, 500);
+    });
+  }, [style, content.title, stopAllAudio]);
 
-    startRecording();
-  }, [style, stopAllAudio]);
-
-  const handleDownload = useCallback(() => {
-    if (!downloadUrl) return;
+  const handleDownloadMp4 = useCallback(() => {
+    if (!mp4Url) return;
     const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = `${content.title.slice(0, 12)}.mp4`;
+    a.href = mp4Url;
+    a.download = `${content.title.slice(0, 12) || 'video'}.mp4`;
     a.click();
-  }, [downloadUrl, content.title]);
+  }, [mp4Url, content.title]);
+
+  const handleDownloadWebm = useCallback(() => {
+    if (!webmUrl) return;
+    const a = document.createElement('a');
+    a.href = webmUrl;
+    a.download = `${content.title.slice(0, 12) || 'video'}.webm`;
+    a.click();
+  }, [webmUrl, content.title]);
 
   const showControls = !isBusy;
 
@@ -322,14 +352,10 @@ export default function VideoGenerator({
         <div className="absolute inset-0 flex items-center justify-center overflow-y-auto py-8" style={{ zIndex: 10 }}>
           <div className="w-full max-w-sm px-4">
             <CoverPreview
-              content={content}
-              natureContent={natureContent ?? null}
-              style={style}
-              coverIndex={coverIndex}
-              chineseOptions={chineseOptions}
-              petCoverConfig={petCoverConfig}
-              onContinue={handleContinue}
-              onBack={onClose}
+              content={content} natureContent={natureContent ?? null}
+              style={style} coverIndex={coverIndex}
+              chineseOptions={chineseOptions} petCoverConfig={petCoverConfig}
+              onContinue={handleContinue} onBack={onClose}
             />
           </div>
           <button onClick={onClose}
@@ -347,8 +373,8 @@ export default function VideoGenerator({
           width: `max(100vw, calc(100vh * ${aspect}))`, height: `max(100vh, calc(100vw / ${aspect}))`,
         } : {
           position: 'relative', width: PREVIEW_W, height: PREVIEW_H,
-          borderRadius: '1rem', overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          borderRadius: '1rem', overflow: 'hidden',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)',
         }}>
           {!engineReady && !initError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 z-10">
@@ -358,12 +384,11 @@ export default function VideoGenerator({
           )}
           {initError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 z-10 p-4 gap-3">
-              <span className="text-sm text-red-400 text-center leading-relaxed">{initError}</span>
-              <button
-                onClick={() => setInitError('')}
-                className="px-4 py-1.5 rounded-full text-xs font-medium transition-all"
-                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)' }}
-              >
+              <AlertCircle size={18} className="text-red-400 flex-shrink-0" />
+              <span className="text-sm text-red-300 text-center leading-relaxed">{initError}</span>
+              <button onClick={() => setInitError('')}
+                className="px-4 py-1.5 rounded-full text-xs font-medium"
+                style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)' }}>
                 关闭
               </button>
             </div>
@@ -373,16 +398,17 @@ export default function VideoGenerator({
             width: isRecording ? `max(100vw, calc(100vh * ${aspect}))` : PREVIEW_W,
             height: isRecording ? `max(100vh, calc(100vw / ${aspect}))` : PREVIEW_H,
           }} />
-          {/* REC indicator (only during actual recording) */}
-          <div style={{ display: isRecording ? 'block' : 'none' }}>
-            <div className="absolute top-5 right-6 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-white/80 text-sm font-medium tabular-nums">REC {Math.round(progress)}%</span>
-            </div>
-            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
-              <div className="h-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
-            </div>
-          </div>
+          {isRecording && (
+            <>
+              <div className="absolute top-5 right-6 flex items-center gap-2 px-3 py-1.5 rounded-full bg-black/60 border border-white/10">
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-white/80 text-sm font-medium tabular-nums">REC {Math.round(progress)}%</span>
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
+                <div className="h-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -391,83 +417,103 @@ export default function VideoGenerator({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ zIndex: 2 }}>
           <div className="flex items-center justify-center w-14 h-14 rounded-full"
             style={{ background: `${accent}22`, border: `1.5px solid ${accent}55` }}>
-            {mangaOptions?.rapMode
-              ? <Music size={24} style={{ color: accent }} className="animate-pulse" />
+            {mangaOptions?.rapMode ? <Music size={24} style={{ color: accent }} className="animate-pulse" />
               : <Mic size={24} style={{ color: accent }} className="animate-pulse" />}
           </div>
           <p className="text-white/90 text-base font-medium">
             {mangaOptions?.rapMode ? '正在加载 RAP 音频…' : '正在生成语音…'}
           </p>
           {!mangaOptions?.rapMode && (
-            <p className="text-white/40 text-sm tabular-nums">
-              {ttsStep.done} / {ttsStep.total} 段
-            </p>
+            <p className="text-white/40 text-sm tabular-nums">{ttsStep.done} / {ttsStep.total} 段</p>
           )}
           <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
           </div>
-          <p className="text-xs text-white/25">
-            {mangaOptions?.rapMode ? '下载完成后自动开始录制' : '语音生成完成后自动开始录制'}
-          </p>
         </div>
       )}
 
-      {/* Converting overlay */}
+      {/* Converting overlay — shown while FFmpeg runs, but WebM is already available */}
       {isConverting && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ zIndex: 2 }}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5" style={{ zIndex: 2 }}>
           <Loader2 size={36} className="animate-spin" style={{ color: accent }} />
-          <p className="text-white/80 text-base font-medium">正在转换为 MP4…</p>
+          <div className="text-center">
+            <p className="text-white/80 text-base font-medium">正在转换为 MP4…</p>
+            <p className="text-white/30 text-xs mt-1">高清视频转换需要 1-3 分钟</p>
+          </div>
           <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
           </div>
-          <p className="text-xs text-white/30">首次转换需加载编码器，请稍候</p>
+          {/* WebM is available immediately — offer it while MP4 converts */}
+          {webmUrl && (
+            <button onClick={handleDownloadWebm}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium mt-2"
+              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.8)' }}>
+              <FileVideo size={15} />先下载 WebM（立即可用）
+            </button>
+          )}
         </div>
       )}
 
-      {/* ── Full-screen conversion error overlay ── */}
-      {convError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 p-6" style={{ zIndex: 20 }}>
-          <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-500/30">
-            <AlertCircle size={26} className="text-red-400" />
-          </div>
-          <div className="text-center max-w-xs space-y-1.5">
-            <p className="text-white/90 text-base font-medium">转换失败</p>
-            <p className="text-red-300/80 text-sm leading-relaxed">{convError}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => { setConvError(''); }}
-              className="px-5 py-2 rounded-xl text-sm font-medium transition-all"
-              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.7)' }}
-            >
-              关闭
-            </button>
-            <button
-              onClick={() => { setConvError(''); handleRecord(); }}
-              className="px-5 py-2 rounded-xl text-sm font-semibold transition-all"
-              style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, color: '#fff' }}
-            >
-              重试
+      {/* MP4 conversion error (shown alongside download buttons when done) */}
+      {convError && isDone && (
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 max-w-sm w-full px-4">
+          <div className="rounded-xl px-4 py-3 flex items-start gap-3"
+            style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}>
+            <AlertCircle size={15} className="text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-red-300 leading-relaxed">{convError}</p>
+              <p className="text-xs text-white/30 mt-1">WebM 文件仍可下载</p>
+            </div>
+            <button onClick={() => { setConvError(''); _store.convError = ''; }}
+              className="text-white/30 hover:text-white/60 transition-colors flex-shrink-0">
+              <X size={13} />
             </button>
           </div>
         </div>
       )}
 
-      {/* Controls (video phase, hidden while busy) */}
+      {/* Controls (video phase) */}
       {phase === 'video' && (
         <div className="absolute inset-0 flex flex-col items-center justify-end pb-10 pointer-events-none"
-          style={{ zIndex: 2, display: showControls && !convError ? 'flex' : 'none' }}>
+          style={{ zIndex: 2, display: showControls ? 'flex' : 'none' }}>
           <button onClick={onClose}
             className="absolute top-5 right-6 flex items-center justify-center w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-colors pointer-events-auto">
             <X size={18} />
           </button>
+
+          {/* Download buttons when done */}
+          {isDone && (
+            <div className="flex flex-col items-center gap-3 pointer-events-auto mb-4">
+              {mp4Url && (
+                <button onClick={handleDownloadMp4}
+                  className="flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-sm font-semibold"
+                  style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#fff', boxShadow: '0 4px 20px #22c55e50' }}>
+                  <Download size={16} />下载 MP4（推荐）
+                </button>
+              )}
+              {webmUrl && (
+                <button onClick={handleDownloadWebm}
+                  className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium"
+                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.7)' }}>
+                  <FileVideo size={14} />下载 WebM
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Action buttons */}
           <div className="flex items-center gap-3 pointer-events-auto">
             <button onClick={handlePreview} disabled={!engineReady}
               className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all disabled:opacity-40"
               style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.75)' }}>
-              <Play size={15} />预览{(rapBlobUrlRef.current || ttsRawMp3sRef.current?.some(Boolean)) ? ' ♪' : ''}
+              <Play size={15} />预览
             </button>
-            {!isDone ? (
+            {isDone ? (
+              <button onClick={handleRecord} disabled={!engineReady}
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm text-white/50 hover:text-white/70 transition-colors border border-white/10 disabled:opacity-40 pointer-events-auto">
+                <RotateCcw size={14} />重录
+              </button>
+            ) : (
               <button onClick={handleRecord} disabled={!engineReady}
                 className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
                 style={{ background: `linear-gradient(135deg, ${accent}, ${accent}bb)`, color: '#fff', boxShadow: `0 4px 24px ${accent}55` }}>
@@ -476,24 +522,10 @@ export default function VideoGenerator({
                   ? (mangaOptions?.rapMode ? 'RAP 配音录制' : '配音录制视频')
                   : '全屏录制视频'}
               </button>
-            ) : (
-              <>
-                <button onClick={handleDownload}
-                  className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold"
-                  style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', color: '#fff', boxShadow: '0 4px 20px #22c55e50' }}>
-                  <Download size={15} />下载 MP4
-                </button>
-                <button onClick={handleRecord} disabled={!engineReady}
-                  className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm text-white/50 hover:text-white/70 transition-colors border border-white/10 disabled:opacity-40">
-                  <RotateCcw size={14} />重录
-                </button>
-              </>
             )}
           </div>
           <p className="mt-3 text-xs text-white/25 pointer-events-none">
-            {style === 'manga' && mangaOptions?.ttsEnabled
-              ? '录制前自动生成语音 · 完成后合并为带音频的 MP4'
-              : '点击「全屏录制」画面自动全屏并开始录制 · 完成后自动转换为 MP4'}
+            录制完成后立即可下载 WebM · MP4 转换在后台进行
           </p>
         </div>
       )}
