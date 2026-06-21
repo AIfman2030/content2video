@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Play, Video, Download, RotateCcw, Loader2, Mic } from 'lucide-react';
+import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music } from 'lucide-react';
 import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, PetCoverConfig, NatureOptions, TitleOptions, KeywordOptions } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
 import { CoverPreview } from './CoverPreview';
 import { synthesize } from '../services/tts';
+import { fetchAudioAsBuffer } from '../services/sunoRap';
 
 interface Props {
   content: GeneratedContent;
@@ -95,7 +96,24 @@ export default function VideoGenerator({
 
     const opts = mangaOptionsRef.current;
     const mc = mangaContentRef.current;
-    const isMangaTts = style === 'manga' && opts?.ttsEnabled && mc?.segments?.length;
+    const isRapMode  = style === 'manga' && (opts?.rapMode ?? false) && !!mc?.rapAudioUrl;
+    const isMangaTts = style === 'manga' && opts?.ttsEnabled && mc?.segments?.length && !isRapMode;
+
+    // ── Phase A-RAP: Fetch pre-generated Suno RAP audio ───────────────────
+    let rapAudioBuffer: ArrayBuffer | null = null;
+    if (isRapMode) {
+      setRecordState('generating_audio');
+      setTtsStep({ done: 0, total: 1 });
+      setProgress(0);
+      try {
+        rapAudioBuffer = await fetchAudioAsBuffer(mc!.rapAudioUrl!);
+        setTtsStep({ done: 1, total: 1 });
+        setProgress(100);
+      } catch (e) {
+        console.warn('RAP audio fetch failed:', e);
+        setInitError('RAP 音频下载失败，将录制无声视频。');
+      }
+    }
 
     // ── Phase A: Pre-generate TTS audio (collect raw MP3 bytes) ───────────
     // We store raw MP3 ArrayBuffers here and let FFmpeg do the muxing later.
@@ -162,7 +180,13 @@ export default function VideoGenerator({
       const videoBlob = new Blob(chunksRef.current, { type: mimeType });
       try {
         let mp4: Blob;
-        if (hasTtsAudio) {
+        if (rapAudioBuffer) {
+          // ── RAP mode: single Suno audio track from start ─────────────────
+          const audioSegments = [{ mp3: rapAudioBuffer, startMs: 0 }];
+          mp4 = await webmToMp4WithAudio(
+            videoBlob, audioSegments, r => setProgress(Math.round(r * 100)), opts?.ttsVolume ?? 85,
+          );
+        } else if (hasTtsAudio) {
           // ── FFmpeg audio merge: each MP3 segment time-shifted by i * slideDurationMs
           const slideDurationMs = opts!.slideDurationMs ?? 4000;
           const audioSegments = rawMp3s.map((mp3, i) =>
@@ -293,16 +317,24 @@ export default function VideoGenerator({
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ zIndex: 2 }}>
           <div className="flex items-center justify-center w-14 h-14 rounded-full"
             style={{ background: `${accent}22`, border: `1.5px solid ${accent}55` }}>
-            <Mic size={24} style={{ color: accent }} className="animate-pulse" />
+            {mangaOptions?.rapMode
+              ? <Music size={24} style={{ color: accent }} className="animate-pulse" />
+              : <Mic size={24} style={{ color: accent }} className="animate-pulse" />}
           </div>
-          <p className="text-white/90 text-base font-medium">正在生成语音…</p>
-          <p className="text-white/40 text-sm tabular-nums">
-            {ttsStep.done} / {ttsStep.total} 段
+          <p className="text-white/90 text-base font-medium">
+            {mangaOptions?.rapMode ? '正在加载 RAP 音频…' : '正在生成语音…'}
           </p>
+          {!mangaOptions?.rapMode && (
+            <p className="text-white/40 text-sm tabular-nums">
+              {ttsStep.done} / {ttsStep.total} 段
+            </p>
+          )}
           <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
           </div>
-          <p className="text-xs text-white/25">语音生成完成后自动开始录制</p>
+          <p className="text-xs text-white/25">
+            {mangaOptions?.rapMode ? '下载完成后自动开始录制' : '语音生成完成后自动开始录制'}
+          </p>
         </div>
       )}
 

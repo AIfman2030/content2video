@@ -2,12 +2,13 @@
 // Images are generated via direct browser fetch to Ark API (no edge function needed).
 import { extractMangaScript, extractRapScript } from './deepseek';
 import { generateArkImage } from './ark';
+import { generateRapSong } from './sunoRap';
 import type { MangaContent, MangaSegment } from '../types/video';
 
 export type SegmentStatus = 'pending' | 'generating' | 'done' | 'error';
 
 export interface GenerationProgress {
-  phase: 'script' | 'images';
+  phase: 'script' | 'images' | 'music';
   total: number;
   done: number;
   segments: Array<{
@@ -16,6 +17,8 @@ export interface GenerationProgress {
     imageUrl: string;
     status: SegmentStatus;
   }>;
+  musicStatus?: 'generating' | 'done' | 'error';
+  musicMessage?: string;
 }
 
 export interface MangaGenerateOptions {
@@ -89,5 +92,56 @@ export async function generateMangaContent(
     imageUrl: s.imageUrl,
   }));
 
-  return { segments, disclaimer };
+  // ── Phase 3 (RAP only): Generate Suno RAP song ────────────────────────────
+  let rapAudioUrl: string | undefined;
+  if (rapMode) {
+    const allLyrics = rawSegments.map((s, i) => `[Verse ${i + 1}]\n${s.subtitle}`).join('\n\n');
+
+    onProgress({
+      phase: 'music',
+      total: rawSegments.length,
+      done: rawSegments.length,
+      segments: [...progressSegments],
+      musicStatus: 'generating',
+      musicMessage: '正在提交 RAP 生成请求…',
+    });
+
+    try {
+      rapAudioUrl = await generateRapSong(
+        allLyrics,
+        'RAP 视频',
+        (msg) => onProgress({
+          phase: 'music',
+          total: rawSegments.length,
+          done: rawSegments.length,
+          segments: [...progressSegments],
+          musicStatus: 'generating',
+          musicMessage: msg,
+        }),
+      );
+
+      onProgress({
+        phase: 'music',
+        total: rawSegments.length,
+        done: rawSegments.length,
+        segments: [...progressSegments],
+        musicStatus: 'done',
+        musicMessage: 'RAP 音乐生成完成',
+      });
+    } catch (e) {
+      console.error('Suno RAP generation failed:', e);
+      onProgress({
+        phase: 'music',
+        total: rawSegments.length,
+        done: rawSegments.length,
+        segments: [...progressSegments],
+        musicStatus: 'error',
+        musicMessage: e instanceof Error ? e.message : '音乐生成失败',
+      });
+      // Don't throw — continue with video-only (no music)
+    }
+  }
+
+  return { segments, disclaimer, rapAudioUrl };
 }
+

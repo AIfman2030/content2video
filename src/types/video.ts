@@ -221,6 +221,7 @@ export interface MangaSegment {
 export interface MangaContent {
   segments: MangaSegment[];
   disclaimer: string;
+  rapAudioUrl?: string;  // Suno-generated RAP song URL (only in RAP mode)
 }
 
 export interface MangaOptions {

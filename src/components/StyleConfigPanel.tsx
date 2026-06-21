@@ -1695,12 +1695,26 @@ function MangaPanel({ opts, onChange }: {
       <NumericSlider label="每段停留时间" value={opts.slideDurationMs / 1000} min={2} max={8}
         step={0.5} unit="s" onChange={v => u({ slideDurationMs: Math.round(v * 1000) })} />
 
-      {/* ── TTS toggle ── */}
-      <Row>
-        <div
-          className="flex items-center justify-between cursor-pointer select-none"
-          onClick={() => u({ ttsEnabled: !opts.ttsEnabled })}
-        >
+      {/* ── RAP mode: Suno music info / TTS toggle ── */}
+      {(opts.rapMode ?? false) ? (
+        <Row>
+          <div className="rounded-xl px-3 py-3 space-y-1.5"
+            style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.2)' }}>
+            <div className="flex items-center gap-2">
+              <Label style={{ color: '#eab308' }}>Suno RAP 音乐</Label>
+            </div>
+            <p className="text-[10px] leading-relaxed" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              AI 生成 RAP 歌词后，自动调用 Suno 生成说唱背景音乐（1-3分钟），作为视频的背景音乐轨道。无需配置，点击「AI 生成漫画视频」自动触发。
+            </p>
+          </div>
+        </Row>
+      ) : (
+        /* ── TTS toggle ── */
+        <Row>
+          <div
+            className="flex items-center justify-between cursor-pointer select-none"
+            onClick={() => u({ ttsEnabled: !opts.ttsEnabled })}
+          >
           <div className="flex items-center gap-2">
             {opts.ttsEnabled
               ? <Mic size={13} style={{ color: '#a855f7' }} />
@@ -1868,6 +1882,7 @@ function MangaPanel({ opts, onChange }: {
           </div>
         )}
       </Row>
+      )}
     </div>
   );
 }
