@@ -1,0 +1,140 @@
+export const CW = 1920;
+export const CH = 1080;
+
+export const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+export const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+export const easeOutBack = (t: number) => {
+  const c1 = 1.70158, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+};
+export const easeInOutQuad = (t: number) =>
+  t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+export function seededRandom(seed: number) {
+  let s = seed;
+  return () => { s = (s * 16807 + 0) % 2147483647; return (s - 1) / 2147483646; };
+}
+
+export function hex2rgb(hex: string): [number, number, number] {
+  return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
+}
+
+export function hex2rgba(hex: string, a: number) {
+  const [r, g, b] = hex2rgb(hex);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+export function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number,
+) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+  for (const char of text) {
+    const test = line + char;
+    if (ctx.measureText(test).width > maxWidth && line.length > 0) { lines.push(line); line = char; }
+    else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+export function drawPolygon(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, r: number, sides: number, rotation = 0,
+) {
+  ctx.beginPath();
+  for (let i = 0; i < sides; i++) {
+    const a = (i / sides) * Math.PI * 2 + rotation;
+    if (i === 0) ctx.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    else ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  }
+  ctx.closePath();
+}
+
+export function drawStar(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number, outerR: number, innerR: number, points: number, rotation = 0,
+) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 === 0 ? outerR : innerR;
+    const a = (i / (points * 2)) * Math.PI * 2 + rotation;
+    if (i === 0) ctx.moveTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+    else ctx.lineTo(cx + r * Math.cos(a), cy + r * Math.sin(a));
+  }
+  ctx.closePath();
+}
+
+export const T = {
+  bgBloom: 0,
+  themeEffect: 200,
+  titleEntrance: 800,
+  titleSettle: 2000,
+  cardBase: 2800,
+  cardSlot: 2200,
+  cardReadDelay: 400,
+  outroDur: 2000,
+};
+
+// ── Chinese card layout pagination ────────────────────────────────────────────
+const _CH = CH, _CARD_H = 268, _ROW_GAP = 26, _START_Y = 160;
+export const PAGE_ROWS  = Math.floor((_CH - _START_Y - 20) / (_CARD_H + _ROW_GAP)); // 3
+export const PAGE_SIZE  = 2 * PAGE_ROWS;   // 6 cards per page (2 cols)
+export const PAGE_HOLD  = 1200;             // ms hold after all cards on page appear
+export const PAGE_TRANS = 350;              // ms for fade-out
+
+export function totalDuration(pts: number) {
+  const pageSlot = PAGE_SIZE * T.cardSlot;
+  const numPages = Math.ceil(pts / PAGE_SIZE);
+  return T.cardBase + numPages * (pageSlot + PAGE_HOLD) + T.cardReadDelay + T.outroDur;
+}
+
+// ── Chinese per-slide layout timing ───────────────────────────────────────────
+export const CHINESE_SLIDE_DUR = 2400;  // ms per slide (reused in cards-chinese.ts)
+
+export function chineseSlideDuration(pts: number) {
+  return T.cardBase + pts * CHINESE_SLIDE_DUR + T.cardReadDelay + T.outroDur;
+}
+
+// ── Keyword Layout timing ──────────────────────────────────────────────────────
+export const KW_START_DELAY = 500;  // initial delay before keyword animation (no title wait)
+export const KW_TITLE_HOLD  = 200;  // (legacy, kept for compat)
+export const KW_CENTER_DUR  = 600;  // center keyword entrance animation ms
+export const KW_HOLD_MS     = 2800; // hold after all keywords visible
+
+export function keywordTotalMs(n: number, staggerMs = 280): number {
+  return KW_START_DELAY + KW_CENTER_DUR + n * staggerMs + KW_HOLD_MS + T.outroDur;
+}
+
+// ── AI Tech 4-phase timing ─────────────────────────────────────────────────────
+export const AT = {
+  titleHold:  1000,    // pause after title settles (new)
+  keywordSlot: 1100,   // ms per keyword in radial phase  (was 900)
+  burstDur:    720,    // flip/shatter transition          (was 600)
+  descSlot:   1000,    // ms per desc item                 (was 800)
+  gridStagger: 110,    // ms stagger between grid cells    (was  90)
+  gridHold:   3200,    // hold after all cells visible     (was 1200, +2000 for 2-sec pause)
+  explodeDur: 1600,    // explosion outro                  (was 900, longer for smoke)
+};
+
+export function aiTechPhases(n: number) {
+  const p1Start = T.cardBase + AT.titleHold;               // pause after title settles
+  const p2Start = p1Start + n * AT.keywordSlot;           // burst transition
+  const p3Start = p2Start + AT.burstDur;                  // desc phase
+  const p4Start = p3Start + n * AT.descSlot + 400;        // grid phase
+  const total   = p4Start + n * AT.gridStagger + 400 + AT.gridHold + AT.explodeDur + 200;
+  return { p1Start, p2Start, p3Start, p4Start, total };
+}
+
