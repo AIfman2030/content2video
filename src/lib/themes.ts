@@ -57,7 +57,7 @@ export function getThemeConfig(style: StyleType, chineseOptions?: ChineseOptions
       gridColor: '#c8303040',
     };
   }
-  if (style === 'manga') {
+  if (style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite') {
     return {
       bg: ['#0e0818', '#1a0a2e', '#2d1b4e'],
       accent: '#f59e0b',

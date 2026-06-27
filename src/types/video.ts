@@ -1,4 +1,4 @@
-export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga' | 'keyword';
+export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga' | 'keyword' | 'cat3d' | 'zen' | 'elite';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
@@ -224,6 +224,9 @@ export interface MangaContent {
   rapAudioUrl?: string;  // Suno-generated RAP song URL (only in RAP mode)
 }
 
+// Manga image sub-styles (character + scene)
+export type MangaImageStyle = 'default' | 'cat3d' | 'zen' | 'elite';
+
 export interface MangaOptions {
   disclaimer: string;
   subtitleFontSize: number;    // default 72
@@ -234,6 +237,8 @@ export interface MangaOptions {
   ttsRate: number;             // speech rate multiplier: 0.5 ~ 2.0, default 1.0
   ttsVolume: number;           // audio volume 0-100, default 80
   rapMode: boolean;            // RAP mode: generates rap lyrics + hip-hop visuals
+  imageStyle: MangaImageStyle; // character image style (default / cat3d / zen / elite)
+  minimaxVoiceId: string;      // MiniMax TTS voice ID for character styles
 }
 
 export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
@@ -246,6 +251,8 @@ export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
   ttsRate: 1.0,
   ttsVolume: 80,
   rapMode: false,
+  imageStyle: 'default',
+  minimaxVoiceId: '',
 };
 
 // ─── Content / generator ──────────────────────────────────────────────────────

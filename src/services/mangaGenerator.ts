@@ -3,7 +3,8 @@
 import { extractMangaScript, extractRapScript } from './deepseek';
 import { generateArkImage } from './ark';
 import { generateRapSong } from './sunoRap';
-import type { MangaContent, MangaSegment } from '../types/video';
+import type { MangaContent, MangaSegment, MangaImageStyle } from '../types/video';
+import { buildCharacterImagePrompt } from '../lib/engine/characterPrompts';
 
 export type SegmentStatus = 'pending' | 'generating' | 'done' | 'error';
 
@@ -24,6 +25,7 @@ export interface GenerationProgress {
 export interface MangaGenerateOptions {
   disclaimer?: string;
   rapMode?: boolean;
+  imageStyle?: MangaImageStyle;
 }
 
 export async function generateMangaContent(
@@ -36,6 +38,8 @@ export async function generateMangaContent(
     : disclaimerOrOpts;
   const disclaimer = opts.disclaimer ?? '仅代表个人观点，无任何不良导向';
   const rapMode    = opts.rapMode ?? false;
+  const imageStyle = opts.imageStyle ?? 'default';
+  const useCharacterPrompt = imageStyle !== 'default';
 
   // ── Phase 1: Extract subtitle / RAP script ────────────────────────────────
   onProgress({ phase: 'script', total: 0, done: 0, segments: [] });
@@ -69,7 +73,10 @@ export async function generateMangaContent(
       });
 
       try {
-        const url = await generateArkImage(s.scene);
+        const prompt = useCharacterPrompt
+          ? buildCharacterImagePrompt(s.scene, imageStyle)
+          : s.scene;
+        const url = await generateArkImage(prompt);
         progressSegments[i].imageUrl = url;
         progressSegments[i].status = 'done';
       } catch (e) {

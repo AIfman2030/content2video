@@ -235,8 +235,9 @@ export default function VideoGenerator({
 
     const opts = mangaOptionsRef.current;
     const mc   = mangaContentRef.current;
-    const isRapMode  = style === 'manga' && !!(opts?.rapMode) && !!mc?.rapAudioUrl;
-    const isMangaTts = style === 'manga' && !!(opts?.ttsEnabled) && !!mc?.segments?.length && !isRapMode;
+    const isMangaStyle = style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite';
+    const isRapMode  = isMangaStyle && !!(opts?.rapMode) && !!mc?.rapAudioUrl;
+    const isMangaTts = isMangaStyle && !!(opts?.ttsEnabled) && !!mc?.segments?.length && !isRapMode;
 
     // ── Phase A-RAP: Fetch Suno audio ──────────────────────────────────────
     let rapAudioBuffer: ArrayBuffer | null = null;
@@ -571,9 +572,9 @@ export default function VideoGenerator({
               <button onClick={handleRecord} disabled={!engineReady}
                 className="flex items-center justify-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
                 style={{ background: `linear-gradient(135deg,${accent},${accent}bb)`, color: '#fff', boxShadow: `0 4px 24px ${accent}55` }}>
-                {style === 'manga' && mangaOptions?.ttsEnabled
+                {(style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite') && mangaOptions?.ttsEnabled
                   ? <Mic size={15} /> : <Video size={15} />}
-                {style === 'manga' && mangaOptions?.ttsEnabled
+                {(style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite') && mangaOptions?.ttsEnabled
                   ? (mangaOptions?.rapMode ? 'RAP 配音录制' : '配音录制视频')
                   : '全屏录制视频'}
               </button>

@@ -15,6 +15,7 @@ import ContentEditor from '../components/ContentEditor';
 import MangaContentEditor from '../components/MangaContentEditor';
 import MangaGenerationProgress from '../components/MangaGenerationProgress';
 import StyleConfigPanel from '../components/StyleConfigPanel';
+import { buildCharacterImagePrompt } from '../lib/engine/characterPrompts';
 import VideoGenerator from '../components/VideoGenerator';
 import ApiKeyDialog from '../components/ApiKeyDialog';
 import StudioCanvas from '../components/StudioCanvas';
@@ -113,6 +114,9 @@ const BG_BY_STYLE: Record<StyleType, string> = {
   translation: CLAUDE_BG,
   manga:       CLAUDE_BG,
   keyword:     CLAUDE_BG,
+  cat3d:       CLAUDE_BG,
+  zen:         CLAUDE_BG,
+  elite:       CLAUDE_BG,
 };
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
@@ -124,6 +128,9 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   translation: '#ffe44d',
   manga:       '#f59e0b',
   keyword:     '#00d4ff',
+  cat3d:       '#60a5fa',
+  zen:         '#fbbf24',
+  elite:       '#818cf8',
 };
 
 const MANGA_DUMMY_CONTENT: GeneratedContent = { title: '', points: [] };
@@ -191,6 +198,11 @@ export default function Index() {
     setMangaProgress(null);
     setError('');
     setCoverIndex(0);
+    // Set manga sub-style for character styles
+    if (s === 'cat3d') setMangaOptions(prev => ({ ...prev, imageStyle: 'cat3d' }));
+    else if (s === 'zen') setMangaOptions(prev => ({ ...prev, imageStyle: 'zen' }));
+    else if (s === 'elite') setMangaOptions(prev => ({ ...prev, imageStyle: 'elite' }));
+    else if (s === 'manga') setMangaOptions(prev => ({ ...prev, imageStyle: 'default' }));
   };
 
   // ── Generate ─────────────────────────────────────────────────────────────
@@ -241,7 +253,7 @@ export default function Index() {
     setIsLoading(true);
     try {
       const result = await generateMangaContent(text, (p) => setMangaProgress(p),
-        { disclaimer: mangaOptions.disclaimer, rapMode: mangaOptions.rapMode ?? false });
+        { disclaimer: mangaOptions.disclaimer, rapMode: mangaOptions.rapMode ?? false, imageStyle: mangaOptions.imageStyle });
       setMangaContent(result);
       setMangaProgress(null);
       setContent(MANGA_DUMMY_CONTENT);
@@ -260,7 +272,10 @@ export default function Index() {
     if (!seg) return;
     setMangaRegeneratingIndexes(prev => new Set(prev).add(index));
     try {
-      const url = await generateArkImage(seg.scene);
+      const prompt = mangaOptions.imageStyle && mangaOptions.imageStyle !== 'default'
+        ? buildCharacterImagePrompt(seg.scene, mangaOptions.imageStyle)
+        : seg.scene;
+      const url = await generateArkImage(prompt);
       setMangaContent(prev => {
         if (!prev) return prev;
         return { ...prev, segments: prev.segments.map((s, i2) => i2 === index ? { ...s, imageUrl: url } : s) };
@@ -282,7 +297,7 @@ export default function Index() {
     setContent(c => c ? { ...c } : MANGA_DUMMY_CONTENT);
   };
 
-  const isManga = style === 'manga';
+  const isManga = style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite';
   const canvasContent = isManga ? (mangaContent ? MANGA_DUMMY_CONTENT : null) : content;
   const hasRecordableContent = isManga ? !!mangaContent : !!content;
 

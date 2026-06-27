@@ -1695,6 +1695,29 @@ function MangaPanel({ opts, onChange }: {
       <NumericSlider label="每段停留时间" value={opts.slideDurationMs / 1000} min={2} max={8}
         step={0.5} unit="s" onChange={v => u({ slideDurationMs: Math.round(v * 1000) })} />
 
+      {/* ── Image style selector for character-based manga ── */}
+      <Row>
+        <Label>图片风格</Label>
+        <div className="flex gap-1.5">
+          {([
+            { val: 'default' as const, label: '🎨 漫画' },
+            { val: 'cat3d' as const, label: '🐱 猫咪' },
+            { val: 'zen' as const, label: '🧘 禅师' },
+            { val: 'elite' as const, label: '💼 精英' },
+          ]).map(m => (
+            <button key={m.val}
+              onClick={() => u({ imageStyle: m.val })}
+              className="px-2 py-1 rounded-lg text-[10px] transition-all"
+              style={{
+                background: (opts.imageStyle ?? 'default') === m.val ? 'rgba(217,119,6,0.15)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${(opts.imageStyle ?? 'default') === m.val ? '#f59e0b' : 'rgba(255,255,255,0.1)'}`,
+                color: (opts.imageStyle ?? 'default') === m.val ? '#f59e0b' : 'rgba(255,255,255,0.4)',
+              }}
+            >{m.label}</button>
+          ))}
+        </div>
+      </Row>
+
       {/* ── RAP mode: Suno music info / TTS toggle ── */}
       {(opts.rapMode ?? false) ? (
         <Row>
@@ -2020,6 +2043,9 @@ export default function StyleConfigPanel({
       );
 
     case 'manga':
+    case 'cat3d':
+    case 'zen':
+    case 'elite':
       return <MangaPanel opts={mangaOptions} onChange={onMangaOptionsChange} />;
 
     case 'keyword': {

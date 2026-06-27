@@ -90,7 +90,7 @@ export async function createAnimEngine(
   const isNature      = style === 'nature';
   const isSubtitle    = style === 'subtitle';
   const isTranslation = style === 'translation';
-  const isManga       = style === 'manga';
+  const isManga       = style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite';
 
   const isKeyword     = style === 'keyword';
 
