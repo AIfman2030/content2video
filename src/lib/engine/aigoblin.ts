@@ -190,8 +190,8 @@ export function drawAIGoblin(
 
   const charCx = LEFT_PANEL_X + LEFT_PANEL_W * 0.5;
   const charCy = H * 0.43;
-  const maxCharW = LEFT_PANEL_W * 0.9 * charScale;
-  const maxCharH = H * 0.55 * charScale;
+  const maxCharW = LEFT_PANEL_W * 1.05 * charScale;
+  const maxCharH = H * 0.62 * charScale;
 
   if (characterImg && characterImg.complete && characterImg.naturalWidth > 0) {
     const imgRatio = characterImg.naturalWidth / characterImg.naturalHeight;
@@ -215,8 +215,8 @@ export function drawAIGoblin(
 
     ctx.drawImage(characterImg, ix, iy, iw, ih);
   } else {
-    // Silhouette placeholder
-    drawSilhouette(ctx, charCx, charCy, maxCharW * 0.75, 'rgba(245,158,11,0.12)');
+    // Silhouette placeholder (larger, more dramatic)
+    drawSilhouette(ctx, charCx, charCy, maxCharW * 0.85, accent + '18');
   }
   ctx.restore();
 
@@ -229,8 +229,8 @@ export function drawAIGoblin(
   const activeIdx    = Math.min(points.length - 1, Math.floor(contentTime / SEGMENT_DURATION));
   const segProgress  = Math.min(1, (contentTime % SEGMENT_DURATION) / (SEGMENT_DURATION * 0.7));
 
-  // Starting Y for content panel
-  const panelTop = H * 0.2;
+  // Starting Y for content panel (higher to match reference)
+  const panelTop = H * 0.16;
 
   for (let i = 0; i < points.length; i++) {
     const pt = points[i];
@@ -269,23 +269,23 @@ export function drawAIGoblin(
       ctx.fillText(`${i + 1}`, badgeX + 26, badgeY + 6);
     }
 
-    // Label (big headline)
+    // Keyword (accent-colored, like the reference orange highlights)
+    const keyword = pt.label || content.title || '';
     const labelY = ty + (points.length > 1 ? 40 : 0);
-    ctx.font = `700 58px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`;
-    ctx.fillStyle = '#ffffff';
-    ctx.textAlign = 'left';
-    ctx.shadowColor = accent;
-    ctx.shadowBlur = 30;
-    ctx.fillText(pt.label || content.title || '', RIGHT_PANEL_X, labelY + 58);
-    ctx.shadowBlur = 0;
+    if (keyword) {
+      ctx.font = `700 42px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = accent;
+      ctx.textAlign = 'left';
+      ctx.fillText(keyword, RIGHT_PANEL_X, labelY + 42);
+    }
 
-    // Description / subtitle
+    // Description / subtitle (white, smaller)
     const desc = pt.short || pt.desc || '';
     if (desc) {
-      const descY = labelY + (pt.label ? 80 : 40);
-      ctx.font = `400 30px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`;
-      ctx.fillStyle = 'rgba(255,255,255,0.6)';
-      drawWrappedText(ctx, desc, RIGHT_PANEL_X, descY, RIGHT_PANEL_W - 20, 46);
+      const descY = labelY + (keyword ? 70 : 40);
+      ctx.font = `400 28px "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif`;
+      ctx.fillStyle = 'rgba(255,255,255,0.68)';
+      drawWrappedText(ctx, desc, RIGHT_PANEL_X, descY, RIGHT_PANEL_W - 20, 44);
     }
 
     // Tags
@@ -294,9 +294,9 @@ export function drawAIGoblin(
       const tagAlpha = Math.min(1, (segProgress - 0.2) * 5);
       ctx.globalAlpha = Math.min(1, alpha * tagAlpha);
 
-      const tagBaseY = ty + 220;
+      const tagBaseY = ty + 160;
       let tagRowY = tagBaseY;
-      let tagX = RIGHT_PANEL_X;
+      let tagX = RIGHT_PANEL_X + 4;
       const tagGap = 12;
       const tagMaxW = RIGHT_PANEL_W - 20;
 
