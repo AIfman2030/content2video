@@ -3,11 +3,12 @@ import { Film, Key, Video, Sparkles, Settings2 } from 'lucide-react';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions,
-  TitleOptions, KeywordOptions,
+  TitleOptions, KeywordOptions, AIGoblinOptions,
 } from '../types/video';
 import {
   DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS, DEFAULT_AITECH_OPTIONS,
-  DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, DEFAULT_TITLE_OPTIONS, DEFAULT_KEYWORD_OPTIONS, type PetCoverConfig,
+  DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, DEFAULT_TITLE_OPTIONS, DEFAULT_KEYWORD_OPTIONS,
+  DEFAULT_AIGOBLIN_OPTIONS, type PetCoverConfig,
 } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
@@ -117,6 +118,7 @@ const BG_BY_STYLE: Record<StyleType, string> = {
   cat3d:       CLAUDE_BG,
   zen:         CLAUDE_BG,
   elite:       CLAUDE_BG,
+  aigoblin:    CLAUDE_BG,
 };
 
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
@@ -131,6 +133,7 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   cat3d:       '#60a5fa',
   zen:         '#fbbf24',
   elite:       '#818cf8',
+  aigoblin:    '#f59e0b',
 };
 
 const MANGA_DUMMY_CONTENT: GeneratedContent = { title: '', points: [] };
@@ -162,6 +165,7 @@ export default function Index() {
   const [natureOptions, setNatureOptions] = useState<NatureOptions>(DEFAULT_NATURE_OPTIONS);
   const [titleOptions, setTitleOptions] = useState<TitleOptions>(DEFAULT_TITLE_OPTIONS);
   const [keywordOptions, setKeywordOptions] = useState<KeywordOptions>(DEFAULT_KEYWORD_OPTIONS);
+  const [aigoblinOptions, setAigoblinOptions] = useState<AIGoblinOptions>(DEFAULT_AIGOBLIN_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
   const [petCoverConfig, setPetCoverConfig] = useState<PetCoverConfig>(DEFAULT_PET_COVER_CONFIG);
 
@@ -203,6 +207,7 @@ export default function Index() {
     else if (s === 'zen') setMangaOptions(prev => ({ ...prev, imageStyle: 'zen' }));
     else if (s === 'elite') setMangaOptions(prev => ({ ...prev, imageStyle: 'elite' }));
     else if (s === 'manga') setMangaOptions(prev => ({ ...prev, imageStyle: 'default' }));
+    else if (s === 'aigoblin') setAigoblinOptions(DEFAULT_AIGOBLIN_OPTIONS);
   };
 
   // ── Generate ─────────────────────────────────────────────────────────────
@@ -217,6 +222,16 @@ export default function Index() {
         setSubtitleOptions(prev => ({
           ...prev,
           customLines: result.points.map(pt => (pt.desc ?? pt.short ?? pt.label ?? '').replace(/\n/g, ' ').trim()),
+        }));
+      } else if (style === 'aigoblin') {
+        const result = parseRawContent(text);
+        setContent(result);
+        setNatureContent(null);
+        setAigoblinOptions(prev => ({
+          ...prev,
+          titleText: result.title ?? '',
+          subtitleText: result.points[0]?.label ?? '',
+          tags: result.points.map(p => p.label),
         }));
       } else if (style === 'translation') {
         const englishText = await translateSentence(text.trim());
@@ -298,8 +313,9 @@ export default function Index() {
   };
 
   const isManga = style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite';
+  const isGoblin = style === 'aigoblin';
   const canvasContent = isManga ? (mangaContent ? MANGA_DUMMY_CONTENT : null) : content;
-  const hasRecordableContent = isManga ? !!mangaContent : !!content;
+  const hasRecordableContent = isManga ? !!mangaContent : (isGoblin ? !!content : !!content);
 
   // ─── Claude-style Layout ─────────────────────────────────────────────────
   return (
@@ -372,6 +388,7 @@ export default function Index() {
                   natureOptions={natureOptions} onNatureOptionsChange={setNatureOptions}
                   titleOptions={titleOptions} onTitleOptionsChange={setTitleOptions}
                   keywordOptions={keywordOptions} onKeywordOptionsChange={setKeywordOptions}
+                  aigoblinOptions={aigoblinOptions} onAigoblinOptionsChange={setAigoblinOptions}
                   accentOverrides={accentOverrides}
                   onAccentOverrideChange={(sty, color) => setAccentOverrides(prev => ({ ...prev, [sty]: color }))}
                   petCoverConfig={petCoverConfig} onPetCoverConfigChange={setPetCoverConfig}
@@ -457,7 +474,8 @@ export default function Index() {
           cityOptions={cityOptions} mangaContent={mangaContent ?? undefined}
           mangaOptions={mangaOptions} aitechOptions={aitechOptions}
           petCoverConfig={petCoverConfig} natureOptions={natureOptions}
-          titleOptions={titleOptions} keywordOptions={keywordOptions} />
+          titleOptions={titleOptions} keywordOptions={keywordOptions}
+          aigoblinOptions={aigoblinOptions} />
       )}
 
       {/* ── API Key Dialog ────────────────────────────────────────────────── */}

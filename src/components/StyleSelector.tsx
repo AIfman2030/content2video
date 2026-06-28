@@ -95,6 +95,14 @@ const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: str
     bg: 'linear-gradient(135deg,#020812,#081828)',
     accent: '#00d4ff',
   },
+  {
+    key: 'aigoblin' as StyleType,
+    name: 'AI哥布林',
+    desc: '暗黑角色 · 内容依次出场',
+    tag: '9:16竖屏',
+    bg: 'linear-gradient(135deg,#1a0a0a,#0d0820)',
+    accent: '#f59e0b',
+  },
 ];
 
 export default function StyleSelector({ selected, onChange, compact = false }: Props) {

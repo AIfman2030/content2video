@@ -1,5 +1,5 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions, KeywordOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions, KeywordOptions, AIGoblinOptions } from '../types/video';
 import { getThemeConfig, pickChineseShapeByTitle } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
@@ -22,6 +22,7 @@ import {
   initTrParticles, type TrParticle,
 } from './engine/translation';
 import { drawMangaScene, mangaTotalMs } from './engine/manga';
+import { drawAIGoblin, goblinTotalMs, GOBLIN_W, GOBLIN_H } from './engine/aigoblin';
 
 // ── Image proxy: fetch via Supabase edge function → Blob URL (always origin-clean) ──
 const SUPABASE_URL = "https://spb-t4ngxi6xsx650369.supabase.opentrust.net";
@@ -62,6 +63,8 @@ export interface AnimEngine {
   getElapsed: () => number;
   isRunning: () => boolean;
   getTotalMs: () => number;
+  getCanvasWidth: () => number;
+  getCanvasHeight: () => number;
 }
 
 export async function createAnimEngine(
@@ -82,6 +85,7 @@ export async function createAnimEngine(
   natureOptions?: NatureOptions,
   titleOptions?: TitleOptions,
   keywordOptions?: KeywordOptions,
+  aigoblinOptions?: AIGoblinOptions,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
   // Allow per-style accent override (affects BG, title, overlays, shape decoration)
@@ -91,14 +95,14 @@ export async function createAnimEngine(
   const isSubtitle    = style === 'subtitle';
   const isTranslation = style === 'translation';
   const isManga       = style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite';
-
+  const isGoblin      = style === 'aigoblin';
   const isKeyword     = style === 'keyword';
 
   const rand = seededRandom(coverIndex * 31 + content.points.length * 17 + 7);
 
-  // Shape image not needed for nature, subtitle, translation, manga, or keyword styles
+  // Shape image not needed for nature, subtitle, translation, manga, goblin, or keyword styles
   let shapeImg: HTMLImageElement | null = null;
-  if (!isNature && !isSubtitle && !isTranslation && !isManga && !isKeyword) {
+  if (!isNature && !isSubtitle && !isTranslation && !isManga && !isKeyword && !isGoblin) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     // For Chinese: pick shape by content keywords; other styles cycle by coverIndex
@@ -122,6 +126,12 @@ export async function createAnimEngine(
     );
   }
 
+  // Goblin: pre-load character image
+  let goblinImg: HTMLImageElement = new Image();
+  if (isGoblin && aigoblinOptions?.characterImageUrl) {
+    goblinImg = await loadCanvasImage(aigoblinOptions.characterImageUrl);
+  }
+
   const chineseEffects = style === 'chinese'  ? initChineseEffects(rand) : null;
   const cityEffects    = style === 'city'      ? initCityEffects(rand)    : null;
   const aiEffects      = style === 'aitech'    ? initAIEffects(rand)      : null;
@@ -133,9 +143,11 @@ export async function createAnimEngine(
   const slideDurMs = mangaOptions?.slideDurationMs ?? 4000;
 
   const ctx = canvas.getContext('2d')!;
-  const total = isManga
-    ? mangaTotalMs(mangaContent?.segments.length ?? 0, slideDurMs)
-    : isNature
+  const total = isGoblin
+    ? goblinTotalMs(content.points.length, aigoblinOptions)
+    : isManga
+      ? mangaTotalMs(mangaContent?.segments.length ?? 0, slideDurMs)
+      : isNature
       ? natureTotalMs(
           natureContent?.leftItems.length ?? 0,
           natureContent?.rightItems.length ?? 0,
@@ -160,7 +172,8 @@ export async function createAnimEngine(
   let completionCallback = onComplete;
 
   function render(elapsed: number) {
-    ctx.clearRect(0, 0, CW, CH);
+    // Use canvas's actual dimensions (supports variable-aspect engines like aigoblin 9:16)
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     // ── Manga: fully self-contained pipeline ──
     if (isManga && mangaContent && mangaOptions) {
@@ -177,6 +190,12 @@ export async function createAnimEngine(
     // ── Translation: fully self-contained pipeline ──
     if (isTranslation && trPs) {
       drawTranslation(ctx, elapsed, content, trPs);
+      return;
+    }
+
+    // ── AI Goblin: 9:16 portrait, dark character + sequential reveals ──
+    if (isGoblin && aigoblinOptions) {
+      drawAIGoblin(ctx, elapsed, content, aigoblinOptions, goblinImg);
       return;
     }
 
@@ -285,5 +304,7 @@ export async function createAnimEngine(
     getElapsed: () => lastElapsed,
     isRunning: () => running,
     getTotalMs: () => total,
+    getCanvasWidth: () => isGoblin ? GOBLIN_W : CW,
+    getCanvasHeight: () => isGoblin ? GOBLIN_H : CH,
   };
 }

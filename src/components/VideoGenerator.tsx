@@ -3,7 +3,7 @@ import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music, AlertCircle, 
 import type {
   GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions,
-  PetCoverConfig, NatureOptions, TitleOptions, KeywordOptions,
+  PetCoverConfig, NatureOptions, TitleOptions, KeywordOptions, AIGoblinOptions,
 } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
@@ -29,10 +29,11 @@ interface Props {
   natureOptions?: NatureOptions;
   titleOptions?: TitleOptions;
   keywordOptions?: KeywordOptions;
+  aigoblinOptions?: AIGoblinOptions;
 }
 
-const PREVIEW_W = 512;
-const PREVIEW_H = Math.round(512 * CH / CW);
+const PREVIEW_W_BASE = 512;
+const calcPreviewH = (w: number, h: number) => Math.round(PREVIEW_W_BASE * h / w);
 
 type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'done';
 
@@ -63,6 +64,7 @@ export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
   subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions,
   aitechOptions, petCoverConfig, natureOptions, titleOptions, keywordOptions,
+  aigoblinOptions,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Awaited<ReturnType<typeof createAnimEngine>> | null>(null);
@@ -91,13 +93,17 @@ export default function VideoGenerator({
   const [mp4Url, setMp4Url]         = useState(ws().mp4Url);
   const [initError, setInitError]   = useState('');
   const [convError, setConvError]   = useState(ws().convError);
+  const [cvW, setCvW]               = useState(CW);
+  const [cvH, setCvH]               = useState(CH);
 
+  const previewW = PREVIEW_W_BASE;
+  const previewH = calcPreviewH(cvW, cvH);
   const isGeneratingAudio = recordState === 'generating_audio';
   const isRecording       = recordState === 'recording';
   const isConverting      = recordState === 'converting';
   const isDone            = recordState === 'done';
   const isBusy            = isGeneratingAudio || isRecording || isConverting;
-  const aspect            = CW / CH;
+  const aspect            = cvW / cvH;
 
   const accent = style === 'chinese' ? '#e74c3c'
     : style === 'city' ? '#f5d87a'
@@ -139,9 +145,15 @@ export default function VideoGenerator({
       chineseOptions, aiOptions, natureContent, undefined,
       subtitleOptions, accentOverride, cityOptions,
       mangaContent, mangaOptions, aitechOptions,
-      natureOptions, titleOptions, keywordOptions,
+      natureOptions, titleOptions, keywordOptions, aigoblinOptions,
     )
-      .then(engine => { engineRef.current = engine; setEngineReady(true); engine.start(); })
+      .then(engine => {
+        engineRef.current = engine;
+        setEngineReady(true);
+        setCvW(engine.getCanvasWidth());
+        setCvH(engine.getCanvasHeight());
+        engine.start();
+      })
       .catch(err => setInitError(String(err)));
 
     return () => {
@@ -435,7 +447,7 @@ export default function VideoGenerator({
           width: `max(100vw, calc(100vh * ${aspect}))`,
           height: `max(100vh, calc(100vw / ${aspect}))`,
         } : {
-          position: 'relative', width: PREVIEW_W, height: PREVIEW_H,
+          position: 'relative', width: previewW, height: previewH,
           borderRadius: '1rem', overflow: 'hidden',
           boxShadow: '0 20px 60px rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)',
         }}>
@@ -456,10 +468,10 @@ export default function VideoGenerator({
               </button>
             </div>
           )}
-          <canvas ref={canvasRef} width={CW} height={CH} style={{
+          <canvas ref={canvasRef} width={cvW} height={cvH} style={{
             display: 'block',
-            width: isRecording ? `max(100vw, calc(100vh * ${aspect}))` : PREVIEW_W,
-            height: isRecording ? `max(100vh, calc(100vw / ${aspect}))` : PREVIEW_H,
+            width: isRecording ? `max(100vw, calc(100vh * ${aspect}))` : previewW,
+            height: isRecording ? `max(100vh, calc(100vw / ${aspect}))` : previewH,
           }} />
           {isRecording && (
             <>

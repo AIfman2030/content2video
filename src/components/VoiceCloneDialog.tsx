@@ -9,8 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Mic, Square, Upload, CheckCircle2, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { createClient } from '@supabase/supabase-js';
 import { toast } from "sonner";
 import { addStoredClonedVoice } from "@/services/minimax-tts";
+
+const UPLOAD_SUPABASE_URL = 'https://backend.appmiaoda.com/projects/supabase320737353209528320';
+const UPLOAD_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoyMDk1ODk2OTQ0LCJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwic3ViIjoiYW5vbiJ9.5w8tDI6LD3u_Yb5xAyg9Xl_LhE7hBdpBbQjF4krC234';
+const uploadSupabase = createClient(UPLOAD_SUPABASE_URL, UPLOAD_SUPABASE_ANON_KEY);
 
 export interface ClonedVoice {
   id: string;      // MiniMax voice_id
@@ -135,12 +140,12 @@ export default function VoiceCloneDialog({ open, onClose, onSuccess }: VoiceClon
         : audioBlob.type.includes("wav") ? "wav"
         : "mp3";
       const filePath = `voice-clone-raw/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage
+      const { error: upErr } = await uploadSupabase.storage
         .from("generated-media")
         .upload(filePath, audioBlob, { contentType: audioBlob.type || "audio/webm", upsert: false });
       if (upErr) throw new Error(`音频上传失败：${upErr.message}`);
 
-      const { data: urlData } = supabase.storage.from("generated-media").getPublicUrl(filePath);
+      const { data: urlData } = uploadSupabase.storage.from("generated-media").getPublicUrl(filePath);
       const audioUrl = urlData.publicUrl;
 
       // Call MiniMax voice clone via edge function

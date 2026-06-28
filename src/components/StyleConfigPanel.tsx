@@ -13,6 +13,7 @@ import type {
   ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim,
   TitleOptions, TitleLineConfig, TitleLineEnterAnim,
   KeywordOptions, KeywordLayout, KeywordCenterAnim,
+  AIGoblinOptions,
 } from '../types/video';
 import { DEFAULT_CARD_LINES, DEFAULT_TITLE_OPTIONS, DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2, DEFAULT_KEYWORD_OPTIONS } from '../types/video';
 import CoverPicker from './CoverPicker';
@@ -50,6 +51,9 @@ interface Props {
   // ── Keyword style ──────────────────────────────────────────────────────────
   keywordOptions: KeywordOptions;
   onKeywordOptionsChange: (v: KeywordOptions) => void;
+  // ── AI Goblin style ────────────────────────────────────────────────────────
+  aigoblinOptions: AIGoblinOptions;
+  onAigoblinOptionsChange: (v: AIGoblinOptions) => void;
 }
 
 // ─── Shared colour presets ─────────────────────────────────────────────────────
@@ -1923,6 +1927,119 @@ function TranslationPanel({ accentColor, onAccentColorChange }: {
   );
 }
 
+// ─── AI Goblin Panel ──────────────────────────────────────────────────────────
+function AIGoblinPanel({
+  options, onChange, accentColor, onAccentColorChange,
+}: {
+  options: AIGoblinOptions;
+  onChange: (v: AIGoblinOptions) => void;
+  accentColor: string;
+  onAccentColorChange: (c: string) => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <Row>
+        <Label>角色图片 URL</Label>
+        <input
+          type="text"
+          value={options.characterImageUrl}
+          onChange={e => onChange({ ...options, characterImageUrl: e.target.value })}
+          placeholder="https://example.com/goblin.png"
+          className="w-full rounded-lg px-3 py-2 text-xs"
+          style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff' }}
+        />
+        <div className="text-[10px] mt-1" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          留空则使用暗黑剪影占位
+        </div>
+      </Row>
+
+      <Row>
+        <Label>标题</Label>
+        <input
+          type="text"
+          value={options.titleText}
+          onChange={e => onChange({ ...options, titleText: e.target.value })}
+          placeholder="视频标题"
+          className="w-full rounded-lg px-3 py-2 text-xs"
+          style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff' }}
+        />
+      </Row>
+
+      <Row>
+        <Label>标签（逗号分隔）</Label>
+        <input
+          type="text"
+          value={options.tags.join(', ')}
+          onChange={e => onChange({ ...options, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
+          placeholder="认知, 成长, 人生"
+          className="w-full rounded-lg px-3 py-2 text-xs"
+          style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff' }}
+        />
+      </Row>
+
+      <ColorPicker label="主色调" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
+
+      <Row>
+        <Label>背景色（上）</Label>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={options.bgColor1}
+            onChange={e => onChange({ ...options, bgColor1: e.target.value })}
+            className="w-8 h-8 rounded cursor-pointer border-0"
+          />
+          <input
+            type="text"
+            value={options.bgColor1}
+            onChange={e => onChange({ ...options, bgColor1: e.target.value })}
+            className="flex-1 rounded-lg px-3 py-2 text-xs font-mono"
+            style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff' }}
+          />
+        </div>
+      </Row>
+
+      <Row>
+        <Label>背景色（下）</Label>
+        <div className="flex items-center gap-2">
+          <input
+            type="color"
+            value={options.bgColor2}
+            onChange={e => onChange({ ...options, bgColor2: e.target.value })}
+            className="w-8 h-8 rounded cursor-pointer border-0"
+          />
+          <input
+            type="text"
+            value={options.bgColor2}
+            onChange={e => onChange({ ...options, bgColor2: e.target.value })}
+            className="flex-1 rounded-lg px-3 py-2 text-xs font-mono"
+            style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff' }}
+          />
+        </div>
+      </Row>
+
+      <Row>
+        <Label>字号</Label>
+        <div className="flex gap-1.5">
+          {(['sm', 'md', 'lg'] as const).map(size => (
+            <button
+              key={size}
+              onClick={() => onChange({ ...options, fontSize: size })}
+              className="flex-1 rounded-lg py-2 text-xs font-medium transition-all"
+              style={{
+                background: options.fontSize === size ? `${accentColor}20` : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${options.fontSize === size ? accentColor : 'rgba(255,255,255,0.06)'}`,
+                color: options.fontSize === size ? accentColor : 'rgba(255,255,255,0.4)',
+              }}
+            >
+              {size === 'sm' ? '小' : size === 'md' ? '中' : '大'}
+            </button>
+          ))}
+        </div>
+      </Row>
+    </div>
+  );
+}
+
 // ─── Main export ───────────────────────────────────────────────────────────────
 export default function StyleConfigPanel({
   style, accent,
@@ -1938,6 +2055,7 @@ export default function StyleConfigPanel({
   natureOptions, onNatureOptionsChange,
   titleOptions, onTitleOptionsChange,
   keywordOptions, onKeywordOptionsChange,
+  aigoblinOptions, onAigoblinOptionsChange,
 }: Props) {
   const ov = accentOverrides[style];
 
@@ -2056,6 +2174,18 @@ export default function StyleConfigPanel({
           onKeywordOptionsChange={onKeywordOptionsChange}
           accentColor={accentColor}
           onAccentColorChange={c => onAccentOverrideChange('keyword', c)}
+        />
+      );
+    }
+
+    case 'aigoblin': {
+      const gobAccent = ov ?? '#f59e0b';
+      return (
+        <AIGoblinPanel
+          options={aigoblinOptions}
+          onChange={onAigoblinOptionsChange}
+          accentColor={gobAccent}
+          onAccentColorChange={c => onAccentOverrideChange('aigoblin', c)}
         />
       );
     }

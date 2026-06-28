@@ -1,9 +1,10 @@
 // minimax-tts.ts — MiniMax TTS via Supabase Edge Function
-// Calls tts-minimax edge function which proxies to MiniMax API
+// Calls already-deployed edge functions on the app-c3k52olzg7b5 Supabase instance
 
-const SUPABASE_URL = 'https://spb-t4ngxi6xsx650369.supabase.opentrust.net';
-const SUPABASE_ANON_KEY = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNwYi10NG5neGk2eHN4NjUwMzY5IiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzY5MjgzNDAsImV4cCI6MjA5MjUwNDM0MH0.EHz1XRSbWC1AktqItCyzJ5uK5bTPVGEpsots4QJMHyI';
-const TTS_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/tts-minimax`;
+const SUPABASE_FN_BASE = 'https://backend.appmiaoda.com/projects/supabase320737353209528320/functions/v1';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoyMDk1ODk2OTQ0LCJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwic3ViIjoiYW5vbiJ9.5w8tDI6LD3u_Yb5xAyg9Xl_LhE7hBdpBbQjF4krC234';
+const TTS_FUNCTION_URL = `${SUPABASE_FN_BASE}/tts-minimax`;
+const CLONE_FUNCTION_URL = `${SUPABASE_FN_BASE}/voice-enrollment`;
 
 export interface MinimaxTtsResult {
   audioUrl: string;
@@ -60,7 +61,7 @@ export interface VoiceCloneRequest {
  * audioUrl must be a publicly accessible URL to the audio sample.
  */
 export async function cloneVoice(req: VoiceCloneRequest): Promise<ClonedVoice> {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/voice-enrollment`, {
+  const res = await fetch(CLONE_FUNCTION_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

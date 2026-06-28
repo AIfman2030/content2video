@@ -1,4 +1,4 @@
-export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga' | 'keyword' | 'cat3d' | 'zen' | 'elite';
+export type StyleType = 'chinese' | 'city' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga' | 'keyword' | 'cat3d' | 'zen' | 'elite' | 'aigoblin';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
@@ -253,6 +253,29 @@ export const DEFAULT_MANGA_OPTIONS: MangaOptions = {
   rapMode: false,
   imageStyle: 'default',
   minimaxVoiceId: '',
+};
+
+// ─── AI Goblin style options ──────────────────────────────────────────────────
+export interface AIGoblinOptions {
+  characterImageUrl: string;
+  titleText: string;
+  subtitleText: string;
+  tags: string[];
+  primaryColor: string;
+  bgColor1: string;
+  bgColor2: string;
+  fontSize: 'sm' | 'md' | 'lg';
+}
+
+export const DEFAULT_AIGOBLIN_OPTIONS: AIGoblinOptions = {
+  characterImageUrl: '',
+  titleText: '',
+  subtitleText: '',
+  tags: [],
+  primaryColor: '#f59e0b',
+  bgColor1: '#1a0a0a',
+  bgColor2: '#0d0820',
+  fontSize: 'md',
 };
 
 // ─── Content / generator ──────────────────────────────────────────────────────

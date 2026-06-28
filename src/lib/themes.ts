@@ -66,6 +66,15 @@ export function getThemeConfig(style: StyleType, chineseOptions?: ChineseOptions
       gridColor: '#f59e0b40',
     };
   }
+  if (style === 'aigoblin') {
+    return {
+      bg: ['#1a0a0a', '#150518', '#0d0820'],
+      accent: '#f59e0b',
+      accent2: '#fbbf24',
+      particle: '#f59e0b',
+      gridColor: '#f59e0b30',
+    };
+  }
   // aitech
   return {
     bg: ['#080c14', '#0f172a', '#1e1b4b'],
