@@ -1,5 +1,5 @@
 // Adaptive knowledge-animation engine. All input points are preserved and paged.
-import type { GeneratedContent, ContentPoint, CityOptions } from '../../types/video';
+import type { GeneratedContent, ContentPoint, CityOptions, AIKnowledgeSceneType, AIKnowledgeTheme } from '../../types/video';
 import { CW, CH, T, clamp, easeOutBack, easeOutCubic, lerp, roundRect, wrapText } from './helpers';
 
 export const KNOWLEDGE_OUTRO_MS = 3800;
@@ -9,7 +9,13 @@ const PAGE_TRANSITION = 620;
 const PANORAMA_STAGGER = 150;
 const PANORAMA_HOLD = 1800;
 const FONT = '"Noto Sans SC", "PingFang SC", sans-serif';
-const COLORS = ['#f6d365', '#ff7b93', '#67e8a5', '#78a9ff', '#c58aff', '#ff9f67'];
+const PALETTES: Record<AIKnowledgeTheme, string[]> = {
+  'deep-tech': ['#f6d365', '#45d6ff', '#67e8a5', '#78a9ff', '#c58aff', '#ff8e68'],
+  'bright-knowledge': ['#d9a928', '#e45f78', '#16a77a', '#347fe8', '#8b5bd6', '#ec763f'],
+  business: ['#e8c66a', '#d97a6f', '#5db9a5', '#6c92cb', '#9a82bd', '#cf9463'],
+};
+let COLORS = PALETTES['deep-tech'];
+let ANIMATION_STRENGTH = 1;
 const MAIN_SAFE_TOP = 205;
 const MAIN_SAFE_BOTTOM = 815;
 const DETAIL_TOP = 850;
@@ -18,7 +24,37 @@ type Layout =
   | 'star' | 'ladder' | 'matrix' | 'orbit' | 'split' | 'statement'
   | 'timeline' | 'mindmap' | 'compare' | 'flow' | 'flip' | 'converge';
 type KnowledgeRelation = 'sequence' | 'contrast' | 'causal' | 'hierarchy' | 'parallel';
-interface KnowledgePage { start: number; points: ContentPoint[]; layout: Layout; duration: number }
+interface KnowledgePage { start: number; points: ContentPoint[]; layout: Layout; duration: number; sceneType: AIKnowledgeSceneType }
+
+const SCENE_LABELS: Record<AIKnowledgeSceneType, string> = {
+  'tool-steps': '工具实操',
+  'prompt-breakdown': '提示词拆解',
+  'before-after': '前后对比',
+  workflow: '流程教学',
+};
+
+export function directSceneType(content: GeneratedContent, point?: ContentPoint): AIKnowledgeSceneType {
+  if (point?.sceneType) return point.sceneType;
+  const text = `${content.title} ${point?.label ?? ''} ${point?.short ?? ''} ${point?.desc ?? ''}`;
+  if (/(提示词|prompt|角色|上下文|输出格式|约束)/i.test(text)) return 'prompt-breakdown';
+  if (/(对比|区别|修改前|修改后|传统|现在|优劣|vs)/i.test(text)) return 'before-after';
+  if (/(点击|打开|输入|选择|上传|下载|登录|设置)/i.test(text)) return 'tool-steps';
+  return 'workflow';
+}
+
+function sceneMaxItems(scene: AIKnowledgeSceneType): number {
+  if (scene === 'tool-steps') return 3;
+  if (scene === 'before-after') return 4;
+  if (scene === 'prompt-breakdown') return 6;
+  return 5;
+}
+
+function sceneLayouts(scene: AIKnowledgeSceneType): Layout[] {
+  if (scene === 'tool-steps') return ['timeline', 'statement', 'flip'];
+  if (scene === 'prompt-breakdown') return ['flip', 'matrix', 'converge'];
+  if (scene === 'before-after') return ['compare', 'split', 'statement'];
+  return ['flow', 'timeline', 'ladder'];
+}
 
 function hashText(text: string): number {
   let h = 2166136261;
@@ -62,7 +98,9 @@ function layoutCandidates(relation: KnowledgeRelation): Layout[] {
 export function buildKnowledgePages(content: GeneratedContent, animationSeed = 1): KnowledgePage[] {
   const overviewLayout = overviewLayoutFor(content, animationSeed);
   const pages: KnowledgePage[] = [];
-  const pageCount = Math.max(1, Math.ceil(content.points.length / 6));
+  const directedScenes = content.points.map(point => directSceneType(content, point));
+  const maxItems = Math.min(6, ...directedScenes.map(sceneMaxItems));
+  const pageCount = Math.max(1, Math.ceil(content.points.length / maxItems));
   const baseSize = Math.floor(content.points.length / pageCount);
   const remainder = content.points.length % pageCount;
   let cursor = 0;
@@ -71,14 +109,17 @@ export function buildKnowledgePages(content: GeneratedContent, animationSeed = 1
     // most one: 10→5+5, 11→6+5, 16→6+5+5.
     const count = baseSize + (pageIndex < remainder ? 1 : 0);
     const points = content.points.slice(cursor, cursor + count);
-    const candidates = layoutCandidates(detectKnowledgeRelation(content, points));
+    const sceneType = directSceneType(content, points[0]);
+    const candidates = points.every(point => directSceneType(content, point) === sceneType)
+      ? sceneLayouts(sceneType)
+      : layoutCandidates(detectKnowledgeRelation(content, points));
     const basis = hashText(`${content.title}|${points.map(p => p.label).join('|')}|${animationSeed}|${pages.length}`);
     let layout = candidates[basis % candidates.length];
-    const previous = pages.at(-1)?.layout;
+    const previous = pages.length > 0 ? pages[pages.length - 1].layout : undefined;
     for (let offset = 1; (layout === overviewLayout || layout === previous) && offset < candidates.length; offset++) {
       layout = candidates[(basis + offset) % candidates.length];
     }
-    pages.push({ start: cursor, points, layout, duration: points.length * REVEAL_GAP + PAGE_HOLD + PAGE_TRANSITION });
+    pages.push({ start: cursor, points, layout, duration: points.length * REVEAL_GAP + PAGE_HOLD + PAGE_TRANSITION, sceneType });
     cursor += count;
   }
   return pages;
@@ -158,13 +199,20 @@ function positions(layout: Layout, count: number): Array<{ x: number; y: number 
 
 function effectTransform(effect: number, progress: number, index: number) {
   const eased = easeOutBack(Math.min(progress, 0.999));
+  let result: { x: number; y: number; scale: number; rotation: number };
   switch (effect % 5) {
-    case 0: return { x: 0, y: (1 - easeOutCubic(progress)) * -180, scale: eased, rotation: 0 };
-    case 1: return { x: (index % 2 ? 1 : -1) * (1 - easeOutCubic(progress)) * 260, y: 0, scale: eased, rotation: 0 };
-    case 2: return { x: 0, y: 0, scale: eased, rotation: (1 - progress) * Math.PI * 1.5 };
-    case 3: return { x: 0, y: (1 - progress) * 90, scale: 0.45 + eased * 0.55, rotation: 0 };
-    default: return { x: Math.sin(index * 9.7) * (1 - progress) * 80, y: 0, scale: eased, rotation: 0 };
+    case 0: result = { x: 0, y: (1 - easeOutCubic(progress)) * -180, scale: eased, rotation: 0 }; break;
+    case 1: result = { x: (index % 2 ? 1 : -1) * (1 - easeOutCubic(progress)) * 260, y: 0, scale: eased, rotation: 0 }; break;
+    case 2: result = { x: 0, y: 0, scale: eased, rotation: (1 - progress) * Math.PI * 1.5 }; break;
+    case 3: result = { x: 0, y: (1 - progress) * 90, scale: 0.45 + eased * 0.55, rotation: 0 }; break;
+    default: result = { x: Math.sin(index * 9.7) * (1 - progress) * 80, y: 0, scale: eased, rotation: 0 };
   }
+  return {
+    x: result.x * ANIMATION_STRENGTH,
+    y: result.y * ANIMATION_STRENGTH,
+    rotation: result.rotation * ANIMATION_STRENGTH,
+    scale: 1 - (1 - result.scale) * ANIMATION_STRENGTH,
+  };
 }
 
 function drawBurst(ctx: CanvasRenderingContext2D, x: number, y: number, t: number, color: string, seed: number) {
@@ -451,6 +499,39 @@ function drawStatementPage(ctx: CanvasRenderingContext2D, page: KnowledgePage, e
   });
 }
 
+function drawToolStepsPage(
+  ctx: CanvasRenderingContext2D, page: KnowledgePage, elapsed: number, alpha: number,
+  images: HTMLImageElement[],
+) {
+  const image = page.points.map((_, index) => images[page.start + index]).find(item => item?.naturalWidth > 0);
+  if (!image) { drawTimelinePage(ctx, page, elapsed, page.start + 73, alpha); return; }
+  const frame = { x: 105, y: 260, w: 920, h: 500 };
+  const scale = Math.min(frame.w / image.naturalWidth, frame.h / image.naturalHeight);
+  const w = image.naturalWidth * scale, h = image.naturalHeight * scale;
+  const reveal = easeOutCubic(clamp(elapsed / 620, 0, 1));
+  ctx.save(); ctx.globalAlpha = alpha * reveal;
+  ctx.fillStyle = 'rgba(3,8,15,0.96)'; ctx.strokeStyle = `${COLORS[1]}aa`; ctx.lineWidth = 3;
+  roundRect(ctx, frame.x, frame.y, frame.w, frame.h, 24); ctx.fill(); ctx.stroke();
+  ctx.save(); ctx.beginPath(); roundRect(ctx, frame.x + 12, frame.y + 12, frame.w - 24, frame.h - 24, 16); ctx.clip();
+  ctx.drawImage(image, frame.x + (frame.w - w) / 2, frame.y + (frame.h - h) / 2, w, h);
+  const shade = ctx.createLinearGradient(frame.x, 0, frame.x + frame.w, 0); shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.28)');
+  ctx.fillStyle = shade; ctx.fillRect(frame.x, frame.y, frame.w, frame.h); ctx.restore(); ctx.restore();
+
+  const cardX = 1090, cardW = 715, cardH = 135, gap = 32;
+  page.points.forEach((point, index) => {
+    const p = easeOutCubic(clamp((elapsed - index * REVEAL_GAP) / 480, 0, 1));
+    if (p <= 0) return;
+    const y = 275 + index * (cardH + gap), color = COLORS[(page.start + index) % COLORS.length];
+    ctx.save(); ctx.globalAlpha = alpha * p; ctx.translate((1 - p) * 120, 0);
+    ctx.fillStyle = 'rgba(5,10,18,0.94)'; ctx.strokeStyle = `${color}bb`; ctx.lineWidth = 3;
+    roundRect(ctx, cardX, y, cardW, cardH, 18); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cardX + 58, y + cardH / 2, 29, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#07101a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 24px ${FONT}`; ctx.fillText(String(page.start + index + 1), cardX + 58, y + cardH / 2);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.font = `800 ${fitFont(ctx, point.label, cardW - 145, 34, 22)}px ${FONT}`; ctx.fillText(point.label, cardX + 110, y + 48);
+    const short = point.short || point.desc; ctx.fillStyle = 'rgba(255,255,255,0.62)'; ctx.font = `550 ${fitFont(ctx, short, cardW - 145, 23, 17, 550)}px ${FONT}`; ctx.fillText(short, cardX + 110, y + 91); ctx.restore();
+  });
+}
+
 function drawExplanation(ctx: CanvasRenderingContext2D, point: ContentPoint, absoluteIndex: number, elapsed: number, alpha: number) {
   const color = COLORS[absoluteIndex % COLORS.length];
   const short = (point.short || '').trim();
@@ -465,6 +546,21 @@ function drawExplanation(ctx: CanvasRenderingContext2D, point: ContentPoint, abs
   const visible = Math.floor(clamp((elapsed - 360) / 24, 0, combined.length));
   const visibleText = combined.slice(0, visible); ctx.font = `600 ${size}px ${FONT}`; lines = wrapText(ctx, visibleText, CW - 430);
   ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; lines.forEach((line, i) => ctx.fillText(line, 205, boxY + 20 + i * (size + 8)));
+  if (point.source) {
+    const sourceText = `来源：${point.source}${point.verifiedAt ? ` · 核验于 ${point.verifiedAt}` : ''}`;
+    ctx.fillStyle = 'rgba(255,255,255,0.42)'; ctx.font = `500 19px ${FONT}`; ctx.textAlign = 'right';
+    ctx.fillText(sourceText, CW - 180, boxY + 118);
+  }
+  ctx.restore();
+}
+
+function drawSceneHeader(ctx: CanvasRenderingContext2D, scene: AIKnowledgeSceneType, alpha: number) {
+  const label = SCENE_LABELS[scene];
+  ctx.save(); ctx.globalAlpha = alpha; ctx.font = `750 22px ${FONT}`;
+  const width = ctx.measureText(label).width + 42;
+  ctx.fillStyle = `${COLORS[0]}18`; ctx.strokeStyle = `${COLORS[0]}99`; ctx.lineWidth = 2;
+  roundRect(ctx, CW / 2 - width / 2, 162, width, 42, 21); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = COLORS[0]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, CW / 2, 183);
   ctx.restore();
 }
 
@@ -478,7 +574,7 @@ function drawPanorama(ctx: CanvasRenderingContext2D, content: GeneratedContent, 
 
   if (count <= 6) {
     const layout = overviewLayoutFor(content, seed);
-    const overviewPage: KnowledgePage = { start: 0, points: content.points, layout, duration: panoramaDuration(count) };
+    const overviewPage: KnowledgePage = { start: 0, points: content.points, layout, duration: panoramaDuration(count), sceneType: directSceneType(content, content.points[0]) };
     const fastElapsed = elapsed * (REVEAL_GAP / PANORAMA_STAGGER);
     ctx.save();
     ctx.beginPath(); ctx.rect(70, MAIN_SAFE_TOP, CW - 140, MAIN_SAFE_BOTTOM - MAIN_SAFE_TOP); ctx.clip();
@@ -518,9 +614,12 @@ function drawPanorama(ctx: CanvasRenderingContext2D, content: GeneratedContent, 
 export function drawCityCards(
   ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent,
   accent: string, _accent2: string, _shapeImg: HTMLImageElement,
-  _coverIndex: number, cityOptions?: CityOptions,
+  _coverIndex: number, cityOptions?: CityOptions, knowledgeImages: HTMLImageElement[] = [],
 ) {
   if (elapsed < T.cardBase || content.points.length === 0) return;
+  COLORS = PALETTES[cityOptions?.visualTheme ?? 'deep-tech'];
+  ANIMATION_STRENGTH = cityOptions?.animationIntensity === 'calm' ? 0.55
+    : cityOptions?.animationIntensity === 'dynamic' ? 1.25 : 1;
   const seed = cityOptions?.animationSeed ?? 1;
   const pages = buildKnowledgePages(content, seed);
   let local = elapsed - T.cardBase;
@@ -540,6 +639,7 @@ export function drawCityCards(
   drawGrid(ctx, easeOutCubic(clamp(local / 700, 0, 1)), accent);
   const exitStart = page.duration - PAGE_TRANSITION;
   const pageAlpha = local > exitStart ? 1 - easeOutCubic(clamp((local - exitStart) / PAGE_TRANSITION, 0, 1)) : 1;
+  drawSceneHeader(ctx, page.sceneType, pageAlpha);
   const variantSeed = hashText(`${content.title}|${seed}|${page.start}`);
   // Hard clipping is a final safety net: no layout may paint into the title or
   // explanation regions, even during overshooting entrance animations.
@@ -547,7 +647,8 @@ export function drawCityCards(
   ctx.beginPath();
   ctx.rect(70, MAIN_SAFE_TOP, CW - 140, MAIN_SAFE_BOTTOM - MAIN_SAFE_TOP);
   ctx.clip();
-  if (page.layout === 'ladder') drawLadderPage(ctx, page, local, variantSeed, pageAlpha);
+  if (page.sceneType === 'tool-steps' && knowledgeImages.some(image => image?.naturalWidth > 0)) drawToolStepsPage(ctx, page, local, pageAlpha, knowledgeImages);
+  else if (page.layout === 'ladder') drawLadderPage(ctx, page, local, variantSeed, pageAlpha);
   else if (page.layout === 'matrix') drawMatrixPage(ctx, page, local, variantSeed, pageAlpha);
   else if (page.layout === 'split') drawSplitPage(ctx, page, local, variantSeed, pageAlpha);
   else if (page.layout === 'statement') drawStatementPage(ctx, page, local, variantSeed, pageAlpha);

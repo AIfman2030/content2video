@@ -3,11 +3,19 @@ import { CW, CH, clamp, easeInOutQuad, easeOutBack, easeOutCubic, hex2rgba, roun
 
 const FONT = '"Noto Sans SC", "PingFang SC", sans-serif';
 
-function drawKnowledgeOutro(ctx: CanvasRenderingContext2D, elapsed: number) {
+function drawKnowledgeOutro(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent) {
   const fade = easeOutCubic(clamp(elapsed / 420, 0, 1));
   ctx.save();
   ctx.fillStyle = `rgba(2,4,8,${fade})`;
   ctx.fillRect(0, 0, CW, CH);
+
+  const action = content.actionPrompt?.trim() || '收藏这套方法';
+  const actionIn = easeOutCubic(clamp((elapsed - 180) / 420, 0, 1));
+  const actionOut = 1 - easeOutCubic(clamp((elapsed - 1550) / 350, 0, 1));
+  ctx.globalAlpha = actionIn * actionOut;
+  ctx.font = `700 42px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(255,255,255,0.86)';
+  ctx.fillText(action, CW / 2, 285);
+  ctx.globalAlpha = 1;
 
   const enter = easeOutBack(Math.min(clamp((elapsed - 260) / 520, 0, 1), 0.999));
   if (enter <= 0) { ctx.restore(); return; }
@@ -60,7 +68,7 @@ export function drawOutro(
   _style: StyleType,
 ) {
   if (_style === 'city') {
-    drawKnowledgeOutro(ctx, elapsed);
+    drawKnowledgeOutro(ctx, elapsed, _content);
     return;
   }
   const t = clamp(elapsed / 700, 0, 1);

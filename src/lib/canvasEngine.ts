@@ -138,6 +138,10 @@ export async function createAnimEngine(
     goblinImg = await loadCanvasImage(aigoblinOptions.characterImageUrl);
   }
 
+  const knowledgeImages: HTMLImageElement[] = style === 'city'
+    ? await Promise.all(content.points.map(point => loadCanvasImage(point.mediaUrl ?? '')))
+    : [];
+
   const chineseEffects = style === 'chinese'  ? initChineseEffects(rand) : null;
   const cityEffects    = style === 'city'      ? initCityEffects(rand)    : null;
   const aiEffects      = style === 'aitech'    ? initAIEffects(rand)      : null;
@@ -226,8 +230,16 @@ export async function createAnimEngine(
       glow.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glow; ctx.fillRect(0, 0, CW, CH);
     } else if (style === 'city' && cityEffects) {
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, CW, CH);
+      const cityTheme = cityOptions?.visualTheme ?? 'deep-tech';
+      const bg = ctx.createLinearGradient(0, 0, CW, CH);
+      if (cityTheme === 'bright-knowledge') {
+        bg.addColorStop(0, '#16212a'); bg.addColorStop(1, '#263b4b');
+      } else if (cityTheme === 'business') {
+        bg.addColorStop(0, '#14191d'); bg.addColorStop(1, '#252016');
+      } else {
+        bg.addColorStop(0, '#050a12'); bg.addColorStop(1, '#091829');
+      }
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, CW, CH);
     } else if (style === 'aitech' && aiEffects) {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, CW, CH);
@@ -248,7 +260,7 @@ export async function createAnimEngine(
     if (!isKeyword) {
       drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
     }
-    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions, keywordOptions);
+    drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions, keywordOptions, knowledgeImages);
 
     const outroStart = (style === 'city'
       ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed) - KNOWLEDGE_OUTRO_MS

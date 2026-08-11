@@ -936,6 +936,35 @@ function CityPanel({
       >
         <RefreshCw size={12} />换一组动画布局
       </button>
+      <SectionDivider title="AI知识导演" />
+      <div className="grid grid-cols-3 gap-1.5">
+        {([
+          ['deep-tech', '深色科技'],
+          ['bright-knowledge', '明亮知识'],
+          ['business', '商务沉稳'],
+        ] as const).map(([value, label]) => (
+          <button key={value} onClick={() => upd({ visualTheme: value })}
+            className="rounded-lg px-2 py-2 text-[10px] transition-all"
+            style={{
+              color: cityOptions.visualTheme === value ? '#fff' : 'rgba(255,255,255,0.45)',
+              background: cityOptions.visualTheme === value ? `${accentColor}28` : 'rgba(255,255,255,0.035)',
+              border: `1px solid ${cityOptions.visualTheme === value ? `${accentColor}88` : 'rgba(255,255,255,0.08)'}`,
+            }}>{label}</button>
+        ))}
+      </div>
+      <div className="grid grid-cols-3 gap-1.5">
+        {([
+          ['calm', '克制'], ['balanced', '平衡'], ['dynamic', '动感'],
+        ] as const).map(([value, label]) => (
+          <button key={value} onClick={() => upd({ animationIntensity: value })}
+            className="rounded-lg px-2 py-2 text-[10px] transition-all"
+            style={{
+              color: cityOptions.animationIntensity === value ? '#fff' : 'rgba(255,255,255,0.45)',
+              background: cityOptions.animationIntensity === value ? `${accentColor}28` : 'rgba(255,255,255,0.035)',
+              border: `1px solid ${cityOptions.animationIntensity === value ? `${accentColor}88` : 'rgba(255,255,255,0.08)'}`,
+            }}>{label}动画</button>
+        ))}
+      </div>
       {!petCoverConfig.enabled && (
         <Row>
           <Label>封面图案</Label>

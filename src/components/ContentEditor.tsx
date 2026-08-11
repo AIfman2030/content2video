@@ -129,9 +129,31 @@ function PointCard({
         </>
       ) : (
         <>
+          {style === 'city' && (
+            <div className="flex flex-col gap-1">
+              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontWeight: 500, letterSpacing: '0.05em' }}>页面场景</span>
+              <select value={point.sceneType ?? ''} onChange={e => upd({ sceneType: e.target.value ? e.target.value as ContentPoint['sceneType'] : undefined })}
+                style={{ background: '#1b2027', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8, color: 'rgba(255,255,255,0.88)', fontSize: 12, padding: '7px 9px' }}>
+                <option value="">自动导演</option>
+                <option value="tool-steps">工具实操</option>
+                <option value="prompt-breakdown">提示词拆解</option>
+                <option value="before-after">前后对比</option>
+                <option value="workflow">流程教学</option>
+              </select>
+            </div>
+          )}
           <FieldInput label="关键词" value={point.label} onChange={v => upd({ label: v })} accent={accent} placeholder="两三个字的核心词…" />
           <FieldInput label="短句" value={point.short} onChange={v => upd({ short: v })} accent={accent} placeholder="一句话概括…" />
           <FieldInput label="说明" value={point.desc} onChange={v => upd({ desc: v })} accent={accent} multiline placeholder="详细说明（可留空）…" />
+          {style === 'city' && (
+            <>
+              <FieldInput label="界面截图地址（工具实操可选）" value={point.mediaUrl ?? ''} onChange={v => upd({ mediaUrl: v })} accent={accent} placeholder="https://…（请先处理隐私信息）" />
+              <div className="grid grid-cols-2 gap-2">
+                <FieldInput label="事实来源（可选）" value={point.source ?? ''} onChange={v => upd({ source: v })} accent={accent} placeholder="例如 OpenAI" />
+                <FieldInput label="核验日期（可选）" value={point.verifiedAt ?? ''} onChange={v => upd({ verifiedAt: v })} accent={accent} placeholder="YYYY-MM-DD" />
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
@@ -185,6 +207,19 @@ export default function ContentEditor({ content, style, onChange, onReset }: Pro
           accent={accent}
           placeholder={style === 'translation' ? '要翻译的中文句子…' : '视频大标题…'}
         />
+      )}
+      {style === 'city' && (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="flex flex-col gap-1">
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontWeight: 500, letterSpacing: '0.05em' }}>目标受众</span>
+            <select value={content.audience ?? 'beginner'} onChange={e => onChange({ ...content, audience: e.target.value as GeneratedContent['audience'] })}
+              style={{ background: '#1b2027', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8, color: 'rgba(255,255,255,0.88)', fontSize: 12, padding: '7px 9px' }}>
+              <option value="beginner">AI零基础</option>
+              <option value="small-business">中小企业经营者</option>
+            </select>
+          </div>
+          <FieldInput label="收尾行动提示" value={content.actionPrompt ?? ''} onChange={v => onChange({ ...content, actionPrompt: v })} accent={accent} placeholder="收藏这套方法" />
+        </div>
       )}
 
       {/* Points */}

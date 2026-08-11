@@ -268,8 +268,9 @@ export function drawCards(
   cityOptions?: CityOptions,
   aitechOptions?: AItechOptions,
   keywordOptions?: KeywordOptions,
+  knowledgeImages?: HTMLImageElement[],
 ) {
-  if (style === 'city')    { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex, cityOptions); return; }
+  if (style === 'city')    { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex, cityOptions, knowledgeImages); return; }
   if (style === 'aitech')  { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon', aitechOptions); return; }
   if (style === 'chinese') { drawChineseCards(ctx, elapsed, content, accent, accent2, shapeImg!, coverIndex, chineseOptions); return; }
   if (style === 'keyword') { drawKeywordCards(ctx, elapsed, content, accent, accent2, keywordOptions); return; }

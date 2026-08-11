@@ -116,6 +116,9 @@ export interface CityOptions {
   shortColor?: string;      // default '' = white
   descFontSize?: number;    // default 40
   descColor?: string;       // default '' = rgba(220,220,220,0.90)
+  knowledgeMode?: 'ai';
+  visualTheme?: AIKnowledgeTheme;
+  animationIntensity?: 'calm' | 'balanced' | 'dynamic';
 }
 
 export const DEFAULT_CITY_OPTIONS: CityOptions = {
@@ -123,6 +126,9 @@ export const DEFAULT_CITY_OPTIONS: CityOptions = {
   secondaryColor: '#e52222',
   animSpeed: 'normal',
   animationSeed: 1,
+  knowledgeMode: 'ai',
+  visualTheme: 'deep-tech',
+  animationIntensity: 'balanced',
 };
 
 // ─── AI Tech style options ─────────────────────────────────────────────────────
@@ -286,11 +292,21 @@ export interface ContentPoint {
   short: string;
   desc: string;
   formatted: string;
+  sceneType?: AIKnowledgeSceneType;
+  source?: string;
+  verifiedAt?: string;
+  mediaUrl?: string;
 }
+
+export type AIKnowledgeSceneType = 'tool-steps' | 'prompt-breakdown' | 'before-after' | 'workflow';
+export type AIKnowledgeTheme = 'deep-tech' | 'bright-knowledge' | 'business';
+export type AIKnowledgeAudience = 'beginner' | 'small-business';
 
 export interface GeneratedContent {
   title: string;
   points: ContentPoint[];
+  audience?: AIKnowledgeAudience;
+  actionPrompt?: string;
 }
 
 export interface NatureContent {

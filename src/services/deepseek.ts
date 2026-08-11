@@ -3,17 +3,22 @@ import type { GeneratedContent, NatureContent } from '../types/video';
 const API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const LS_KEY = 'deepseek_api_key';
 
-const SYSTEM_PROMPT = `你是一个内容提炼专家。用户会给你一段文章或文字，你需要提炼核心要点，以严格的JSON格式返回，不要有任何多余文字。
+const SYSTEM_PROMPT = `你是AIfman的AI知识视频导演。受众是完全不懂AI的普通人或中小企业经营者。把输入整理成看完就能操作的知识视频，以严格JSON返回，不要有任何多余文字。
 
 返回格式：
 {
   "title": "核心标题（≤12字，有冲击力）",
+  "audience": "beginner或small-business",
+  "actionPrompt": "本期行动提示（≤12字）",
   "points": [
     {
       "label": "核心词（2-4字，有冲击力）",
       "short": "一句话补充（5-10字）",
       "desc": "详细解释（15-20字，务必简洁）",
-      "formatted": "精炼格式（3-5字事件：3-5字感悟，共10-16字）"
+      "formatted": "精炼格式（3-5字事件：3-5字感悟，共10-16字）",
+      "sceneType": "tool-steps或prompt-breakdown或before-after或workflow",
+      "source": "涉及价格、产品功能或具体数据时填写可靠来源名称，否则留空",
+      "verifiedAt": "来源核验日期YYYY-MM-DD，否则留空"
     }
   ]
 }
@@ -21,6 +26,9 @@ const SYSTEM_PROMPT = `你是一个内容提炼专家。用户会给你一段文
 规则：
 - 若原文有明确维度（如"三维度"、"三个要点"），严格对应生成，不增不减
 - 若原文无明确分类，自然分3~5个主题点
+- 工具操作选tool-steps；提示词组成选prompt-breakdown；修改前后或优劣选before-after；有步骤和因果链选workflow
+- 面向零基础用户，不堆术语；面向小老板时优先说明业务动作，不得捏造收益数字
+- 具体价格、产品能力、效率数字缺少来源时，不得写成确定事实
 - 只返回JSON，不要任何其他文字
 - 确保所有字段都有值`;
 
@@ -103,7 +111,18 @@ export async function extractContent(text: string): Promise<GeneratedContent> {
   if (!parsed.title || !Array.isArray(parsed.points) || parsed.points.length === 0) {
     throw new Error('AI 返回数据不完整，请重试');
   }
-  return parsed;
+  const validScenes = new Set(['tool-steps', 'prompt-breakdown', 'before-after', 'workflow']);
+  return {
+    ...parsed,
+    audience: parsed.audience === 'small-business' ? 'small-business' : 'beginner',
+    actionPrompt: parsed.actionPrompt?.trim() || '收藏这套方法',
+    points: parsed.points.map(point => ({
+      ...point,
+      sceneType: validScenes.has(point.sceneType ?? '') ? point.sceneType : undefined,
+      source: point.source?.trim() || '',
+      verifiedAt: point.verifiedAt?.trim() || '',
+    })),
+  };
 }
 
 export async function extractNatureContent(text: string): Promise<NatureContent> {
