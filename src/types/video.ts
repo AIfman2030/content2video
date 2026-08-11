@@ -108,6 +108,7 @@ export interface CityOptions {
   accentColor: string;                     // warm highlight
   secondaryColor: string;                  // contrast (default red)
   animSpeed: 'slow' | 'normal' | 'fast';
+  animationSeed?: number;                   // stable variation across preview/export
   // Text style overrides (optional — fall back to defaults when empty/undefined)
   labelFontSize?: number;   // default 108
   labelColor?: string;      // default '' = use accent
@@ -121,6 +122,7 @@ export const DEFAULT_CITY_OPTIONS: CityOptions = {
   accentColor: '#ff8800',
   secondaryColor: '#e52222',
   animSpeed: 'normal',
+  animationSeed: 1,
 };
 
 // ─── AI Tech style options ─────────────────────────────────────────────────────

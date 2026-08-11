@@ -145,34 +145,18 @@ export const CHINESE_SHAPES: ShapeItem[] = [
 ];
 
 export const CITY_SHAPES: ShapeItem[] = [
-  // 华北东北
-  { id: 'beijing', label: '北京', group: '华北东北' },
-  { id: 'tianjin', label: '天津', group: '华北东北' },
-  { id: 'shijiazhuang', label: '石家庄', group: '华北东北' },
-  { id: 'shenyang', label: '沈阳', group: '华北东北' },
-  { id: 'changchun', label: '长春', group: '华北东北' },
-  { id: 'harbin', label: '哈尔滨', group: '华北东北' },
-  // 华东
-  { id: 'shanghai', label: '上海', group: '华东' },
-  { id: 'nanjing', label: '南京', group: '华东' },
-  { id: 'hangzhou', label: '杭州', group: '华东' },
-  { id: 'hefei', label: '合肥', group: '华东' },
-  { id: 'fuzhou', label: '福州', group: '华东' },
-  { id: 'nanchang', label: '南昌', group: '华东' },
-  // 华中华南
-  { id: 'wuhan', label: '武汉', group: '华中华南' },
-  { id: 'changsha', label: '长沙', group: '华中华南' },
-  { id: 'guangzhou', label: '广州', group: '华中华南' },
-  { id: 'nanning', label: '南宁', group: '华中华南' },
-  { id: 'haikou', label: '海口', group: '华中华南' },
-  // 西南西北
-  { id: 'chengdu', label: '成都', group: '西南西北' },
-  { id: 'kunming', label: '昆明', group: '西南西北' },
-  { id: 'lhasa', label: '拉萨', group: '西南西北' },
-  { id: 'xian', label: '西安', group: '西南西北' },
-  { id: 'lanzhou', label: '兰州', group: '西南西北' },
-  { id: 'urumqi', label: '乌鲁木齐', group: '西南西北' },
-  { id: 'chongqing', label: '重庆', group: '西南西北' },
+  { id: 'network', label: '知识网络', group: '通用知识' },
+  { id: 'target', label: '目标聚焦', group: '通用知识' },
+  { id: 'prism', label: '结构拆解', group: '通用知识' },
+  { id: 'spiral', label: '成长演进', group: '思维成长' },
+  { id: 'vortex', label: '心理思维', group: '思维成长' },
+  { id: 'star8', label: '历史文化', group: '思维成长' },
+  { id: 'atom', label: '科学原理', group: '科技科学' },
+  { id: 'helix', label: '生命健康', group: '科技科学' },
+  { id: 'hex', label: '数字科技', group: '科技科学' },
+  { id: 'crystal', label: '商业财经', group: '商业社会' },
+  { id: 'pentagon', label: '组织管理', group: '商业社会' },
+  { id: 'snowflake', label: '自然环境', group: '商业社会' },
 ];
 
 export const AI_SHAPES: ShapeItem[] = [
@@ -283,4 +267,30 @@ export function pickChineseShapeByTitle(
     if (keywords.some(kw => text.includes(kw))) return shapeId;
   }
   return CHINESE_SHAPES[coverIndex % CHINESE_SHAPES.length]?.id ?? 'mountain';
+}
+
+const KNOWLEDGE_TOPIC_SHAPES: [string[], string][] = [
+  [['科技', 'AI', '人工智能', '互联网', '软件', '编程', '数据', '数字'], 'hex'],
+  [['科学', '物理', '化学', '宇宙', '能源', '原理', '实验'], 'atom'],
+  [['健康', '医学', '医疗', '生物', '基因', '营养', '疾病', '身体'], 'helix'],
+  [['财经', '金融', '投资', '商业', '经济', '赚钱', '财富', '市场', '复利', '收益', '利率', '股票', '基金'], 'crystal'],
+  [['管理', '职场', '组织', '团队', '企业', '领导', '效率'], 'pentagon'],
+  [['历史', '文化', '人物', '传统', '国学', '文明'], 'star8'],
+  [['心理', '情绪', '认知', '思维', '焦虑', '关系', '沟通'], 'vortex'],
+  [['成长', '学习', '教育', '读书', '方法', '习惯', '人生'], 'spiral'],
+  [['自然', '环境', '气候', '地理', '动物', '植物'], 'snowflake'],
+  [['目标', '重点', '策略', '计划', '行动'], 'target'],
+  [['结构', '拆解', '分析', '逻辑', '框架', '系统'], 'prism'],
+];
+
+export function pickKnowledgeShapeByTitle(
+  title: string,
+  items: string[],
+  coverIndex = 0,
+): string {
+  const text = title + items.join('');
+  for (const [keywords, shapeId] of KNOWLEDGE_TOPIC_SHAPES) {
+    if (keywords.some(kw => text.includes(kw))) return shapeId;
+  }
+  return CITY_SHAPES[coverIndex % CITY_SHAPES.length]?.id ?? 'network';
 }

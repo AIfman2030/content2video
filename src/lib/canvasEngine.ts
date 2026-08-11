@@ -2,7 +2,7 @@
 import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions, KeywordOptions, AIGoblinOptions } from '../types/video';
 import { getThemeConfig, pickChineseShapeByTitle } from './themes';
 import { loadShapeImage } from './shapes';
-import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES } from './themes';
+import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES, pickKnowledgeShapeByTitle } from './themes';
 
 import { CW, CH, seededRandom, T, totalDuration, aiTechPhases, chineseSlideDuration, keywordTotalMs } from './engine/helpers';
 import { initChineseEffects } from './engine/chinese';
@@ -12,7 +12,7 @@ import { drawTitle } from './engine/title';
 import { drawCards } from './engine/cards';
 import { drawOutro, drawOverlays } from './engine/outro';
 import { drawNatureScene, natureTotalMs } from './engine/nature-scene';
-import { cityTotalMs } from './engine/cards-city';
+import { cityTotalMs, KNOWLEDGE_OUTRO_MS } from './engine/cards-city';
 import {
   drawSubtitle, subtitleTotalMs,
   initSubtitleParticles, type SubParticle,
@@ -112,6 +112,12 @@ export async function createAnimEngine(
           content.points.map(p => p.label ?? ''),
           coverIndex,
         )
+      : style === 'city'
+        ? pickKnowledgeShapeByTitle(
+            content.title ?? '',
+            content.points.map(p => `${p.label ?? ''}${p.short ?? ''}${p.desc ?? ''}`),
+            coverIndex,
+          )
       : shapeList[coverIndex % shapeList.length]?.id ?? shapeList[0].id;
     const shapeColor = style === 'city' ? '#f5d87a' : accent;
     const lineWidth = style === 'chinese' ? (chineseOptions?.lineWidth ?? 2) : 1.5;
@@ -158,7 +164,7 @@ export async function createAnimEngine(
         : isTranslation
           ? TR_TOTAL_MS
           : style === 'city'
-            ? cityTotalMs(content.points.length)
+            ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed)
             : style === 'aitech'
               ? aiTechPhases(content.points.length).total
               : style === 'chinese'
@@ -245,7 +251,7 @@ export async function createAnimEngine(
     drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions, keywordOptions);
 
     const outroStart = (style === 'city'
-      ? cityTotalMs(content.points.length)
+      ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed) - KNOWLEDGE_OUTRO_MS
       : style === 'chinese'
         ? chineseSlideDuration(content.points.length)
         : style === 'keyword'

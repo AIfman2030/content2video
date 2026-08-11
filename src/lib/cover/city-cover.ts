@@ -1,77 +1,151 @@
-import { COVER_W, COVER_H, ICON_CX, ICON_CY, ICON_R, CoverOpts,
-  hex2rgbaCover, neonGrad, drawRainbowBorder, registerCover } from './registry';
+import { COVER_W, COVER_H, type CoverOpts, drawRoundRect, registerCover } from './registry';
 import { loadShapeImage } from '../shapes';
-import { CITY_ABSTRACT_IDS } from '../shapes/city';
+import { pickKnowledgeShapeByTitle } from '../themes';
 
-const W = COVER_W, H = COVER_H;
+const W = COVER_W;
+const H = COVER_H;
+const FONT = '"Noto Sans SC", "PingFang SC", sans-serif';
 
-// Per-index neon palettes for variety
-const PALETTES: [string, string][] = [
-  ['#f5d87a','#ff6b35'],['#00d4ff','#7700ff'],['#ff4466','#44ffaa'],
-  ['#ffcc00','#0088ff'],['#00ff88','#cc00ff'],['#ff8844','#44aaff'],
-  ['#ff0088','#00ffcc'],['#ffaa00','#6600ff'],['#44ff44','#ff4488'],
-  ['#00ccff','#ff2244'],['#ff00cc','#88ff00'],['#ffcc44','#0044cc'],
-  ['#f5d87a','#cc00ff'],['#00ffee','#ff0055'],['#88ff44','#ff44aa'],
-  ['#4400ff','#ffcc44'],['#ff4488','#44ffaa'],['#aaff00','#ff00cc'],
-  ['#00bbff','#ff6644'],['#ff0066','#66ff00'],['#8888ff','#ffaa00'],
-  ['#44ff88','#ff4400'],['#ffcc88','#0044cc'],['#ff00aa','#aaff44'],
-];
+const TOPIC_META: Record<string, { label: string; accent: string }> = {
+  network:   { label: '知识科普', accent: '#2563eb' },
+  target:    { label: '目标方法', accent: '#dc2626' },
+  prism:     { label: '逻辑拆解', accent: '#7c3aed' },
+  spiral:    { label: '学习成长', accent: '#16a34a' },
+  vortex:    { label: '心理认知', accent: '#db2777' },
+  star8:     { label: '历史文化', accent: '#b45309' },
+  atom:      { label: '科学原理', accent: '#0891b2' },
+  helix:     { label: '生命健康', accent: '#059669' },
+  hex:       { label: '数字科技', accent: '#4f46e5' },
+  crystal:   { label: '商业财经', accent: '#c2410c' },
+  pentagon:  { label: '职场管理', accent: '#475569' },
+  snowflake: { label: '自然地理', accent: '#0284c7' },
+};
 
-function drawBg(ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-  const g = ctx.createLinearGradient(0, 0, 0, H * 0.5);
-  g.addColorStop(0, 'rgba(10,5,20,0.7)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H * 0.5);
+function splitTitle(ctx: CanvasRenderingContext2D, title: string, maxWidth: number): string[] {
+  const clean = title.replace(/\s+/g, ' ').trim() || '值得分享的知识';
+  const lines: string[] = [];
+  let line = '';
+  for (const char of clean) {
+    const next = line + char;
+    if (line && ctx.measureText(next).width > maxWidth) {
+      lines.push(line);
+      line = char;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
 }
 
-async function drawCity(ctx: CanvasRenderingContext2D, opts: CoverOpts) {
-  const { coverIndex } = opts;
-  const [c1, c2] = PALETTES[coverIndex % PALETTES.length];
+function fitTitle(ctx: CanvasRenderingContext2D, title: string): { lines: string[]; size: number } {
+  for (let size = 104; size >= 68; size -= 4) {
+    ctx.font = `900 ${size}px ${FONT}`;
+    const lines = splitTitle(ctx, title, W - 144);
+    if (lines.length <= 3) return { lines, size };
+  }
+  ctx.font = `900 64px ${FONT}`;
+  const lines = splitTitle(ctx, title, W - 144);
+  if (lines.length > 3) lines[2] = `${lines.slice(2).join('').slice(0, 12)}…`;
+  return { lines: lines.slice(0, 3), size: 64 };
+}
 
-  drawBg(ctx);
-  drawRainbowBorder(ctx, W, H);
+function drawBackground(ctx: CanvasRenderingContext2D, accent: string) {
+  ctx.fillStyle = '#f4f0e8';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, 18, H);
+
+  ctx.globalAlpha = 0.06;
+  ctx.strokeStyle = '#172033';
+  ctx.lineWidth = 1;
+  for (let x = 72; x < W; x += 72) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 72; y < H; y += 72) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+async function drawKnowledgeCover(ctx: CanvasRenderingContext2D, opts: CoverOpts) {
+  const shapeId = pickKnowledgeShapeByTitle(opts.title, opts.items ?? [], opts.coverIndex);
+  const meta = TOPIC_META[shapeId] ?? TOPIC_META.network;
+  drawBackground(ctx, meta.accent);
+
+  // Brand masthead
+  ctx.fillStyle = '#172033';
+  ctx.font = `800 34px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('AIFMAN · 知识动画', 72, 82);
+  ctx.textAlign = 'right';
+  ctx.font = `600 25px ${FONT}`;
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('KNOWLEDGE NOTE', W - 72, 82);
+  ctx.strokeStyle = '#172033';
+  ctx.globalAlpha = 0.22;
+  ctx.beginPath(); ctx.moveTo(72, 126); ctx.lineTo(W - 72, 126); ctx.stroke();
+  ctx.globalAlpha = 1;
+
+  // Topic badge
+  ctx.font = `700 28px ${FONT}`;
+  const badgeW = ctx.measureText(meta.label).width + 54;
+  ctx.fillStyle = meta.accent;
+  drawRoundRect(ctx, 72, 180, badgeW, 58, 29); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.fillText(meta.label, 72 + badgeW / 2, 209);
+
+  // Strong editorial title
+  const { lines, size } = fitTitle(ctx, opts.title);
+  const lineHeight = size * 1.22;
+  ctx.font = `900 ${size}px ${FONT}`;
+  ctx.fillStyle = '#101827';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  lines.forEach((line, index) => ctx.fillText(line, 72, 292 + index * lineHeight));
+
+  const titleBottom = 292 + lines.length * lineHeight;
+  ctx.fillStyle = meta.accent;
+  ctx.fillRect(72, titleBottom + 26, 132, 10);
+  ctx.fillStyle = '#667085';
+  ctx.font = `500 30px ${FONT}`;
+  ctx.fillText('用动画，把复杂知识讲清楚', 72, titleBottom + 64);
+
+  // Topic illustration: supporting element, not the visual hierarchy.
+  const cardX = 470;
+  const cardY = 870;
+  const cardSize = 500;
+  ctx.fillStyle = '#172033';
+  drawRoundRect(ctx, cardX, cardY, cardSize, cardSize, 44); ctx.fill();
+  ctx.fillStyle = meta.accent;
+  ctx.fillRect(cardX, cardY, cardSize, 18);
 
   try {
-    const shapeId = CITY_ABSTRACT_IDS[coverIndex % CITY_ABSTRACT_IDS.length];
-    const img = await loadShapeImage('city', shapeId, c1, 3.0);
-    const r = ICON_R;
-    const cx = ICON_CX, cy = ICON_CY;
-
-    // Radial glow fill behind shape
-    const gf = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-    gf.addColorStop(0, hex2rgbaCover(c1, 0.22));
-    gf.addColorStop(0.65, hex2rgbaCover(c2, 0.08));
-    gf.addColorStop(1, 'transparent');
-    ctx.fillStyle = gf;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
-
-    // Outer neon ring
-    ctx.shadowColor = c1; ctx.shadowBlur = 40;
-    ctx.strokeStyle = neonGrad(ctx, cx - r, cy, cx + r, cy, c1, c2);
-    ctx.lineWidth = 9;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-
-    // 8 orbital dots
-    ctx.shadowBlur = 14;
-    for (let i = 0; i < 8; i++) {
-      const a = (i / 8) * Math.PI * 2;
-      ctx.fillStyle = i % 2 === 0 ? c1 : c2;
-      ctx.beginPath();
-      ctx.arc(cx + Math.cos(a) * (r + 22), cy + Math.sin(a) * (r + 22), 11, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Inner ring
-    ctx.shadowBlur = 0; ctx.strokeStyle = hex2rgbaCover(c2, 0.65); ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(cx, cy, r * 0.68, 0, Math.PI * 2); ctx.stroke();
-
-    // Shape image with glow
+    const image = await loadShapeImage('city', shapeId, '#ffffff', 2.8);
     ctx.save();
-    ctx.shadowColor = c1; ctx.shadowBlur = 50;
     ctx.globalAlpha = 0.92;
-    ctx.drawImage(img, cx - r * 0.68, cy - r * 0.68, r * 1.36, r * 1.36);
-    ctx.shadowBlur = 0; ctx.restore();
-  } catch { /* fallback: no icon */ }
+    ctx.drawImage(image, cardX + 90, cardY + 90, 320, 320);
+    ctx.restore();
+  } catch { /* Text hierarchy remains usable if the icon fails. */ }
+
+  // Issue marker balances the illustration and gives the cover a repeatable series identity.
+  ctx.fillStyle = '#172033';
+  ctx.font = `900 112px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText('01', 72, 1120);
+  ctx.font = `700 25px ${FONT}`;
+  ctx.fillStyle = '#64748b';
+  ctx.fillText('KNOWLEDGE', 78, 1162);
+  ctx.fillText('SHARING', 78, 1196);
+
+  ctx.strokeStyle = '#172033';
+  ctx.globalAlpha = 0.22;
+  ctx.beginPath(); ctx.moveTo(72, H - 72); ctx.lineTo(W - 72, H - 72); ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
-registerCover('city', drawCity);
+registerCover('city', drawKnowledgeCover);

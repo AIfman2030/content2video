@@ -100,6 +100,13 @@ function parseRawContent(text: string): GeneratedContent {
   };
 }
 
+function ensureKnowledgeLimit(result: GeneratedContent): GeneratedContent {
+  if (result.points.length > 16) {
+    throw new Error(`当前最多支持 16 组内容，本次识别到 ${result.points.length} 组。请拆分为上下集后再生成。`);
+  }
+  return result;
+}
+
 // ─── Claude-style color palette ──────────────────────────────────────────────
 const CLAUDE_BG = '#0d1117';
 const CLAUDE_SURFACE = '#161b22';
@@ -140,7 +147,7 @@ const MANGA_DUMMY_CONTENT: GeneratedContent = { title: '', points: [] };
 const MANGA_STORAGE_KEY = 'vreel_manga_content_v1';
 
 export default function Index() {
-  const [style, setStyle] = useState<StyleType>('chinese');
+  const [style, setStyle] = useState<StyleType>('city');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [content, setContent] = useState<GeneratedContent | null>(null);
@@ -173,20 +180,6 @@ export default function Index() {
     ? subtitleOptions.accentColor
     : (accentOverrides[style] ?? ACCENT_BY_STYLE[style]);
 
-  // ── Persist manga content ────────────────────────────────────────────────
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(MANGA_STORAGE_KEY);
-      if (!raw) return;
-      const saved: MangaContent = JSON.parse(raw);
-      if (saved?.segments?.length) {
-        setStyle('manga');
-        setMangaContent(saved);
-        setContent(MANGA_DUMMY_CONTENT);
-      }
-    } catch { /* ignore */ }
-  }, []);
-
   useEffect(() => {
     try {
       if (mangaContent) localStorage.setItem(MANGA_STORAGE_KEY, JSON.stringify(mangaContent));
@@ -214,6 +207,9 @@ export default function Index() {
   const handleGenerate = async (text: string, rawMode = false) => {
     setError('');
     setIsLoading(true);
+    if (style === 'city') {
+      setCityOptions(prev => ({ ...prev, animationSeed: (prev.animationSeed ?? 1) + 1 }));
+    }
     try {
       if (style === 'subtitle') {
         const result = parseSubtitleContent(text);
@@ -246,10 +242,10 @@ export default function Index() {
         setContent(result);
         setNatureContent(null);
       } else if (rawMode) {
-        setContent(parseRawContent(text));
+        setContent(ensureKnowledgeLimit(parseRawContent(text)));
         setNatureContent(null);
       } else {
-        setContent(await extractContent(text));
+        setContent(ensureKnowledgeLimit(await extractContent(text)));
         setNatureContent(null);
       }
     } catch (e: unknown) {
@@ -454,10 +450,10 @@ export default function Index() {
                 <Sparkles size={28} style={{ color: '#f59e0b' }} />
               </div>
               <p className="text-sm font-medium" style={{ color: 'rgba(255,255,255,0.4)' }}>
-                输入内容，选择风格，开始创作
+                输入知识内容，生成动态讲解视频
               </p>
               <p className="text-xs mt-2" style={{ color: 'rgba(255,255,255,0.15)' }}>
-                支持国风 · 城市 · AI科技 · 自然 · 字幕 · 动漫等多种风格
+                封面图案会根据知识主题自动匹配
               </p>
             </div>
           )}

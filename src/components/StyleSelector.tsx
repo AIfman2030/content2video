@@ -8,107 +8,19 @@ interface Props {
 
 const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: string; accent: string }[] = [
   {
-    key: 'chinese',
-    name: '中国风',
-    desc: '水墨意境 · 东方美学',
-    tag: '24种古典纹样',
-    bg: 'linear-gradient(135deg,#0a0a14,#1a1a2e)',
-    accent: '#e74c3c',
-  },
-  {
     key: 'city',
-    name: '十二生肖',
-    desc: '夜色繁华 · 都市天际',
-    tag: '12生肖',
+    name: '知识动画',
+    desc: '主题图形 · 动态讲解',
+    tag: '封面智能匹配',
     bg: 'linear-gradient(135deg,#0d1b2a,#1a2a4a)',
     accent: '#f5d87a',
-  },
-  {
-    key: 'aitech',
-    name: 'AI 科技',
-    desc: '数字未来 · 智能前沿',
-    tag: '24种AI品牌',
-    bg: 'linear-gradient(135deg,#080c14,#1e1b4b)',
-    accent: '#a855f7',
-  },
-  {
-    key: 'nature',
-    name: '山川河海',
-    desc: '天地自然 · 对比之道',
-    tag: '6处名山胜水',
-    bg: 'linear-gradient(135deg,#060e06,#1a3020)',
-    accent: '#4ade80',
-  },
-  {
-    key: 'subtitle',
-    name: '电影字幕',
-    desc: '光影流动 · 影视字幕',
-    tag: '荧光多彩字幕',
-    bg: 'linear-gradient(135deg,#020204,#0a0a14)',
-    accent: '#ffd700',
-  },
-  {
-    key: 'translation',
-    name: '中英翻译',
-    desc: '双语字幕 · 暖调红韵',
-    tag: '收到扣1系列',
-    bg: 'linear-gradient(135deg,#190404,#631414)',
-    accent: '#ffe44d',
-  },
-  {
-    key: 'manga',
-    name: '漫画字幕',
-    desc: 'AI插画 · 短视频字幕',
-    tag: 'Seedream 4.5 生成',
-    bg: 'linear-gradient(135deg,#1a0a2e,#2d1b4e)',
-    accent: '#f59e0b',
-  },
-  {
-    key: 'cat3d' as StyleType,
-    name: '3D猫咪',
-    desc: '灰西装猫 · Pixar风格',
-    tag: '角色动画',
-    bg: 'linear-gradient(135deg,#1a1a2e,#2d1b4e)',
-    accent: '#60a5fa',
-  },
-  {
-    key: 'zen' as StyleType,
-    name: '玄学禅师',
-    desc: '国学人物 · 水墨禅意',
-    tag: '角色动画',
-    bg: 'linear-gradient(135deg,#1a0a0a,#3d1a0a)',
-    accent: '#fbbf24',
-  },
-  {
-    key: 'elite' as StyleType,
-    name: '都市精英',
-    desc: '西装男主 · 电影光影',
-    tag: '角色动画',
-    bg: 'linear-gradient(135deg,#0a0a1a,#1a1a3e)',
-    accent: '#818cf8',
-  },
-  {
-    key: 'keyword',
-    name: '关键词',
-    desc: '主题发散 · 6种排列',
-    tag: '词云 / 网格 / 卡片等',
-    bg: 'linear-gradient(135deg,#020812,#081828)',
-    accent: '#00d4ff',
-  },
-  {
-    key: 'aigoblin' as StyleType,
-    name: 'AI哥布林',
-    desc: '暗黑角色 · 内容依次出场',
-    tag: '9:16竖屏',
-    bg: 'linear-gradient(135deg,#1a0a0a,#0d0820)',
-    accent: '#f59e0b',
   },
 ];
 
 export default function StyleSelector({ selected, onChange, compact = false }: Props) {
   if (compact) {
     return (
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="grid grid-cols-1 gap-1.5">
         {STYLES.map(s => (
           <button
             key={s.key}

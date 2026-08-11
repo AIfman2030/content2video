@@ -306,10 +306,19 @@ export default function VideoGenerator({
     // ── Phase B: Canvas recording ─────────────────────────────────────────
     setRecordState('recording'); setProgress(0);
 
-    // VP8 → better FFmpeg WASM compatibility than VP9
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-      ? 'video/webm;codecs=vp8'
-      : 'video/webm';
+    // Prefer native H.264/MP4 recording when no external audio needs mixing.
+    // This avoids a full-resolution FFmpeg/WASM re-encode, which is the slowest
+    // part of the export flow. Browsers without MP4 MediaRecorder support keep
+    // the existing VP8 WebM → MP4 fallback.
+    const needsAudioMix = !!rapAudioBuffer || hasTtsAudio;
+    const nativeMp4Mime = !needsAudioMix
+      ? ['video/mp4;codecs=avc1.42E01E', 'video/mp4'].find(type => MediaRecorder.isTypeSupported(type))
+      : undefined;
+    const mimeType = nativeMp4Mime
+      ?? (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+        ? 'video/webm;codecs=vp8'
+        : 'video/webm');
+    const recordsMp4Directly = mimeType.startsWith('video/mp4');
 
     const videoStream = canvas.captureStream(30);
     const recorder    = new MediaRecorder(videoStream, { mimeType });
@@ -321,6 +330,18 @@ export default function VideoGenerator({
 
       const videoBlob = new Blob(chunksRef.current, { type: mimeType });
       console.log('[VideoGenerator] Recording done:', videoBlob.size, 'bytes,', mimeType);
+
+      // Native MP4 path: the browser has already encoded H.264, so the export
+      // is ready immediately and FFmpeg does not need to load or transcode.
+      if (recordsMp4Directly) {
+        const url = URL.createObjectURL(videoBlob);
+        ws().mp4Url = url;
+        setMp4Url(url);
+        setProgress(100);
+        setRecordState('done');
+        window.dispatchEvent(new CustomEvent(EV_MP4, { detail: url }));
+        return;
+      }
 
       // ── Step 1: Immediate WebM download (no conversion wait) ─────────────
       const immediateWebmUrl = URL.createObjectURL(videoBlob);
@@ -514,7 +535,7 @@ export default function VideoGenerator({
           <Loader2 size={36} className="animate-spin" style={{ color: accent }} />
           <div className="text-center">
             <p className="text-white/80 text-base font-medium">正在转换为 MP4…</p>
-            <p className="text-white/30 text-xs mt-1">高清视频转换需要 1-3 分钟，请耐心等待</p>
+            <p className="text-white/30 text-xs mt-1">当前浏览器不支持直接导出 MP4，正在使用兼容模式</p>
           </div>
           <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
@@ -593,7 +614,7 @@ export default function VideoGenerator({
             )}
           </div>
           <p className="mt-3 text-xs text-white/20 pointer-events-none">
-            录制完成立即可下载 WebM · MP4 需等待后台转换
+            优先直接生成 MP4 · 不支持时自动使用兼容转换
           </p>
         </div>
       )}

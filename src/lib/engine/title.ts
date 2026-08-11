@@ -234,6 +234,7 @@ export function drawTitle(
   _style: StyleType,
   titleOptions?: TitleOptions,
 ) {
+  const crispKnowledgeText = _style === 'city';
   // Use provided options or fall back to default 2-line split
   const opts = titleOptions ?? {
     lines: [
@@ -340,6 +341,9 @@ export function drawTitle(
           ctx.textBaseline = 'middle';
           ctx.shadowColor  = hex2rgba(accent, 0.75);
           ctx.shadowBlur   = 32;
+          if (crispKnowledgeText) {
+            ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+          }
           const partial = text.slice(0, chars);
           const hw = ctx.measureText(partial).width / 2;
           applyFill(ctx, cfg, CW / 2, drawY, hw);
@@ -379,6 +383,9 @@ export function drawTitle(
         ctx.textBaseline = 'middle';
         ctx.shadowColor  = hex2rgba(accent, 0.8);
         ctx.shadowBlur   = 24 + 10 * Math.sin(elapsed * 0.002);
+        if (crispKnowledgeText) {
+          ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+        }
         const hw = ctx.measureText(merged).width / 2;
         applyFill(ctx, cfg, CW / 2, HEADER_Y, hw);
         ctx.fillText(merged, CW / 2, HEADER_Y);
@@ -401,6 +408,9 @@ export function drawTitle(
         ctx.textBaseline = 'middle';
         ctx.shadowColor  = hex2rgba(accent, 0.75);
         ctx.shadowBlur   = 28;
+        if (crispKnowledgeText) {
+          ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+        }
         const hw = ctx.measureText(partText).width / 2;
         applyFill(ctx, cfg, CW / 2, drawY, hw);
         ctx.fillText(partText, CW / 2, drawY + shakeY);
@@ -455,6 +465,9 @@ export function drawTitle(
     ctx.shadowBlur   = cfg.enterAnim === 'dropsFromSky'
       ? lerp(60, 32, clamp((elapsed - T_L2_LAND) / 600, 0, 1))
       : 32 + 12 * Math.sin(elapsed * 0.002);
+    if (crispKnowledgeText) {
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+    }
     const hw = ctx.measureText(text).width / 2;
     applyFill(ctx, cfg, CW / 2, drawY, hw);
     ctx.fillText(text, CW / 2, drawY + shakeY);

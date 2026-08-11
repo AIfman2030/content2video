@@ -828,7 +828,10 @@ function ChinesePanel({ options, onChange, accent, coverIndex, onCoverIndexChang
       {!petCoverConfig.enabled && (
         <Row>
           <Label>封面图案</Label>
-          <CoverPicker style={style} value={coverIndex} onChange={onCoverIndexChange} />
+          <p className="rounded-lg px-3 py-2 text-[11px] leading-relaxed"
+            style={{ background: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            根据标题与正文内容自动匹配知识主题图形
+          </p>
         </Row>
       )}
       <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
@@ -926,6 +929,13 @@ function CityPanel({
   const upd = (patch: Partial<CityOptions>) => onCityOptionsChange({ ...cityOptions, ...patch });
   return (
     <div className="space-y-4">
+      <button
+        onClick={() => upd({ animationSeed: (cityOptions.animationSeed ?? 1) + 1 })}
+        className="flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[11px] font-medium transition-all hover:bg-white/10"
+        style={{ background: 'rgba(255,255,255,0.05)', color: accentColor, border: `1px solid ${accentColor}44` }}
+      >
+        <RefreshCw size={12} />换一组动画布局
+      </button>
       {!petCoverConfig.enabled && (
         <Row>
           <Label>封面图案</Label>

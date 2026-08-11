@@ -22,7 +22,7 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
 };
 
 const MAX_POINTS: Record<StyleType, number> = {
-  chinese: 12, city: 12, aitech: 12, nature: 1, subtitle: 20, translation: 1,
+  chinese: 12, city: 16, aitech: 12, nature: 1, subtitle: 20, translation: 1,
 };
 
 // ── Shared primitive inputs ────────────────────────────────────────────────────
