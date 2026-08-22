@@ -67,6 +67,48 @@ export interface AnimEngine {
   getCanvasHeight: () => number;
 }
 
+function drawPerspectiveGridBackground(ctx: CanvasRenderingContext2D) {
+  const inner = { x: 390, y: 205, w: 1140, h: 610 };
+  ctx.save();
+  ctx.shadowColor = 'transparent';
+  ctx.shadowBlur = 0;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#081A2F';
+  ctx.fillRect(0, 0, CW, CH);
+  ctx.fillStyle = '#061426';
+  ctx.fillRect(inner.x, inner.y, inner.w, inner.h);
+
+  ctx.save();
+  ctx.strokeStyle = 'rgba(150,195,225,0.16)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i <= 14; i++) {
+    const t = i / 14;
+    const outerX = CW * t;
+    const innerX = inner.x + inner.w * t;
+    ctx.beginPath(); ctx.moveTo(outerX, 0); ctx.lineTo(innerX, inner.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(outerX, CH); ctx.lineTo(innerX, inner.y + inner.h); ctx.stroke();
+  }
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const outerY = CH * t;
+    const innerY = inner.y + inner.h * t;
+    ctx.beginPath(); ctx.moveTo(0, outerY); ctx.lineTo(inner.x, innerY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(CW, outerY); ctx.lineTo(inner.x + inner.w, innerY); ctx.stroke();
+  }
+  for (const depth of [0.14, 0.3, 0.48, 0.66, 0.83]) {
+    const x = inner.x * depth;
+    const y = inner.y * depth;
+    ctx.strokeRect(x, y, CW - x * 2, CH - y * 2);
+  }
+  ctx.strokeStyle = 'rgba(175,215,240,0.24)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(inner.x, inner.y, inner.w, inner.h);
+  ctx.restore();
+  ctx.restore();
+}
+
 export async function createAnimEngine(
   canvas: HTMLCanvasElement,
   content: GeneratedContent,
@@ -230,16 +272,7 @@ export async function createAnimEngine(
       glow.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glow; ctx.fillRect(0, 0, CW, CH);
     } else if (style === 'city' && cityEffects) {
-      const cityTheme = cityOptions?.visualTheme ?? 'deep-tech';
-      const bg = ctx.createLinearGradient(0, 0, CW, CH);
-      if (cityTheme === 'bright-knowledge') {
-        bg.addColorStop(0, '#16212a'); bg.addColorStop(1, '#263b4b');
-      } else if (cityTheme === 'business') {
-        bg.addColorStop(0, '#14191d'); bg.addColorStop(1, '#252016');
-      } else {
-        bg.addColorStop(0, '#050a12'); bg.addColorStop(1, '#091829');
-      }
-      ctx.fillStyle = bg; ctx.fillRect(0, 0, CW, CH);
+      drawPerspectiveGridBackground(ctx);
     } else if (style === 'aitech' && aiEffects) {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, CW, CH);
@@ -257,21 +290,22 @@ export async function createAnimEngine(
 
     // Shape decoration removed — background is plain black
     // For keyword style: title is handled internally (no header)
-    if (!isKeyword) {
-      drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions);
-    }
+    const cityOutroStart = style === 'city'
+      ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed) - KNOWLEDGE_OUTRO_MS
+      : Number.POSITIVE_INFINITY;
+    if (!isKeyword && elapsed <= cityOutroStart) drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions, cityOptions);
     drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions, keywordOptions, knowledgeImages);
 
-    const outroStart = (style === 'city'
-      ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed) - KNOWLEDGE_OUTRO_MS
-      : style === 'chinese'
+    const outroStart = style === 'city'
+      ? cityOutroStart
+      : (style === 'chinese'
         ? chineseSlideDuration(content.points.length)
         : style === 'keyword'
           ? keywordTotalMs(content.points.length, keywordOptions?.staggerMs)
           : totalDuration(content.points.length)) - T.outroDur;
     // aitech has its own phase-5 outro; keyword just holds last frame
     if (style !== 'aitech' && style !== 'keyword' && elapsed > outroStart) {
-      drawOutro(ctx, elapsed - outroStart, content, accent, accent2, style);
+      drawOutro(ctx, elapsed - outroStart, content, accent, accent2, style, cityOptions);
     }
 
     drawOverlays(ctx, elapsed, accent, style);

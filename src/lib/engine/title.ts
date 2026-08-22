@@ -1,4 +1,4 @@
-import type { GeneratedContent, StyleType, TitleOptions, TitleLineConfig } from '../../types/video';
+import type { GeneratedContent, StyleType, TitleOptions, TitleLineConfig, CityOptions } from '../../types/video';
 import { CW, CH, clamp, lerp, easeOutCubic, easeOutBack, hex2rgba } from './helpers';
 
 // ── Timing (absolute ms from elapsed = 0) ─────────────────────────────────────
@@ -54,9 +54,10 @@ function applyFill(
   ctx: CanvasRenderingContext2D,
   cfg: TitleLineConfig,
   cx: number, cy: number, halfW: number,
+  forceSolid = false,
 ) {
   const baseColor = cfg.color || '#ffffff';
-  if (cfg.colorEnd && cfg.colorEnd !== baseColor) {
+  if (!forceSolid && cfg.colorEnd && cfg.colorEnd !== baseColor) {
     const g = ctx.createLinearGradient(cx - halfW, cy, cx + halfW, cy);
     g.addColorStop(0, baseColor);
     g.addColorStop(1, cfg.colorEnd);
@@ -233,6 +234,8 @@ export function drawTitle(
   _accent2: string,
   _style: StyleType,
   titleOptions?: TitleOptions,
+  cityOptions?: CityOptions,
+  hideCityAccount = false,
 ) {
   const crispKnowledgeText = _style === 'city';
   // Use provided options or fall back to default 2-line split
@@ -342,11 +345,11 @@ export function drawTitle(
           ctx.shadowColor  = hex2rgba(accent, 0.75);
           ctx.shadowBlur   = 32;
           if (crispKnowledgeText) {
-            ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+            ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
           }
           const partial = text.slice(0, chars);
           const hw = ctx.measureText(partial).width / 2;
-          applyFill(ctx, cfg, CW / 2, drawY, hw);
+          applyFill(ctx, cfg, CW / 2, drawY, hw, crispKnowledgeText);
           ctx.fillText(partial, CW / 2, drawY);
           // Blinking cursor
           if (chars < text.length && Math.floor(elapsed / 500) % 2 === 0) {
@@ -367,8 +370,16 @@ export function drawTitle(
     if (flyT > 0) {
       // During fly, converge all lines to a single merged row at headerY
       // Font shrinks to headerFontSize
-      const merged   = lines.map((ln, i) => resolveLineText(ln, i, content.title)).join('');
-      const targetFsz = opts.headerFontSize;
+      const mergedParts = lines.map((ln, i) => resolveLineText(ln, i, content.title)).filter(Boolean);
+      const merged = mergedParts.join(crispKnowledgeText && mergedParts.length > 1 ? '｜' : '');
+      let targetFsz = opts.headerFontSize;
+      if (crispKnowledgeText) {
+        ctx.font = fontStr(cfg, targetFsz);
+        while (targetFsz > 28 && ctx.measureText(merged).width > CW * 0.7) {
+          targetFsz -= 2;
+          ctx.font = fontStr(cfg, targetFsz);
+        }
+      }
       drawFsz = lerp(cfg.fontSize, targetFsz, flyEased);
       drawY   = lerp(settledY, HEADER_Y, flyEased);
 
@@ -379,16 +390,23 @@ export function drawTitle(
         ctx.save();
         ctx.globalAlpha = 1;
         ctx.font = fontStr(cfg, targetFsz);
-        ctx.textAlign    = 'center';
+        ctx.textAlign    = crispKnowledgeText ? 'left' : 'center';
         ctx.textBaseline = 'middle';
         ctx.shadowColor  = hex2rgba(accent, 0.8);
         ctx.shadowBlur   = 24 + 10 * Math.sin(elapsed * 0.002);
-        if (crispKnowledgeText) {
-          ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+        if (crispKnowledgeText && !hideCityAccount) {
+          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
         }
         const hw = ctx.measureText(merged).width / 2;
-        applyFill(ctx, cfg, CW / 2, HEADER_Y, hw);
-        ctx.fillText(merged, CW / 2, HEADER_Y);
+        const titleX = crispKnowledgeText ? 72 : CW / 2;
+        applyFill(ctx, cfg, titleX, HEADER_Y, hw, crispKnowledgeText);
+        ctx.fillText(merged, titleX, HEADER_Y);
+        if (crispKnowledgeText) {
+          ctx.font = `700 32px "Noto Sans SC", "PingFang SC", sans-serif`;
+          ctx.textAlign = 'right';
+          ctx.fillStyle = '#ffffff';
+          ctx.fillText(cityOptions?.accountName?.trim() || '思享稼', CW - 72, HEADER_Y);
+        }
         ctx.shadowBlur = 0;
         ctx.restore();
         break;
@@ -396,24 +414,31 @@ export function drawTitle(
 
       // During transition: each line individually moves to headerY + shrinks
       if (flyT > 0 && flyT < 1) {
-        const partText = flyT > 0.5
+        const lineFly = crispKnowledgeText
+          ? clamp((flyT - li * 0.14) / Math.max(0.01, 1 - li * 0.14), 0, 1)
+          : flyT;
+        const lineFlyEased = easeOutCubic(lineFly);
+        const partText = lineFly > 0.68
           ? (li === 0 ? merged : '')  // collapse all text into line 0 midway
           : text;
         if (!partText) continue;
 
         ctx.save();
-        ctx.globalAlpha = li === 0 ? 1 : clamp(1 - flyEased * 3, 0, 1); // other lines fade out
+        ctx.globalAlpha = li === 0 ? 1 : clamp(1 - lineFlyEased * 1.35, 0, 1);
         ctx.font = fontStr(cfg, drawFsz);
-        ctx.textAlign    = 'center';
+        ctx.textAlign    = crispKnowledgeText ? 'left' : 'center';
         ctx.textBaseline = 'middle';
         ctx.shadowColor  = hex2rgba(accent, 0.75);
         ctx.shadowBlur   = 28;
         if (crispKnowledgeText) {
-          ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+          ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
         }
         const hw = ctx.measureText(partText).width / 2;
-        applyFill(ctx, cfg, CW / 2, drawY, hw);
-        ctx.fillText(partText, CW / 2, drawY + shakeY);
+        const startX = CW / 2 - (crispKnowledgeText ? hw : 0);
+        const drawX = crispKnowledgeText ? lerp(startX, 72, lineFlyEased) : CW / 2;
+        const lineY = crispKnowledgeText ? lerp(settledY, HEADER_Y, lineFlyEased) : drawY;
+        applyFill(ctx, cfg, drawX, lineY, hw, crispKnowledgeText);
+        ctx.fillText(partText, drawX, lineY + shakeY);
         ctx.shadowBlur = 0;
         ctx.restore();
         continue;
@@ -466,10 +491,10 @@ export function drawTitle(
       ? lerp(60, 32, clamp((elapsed - T_L2_LAND) / 600, 0, 1))
       : 32 + 12 * Math.sin(elapsed * 0.002);
     if (crispKnowledgeText) {
-      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 2;
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
     }
     const hw = ctx.measureText(text).width / 2;
-    applyFill(ctx, cfg, CW / 2, drawY, hw);
+    applyFill(ctx, cfg, CW / 2, drawY, hw, crispKnowledgeText);
     ctx.fillText(text, CW / 2, drawY + shakeY);
     ctx.shadowBlur = 0;
     ctx.restore();

@@ -95,7 +95,7 @@ function parseRawContent(text: string): GeneratedContent {
     title,
     points: groups.map(g => ({
       label: g.label, short: g.rest[0] ?? '',
-      desc: g.rest.slice(1).join('') || g.rest[0] || '',
+      desc: g.rest.slice(1).join('\n') || g.rest[0] || '',
       formatted: [g.label, ...g.rest].join(' '),
     })),
   };
@@ -109,8 +109,8 @@ function ensureKnowledgeLimit(result: GeneratedContent): GeneratedContent {
 }
 
 // ─── Claude-style color palette ──────────────────────────────────────────────
-const CLAUDE_BG = '#0d1117';
-const CLAUDE_SURFACE = '#161b22';
+const CLAUDE_BG = '#081A2F';
+const CLAUDE_SURFACE = '#081A2F';
 const CLAUDE_BORDER = 'rgba(255,255,255,0.06)';
 const CLAUDE_ACCENT = '#d97706';
 
@@ -169,7 +169,12 @@ export default function Index() {
   const [aiOptions, setAiOptions] = useState<AIOptions>({ polyShape: 'hexagon' });
   const [aitechOptions, setAitechOptions] = useState<AItechOptions>(DEFAULT_AITECH_OPTIONS);
   const [subtitleOptions, setSubtitleOptions] = useState<SubtitleOptions>(DEFAULT_SUBTITLE_OPTIONS);
-  const [cityOptions, setCityOptions] = useState<CityOptions>(DEFAULT_CITY_OPTIONS);
+  const [cityOptions, setCityOptions] = useState<CityOptions>(() => {
+    try {
+      const saved = localStorage.getItem('content-video-city-options');
+      return saved ? { ...DEFAULT_CITY_OPTIONS, ...JSON.parse(saved) } : DEFAULT_CITY_OPTIONS;
+    } catch { return DEFAULT_CITY_OPTIONS; }
+  });
   const [natureOptions, setNatureOptions] = useState<NatureOptions>(DEFAULT_NATURE_OPTIONS);
   const [titleOptions, setTitleOptions] = useState<TitleOptions>(DEFAULT_TITLE_OPTIONS);
   const [keywordOptions, setKeywordOptions] = useState<KeywordOptions>(DEFAULT_KEYWORD_OPTIONS);
@@ -187,6 +192,10 @@ export default function Index() {
       else localStorage.removeItem(MANGA_STORAGE_KEY);
     } catch { /* ignore */ }
   }, [mangaContent]);
+
+  useEffect(() => {
+    try { localStorage.setItem('content-video-city-options', JSON.stringify(cityOptions)); } catch { /* ignore */ }
+  }, [cityOptions]);
 
   const handleStyleChange = (s: StyleType) => {
     setStyle(s);
@@ -324,7 +333,7 @@ export default function Index() {
     <div className="flex flex-col h-screen overflow-hidden" style={{ background: CLAUDE_BG }}>
       {/* ── Minimal Header ──────────────────────────────────────────────── */}
       <header className="flex-shrink-0 flex items-center justify-between px-6 py-3"
-        style={{ borderBottom: `1px solid ${CLAUDE_BORDER}`, background: 'rgba(13,17,23,0.8)', backdropFilter: 'blur(12px)' }}>
+        style={{ borderBottom: `1px solid ${CLAUDE_BORDER}`, background: CLAUDE_BG }}>
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg"
             style={{ background: 'linear-gradient(135deg, #d97706, #f59e0b)' }}>
@@ -445,7 +454,7 @@ export default function Index() {
 
         {/* RIGHT: Preview */}
         <main className="flex-1 min-w-0 flex flex-col items-center justify-center p-8 overflow-hidden"
-          style={{ background: 'radial-gradient(ellipse at center, rgba(217,119,6,0.03) 0%, transparent 60%)' }}>
+          style={{ background: CLAUDE_BG }}>
           {canvasContent ? (
             <div className="animate-fade-in-scale w-full max-w-[960px]">
               <StudioCanvas

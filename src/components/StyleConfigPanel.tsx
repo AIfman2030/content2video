@@ -937,6 +937,26 @@ function CityPanel({
         <RefreshCw size={12} />换一组动画布局
       </button>
       <SectionDivider title="AI知识导演" />
+      <div>
+        <Label>账号名称</Label>
+        <input
+          value={cityOptions.accountName ?? '思享稼'}
+          maxLength={12}
+          onChange={event => upd({ accountName: event.target.value })}
+          className="mt-1.5 w-full rounded-lg px-3 py-2 text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
+        />
+      </div>
+      <div>
+        <Label>片尾 Slogan</Label>
+        <input
+          value={cityOptions.outroSlogan ?? '生活新方案，就找AIfman.'}
+          maxLength={36}
+          onChange={event => upd({ outroSlogan: event.target.value })}
+          className="mt-1.5 w-full rounded-lg px-3 py-2 text-xs outline-none"
+          style={{ background: 'rgba(255,255,255,0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
+        />
+      </div>
       <div className="grid grid-cols-3 gap-1.5">
         {([
           ['deep-tech', '深色科技'],
@@ -974,17 +994,37 @@ function CityPanel({
       <PetCoverSection config={petCoverConfig} onChange={onPetCoverConfigChange} titleForGen={titleForPetCover} />
       <ColorPicker label="强调色" value={accentColor} onChange={onAccentColorChange} accent={accentColor} />
 
-      <SectionDivider title="标题（数字+关键词）" />
-      <NumericSlider label="字号" value={cityOptions.labelFontSize ?? 108} min={60} max={140} onChange={v => upd({ labelFontSize: v })} />
-      <OptionalColorPicker label="颜色（空=强调色）" value={cityOptions.labelColor ?? ''} placeholder="跟随强调色" onChange={c => upd({ labelColor: c })} accent={accentColor} />
+      <SectionDivider title="全貌关键词" />
+      <NumericSlider label="字号" value={cityOptions.labelFontSize ?? 50} min={30} max={72} onChange={v => upd({ labelFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=白色）" value={cityOptions.labelColor ?? ''} placeholder="#ffffff" onChange={c => upd({ labelColor: c })} accent={accentColor} />
 
-      <SectionDivider title="副标题" />
-      <NumericSlider label="字号" value={cityOptions.shortFontSize ?? 64} min={36} max={90} onChange={v => upd({ shortFontSize: v })} />
-      <OptionalColorPicker label="颜色（空=白色）" value={cityOptions.shortColor ?? ''} placeholder="rgba(255,255,255,0.95)" onChange={c => upd({ shortColor: c })} accent={accentColor} />
+      <SectionDivider title="金字塔层级词" />
+      <NumericSlider label="字号" value={cityOptions.pyramidLabelFontSize ?? 38} min={24} max={58} onChange={v => upd({ pyramidLabelFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=白色）" value={cityOptions.pyramidLabelColor ?? ''} placeholder="#ffffff" onChange={c => upd({ pyramidLabelColor: c })} accent={accentColor} />
 
-      <SectionDivider title="说明文字" />
-      <NumericSlider label="字号" value={cityOptions.descFontSize ?? 40} min={22} max={56} onChange={v => upd({ descFontSize: v })} />
-      <OptionalColorPicker label="颜色（空=浅灰）" value={cityOptions.descColor ?? ''} placeholder="rgba(220,220,220,0.92)" onChange={c => upd({ descColor: c })} accent={accentColor} />
+      <SectionDivider title="金字塔解释" />
+      <NumericSlider label="字号" value={cityOptions.shortFontSize ?? 36} min={24} max={52} onChange={v => upd({ shortFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=白色）" value={cityOptions.shortColor ?? ''} placeholder="#ffffff" onChange={c => upd({ shortColor: c })} accent={accentColor} />
+
+      <SectionDivider title="流程节点名称" />
+      <NumericSlider label="字号" value={cityOptions.workflowLabelFontSize ?? 40} min={26} max={60} onChange={v => upd({ workflowLabelFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=白色）" value={cityOptions.workflowLabelColor ?? ''} placeholder="#ffffff" onChange={c => upd({ workflowLabelColor: c })} accent={accentColor} />
+
+      <SectionDivider title="流程操作步骤正文（不含序号）" />
+      <Row>
+        <Label>字体</Label>
+        <select
+          className="flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-foreground"
+          value={cityOptions.descFontFamily ?? ''}
+          onChange={event => upd({ descFontFamily: event.target.value })}
+        >
+          {FONT_FAMILY_OPTS.map(font => (
+            <option key={font.value} value={font.value}>{font.label}</option>
+          ))}
+        </select>
+      </Row>
+      <NumericSlider label="字号" value={cityOptions.descFontSize ?? 36} min={24} max={48} onChange={v => upd({ descFontSize: v })} />
+      <OptionalColorPicker label="颜色（空=白色）" value={cityOptions.descColor ?? ''} placeholder="#ffffff" onChange={c => upd({ descColor: c })} accent={accentColor} />
     </div>
   );
 }

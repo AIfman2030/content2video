@@ -1,13 +1,22 @@
-import type { GeneratedContent, StyleType } from '../../types/video';
-import { CW, CH, clamp, easeInOutQuad, easeOutBack, easeOutCubic, hex2rgba, roundRect } from './helpers';
+import type { GeneratedContent, StyleType, CityOptions } from '../../types/video';
+import { CW, CH, clamp, easeInOutQuad, easeOutBack, easeOutCubic, hex2rgba, lerp, roundRect } from './helpers';
 
 const FONT = '"Noto Sans SC", "PingFang SC", sans-serif';
 
-function drawKnowledgeOutro(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent) {
-  const fade = easeOutCubic(clamp(elapsed / 420, 0, 1));
+function drawKnowledgeOutro(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent, cityOptions?: CityOptions) {
   ctx.save();
-  ctx.fillStyle = `rgba(2,4,8,${fade})`;
-  ctx.fillRect(0, 0, CW, CH);
+  const transition = clamp(elapsed / 480, 0, 1);
+  if (transition < 1) {
+    ctx.save();
+    ctx.globalAlpha = 1 - transition;
+    ctx.fillStyle = '#061426';
+    ctx.fillRect(390, 205, 1140 * easeOutCubic(transition), 610);
+    ctx.strokeStyle = 'rgba(150,210,245,0.8)';
+    ctx.lineWidth = 5;
+    const sweepX = 390 + 1140 * easeOutCubic(transition);
+    ctx.beginPath(); ctx.moveTo(sweepX, 205); ctx.lineTo(sweepX, 815); ctx.stroke();
+    ctx.restore();
+  }
 
   const action = content.actionPrompt?.trim() || '收藏这套方法';
   const actionIn = easeOutCubic(clamp((elapsed - 180) / 420, 0, 1));
@@ -32,29 +41,36 @@ function drawKnowledgeOutro(ctx: CanvasRenderingContext2D, elapsed: number, cont
   ctx.beginPath(); ctx.moveTo(boxX + boxW - 67, boxY + 87); ctx.lineTo(boxX + boxW - 43, boxY + 112); ctx.stroke();
   ctx.restore();
 
-  const query = 'AIfman';
-  const chars = Math.floor(clamp((elapsed - 780) / 110, 0, query.length));
+  const query = cityOptions?.accountName?.trim() || '思享稼';
+  const travel = easeInOutQuad(clamp((elapsed - 520) / 620, 0, 1));
+  if (travel < 1) {
+    ctx.save();
+    ctx.globalAlpha = 1 - clamp((travel - 0.82) / 0.18, 0, 1);
+    ctx.font = `700 32px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+    const targetX = boxX + 64 + ctx.measureText(query).width;
+    ctx.fillText(query, lerp(CW - 72, targetX, travel), lerp(78, boxY + 76, travel));
+    ctx.restore();
+  }
+  const chars = Math.floor(clamp((elapsed - 1120) / 90, 0, query.length));
   const typed = query.slice(0, chars);
   ctx.font = `800 74px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  const grad = ctx.createLinearGradient(boxX + 60, 0, boxX + 420, 0); grad.addColorStop(0, '#2458ff'); grad.addColorStop(1, '#06b6d4'); ctx.fillStyle = grad;
+  ctx.fillStyle = '#2458ff';
   ctx.fillText(typed, boxX + 64, boxY + 76);
-  if (elapsed > 780 && elapsed < 1900 && Math.floor(elapsed / 260) % 2 === 0) {
+  if (elapsed > 1120 && elapsed < 2100 && Math.floor(elapsed / 260) % 2 === 0) {
     const cursorX = boxX + 64 + ctx.measureText(typed).width + 8;
     ctx.fillRect(cursorX, boxY + 34, 5, 84);
   }
 
-  const clickT = clamp((elapsed - 1800) / 460, 0, 1);
+  const clickT = clamp((elapsed - 2050) / 460, 0, 1);
   if (clickT > 0 && clickT < 1) {
     ctx.globalAlpha = (1 - clickT) * 0.8; ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 5;
     ctx.beginPath(); ctx.arc(boxX + boxW - 76, boxY + 75, 70 + clickT * 90, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
   }
 
-  const sloganT = easeOutCubic(clamp((elapsed - 2050) / 500, 0, 1));
+  const sloganT = easeOutCubic(clamp((elapsed - 2450) / 500, 0, 1));
   ctx.globalAlpha = sloganT;
   ctx.font = `700 50px ${FONT}`; ctx.textAlign = 'center'; ctx.fillStyle = '#ffffff';
-  ctx.fillText('生活新方案，就找AIfman.', CW / 2, 680 + (1 - sloganT) * 42);
-  ctx.font = `500 25px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.38)';
-  ctx.fillText('AIFMAN · KNOWLEDGE IN MOTION', CW / 2, 745 + (1 - sloganT) * 42);
+  ctx.fillText(cityOptions?.outroSlogan?.trim() || '生活新方案，就找AIfman.', CW / 2, 700 + (1 - sloganT) * 42);
   ctx.restore();
 }
 
@@ -66,9 +82,10 @@ export function drawOutro(
   _accent: string,
   _accent2: string,
   _style: StyleType,
+  cityOptions?: CityOptions,
 ) {
   if (_style === 'city') {
-    drawKnowledgeOutro(ctx, elapsed, _content);
+    drawKnowledgeOutro(ctx, elapsed, _content, cityOptions);
     return;
   }
   const t = clamp(elapsed / 700, 0, 1);
@@ -84,14 +101,16 @@ export function drawOverlays(
   accent: string,
   style: StyleType,
 ) {
-  // Vignette
-  ctx.save();
-  const vg = ctx.createRadialGradient(CW / 2, CH / 2, CH * 0.3, CW / 2, CH / 2, CH * 0.8);
-  vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, 'rgba(0,0,0,0.5)');
-  ctx.fillStyle = vg;
-  ctx.fillRect(0, 0, CW, CH);
-  ctx.restore();
+  // Knowledge videos use a flat spatial background without edge vignettes.
+  if (style !== 'city') {
+    ctx.save();
+    const vg = ctx.createRadialGradient(CW / 2, CH / 2, CH * 0.3, CW / 2, CH / 2, CH * 0.8);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,0.5)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, CW, CH);
+    ctx.restore();
+  }
 
   // Scan-lines for AI tech style
   if (style === 'aitech') {

@@ -27,10 +27,10 @@ const MAX_POINTS: Record<StyleType, number> = {
 
 // ── Shared primitive inputs ────────────────────────────────────────────────────
 function FieldInput({
-  label, value, onChange, accent, multiline = false, placeholder = '',
+  label, value, onChange, accent, multiline = false, placeholder = '', allowAddLine = false,
 }: {
   label: string; value: string; onChange: (v: string) => void;
-  accent: string; multiline?: boolean; placeholder?: string;
+  accent: string; multiline?: boolean; placeholder?: string; allowAddLine?: boolean;
 }) {
   const base: CSSProperties = {
     width: '100%',
@@ -60,15 +60,21 @@ function FieldInput({
         {label}
       </span>
       {multiline ? (
-        <textarea
-          rows={2}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          style={base}
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-        />
+        <>
+          <textarea
+            rows={allowAddLine ? Math.min(7, Math.max(3, value.split('\n').length + 1)) : 2}
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            placeholder={placeholder}
+            style={base}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+          />
+          {allowAddLine && (
+            <button type="button" onClick={() => onChange(`${value}\n`)}
+              className="self-start text-[10px] font-medium" style={{ color: accent }}>＋新增一条步骤</button>
+          )}
+        </>
       ) : (
         <input
           type="text"
@@ -129,22 +135,9 @@ function PointCard({
         </>
       ) : (
         <>
-          {style === 'city' && (
-            <div className="flex flex-col gap-1">
-              <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontWeight: 500, letterSpacing: '0.05em' }}>页面场景</span>
-              <select value={point.sceneType ?? ''} onChange={e => upd({ sceneType: e.target.value ? e.target.value as ContentPoint['sceneType'] : undefined })}
-                style={{ background: '#1b2027', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8, color: 'rgba(255,255,255,0.88)', fontSize: 12, padding: '7px 9px' }}>
-                <option value="">自动导演</option>
-                <option value="tool-steps">工具实操</option>
-                <option value="prompt-breakdown">提示词拆解</option>
-                <option value="before-after">前后对比</option>
-                <option value="workflow">流程教学</option>
-              </select>
-            </div>
-          )}
-          <FieldInput label="关键词" value={point.label} onChange={v => upd({ label: v })} accent={accent} placeholder="两三个字的核心词…" />
-          <FieldInput label="短句" value={point.short} onChange={v => upd({ short: v })} accent={accent} placeholder="一句话概括…" />
-          <FieldInput label="说明" value={point.desc} onChange={v => upd({ desc: v })} accent={accent} multiline placeholder="详细说明（可留空）…" />
+          <FieldInput label={style === 'city' ? '全貌关键词' : '关键词'} value={point.label} onChange={v => upd({ label: v })} accent={accent} placeholder={style === 'city' ? '全貌折线上的核心词…' : '两三个字的核心词…'} />
+          <FieldInput label={style === 'city' ? '金字塔解释' : '短句'} value={point.short} onChange={v => upd({ short: v })} accent={accent} multiline={style === 'city'} placeholder={style === 'city' ? '解释这个核心词的含义…' : '一句话概括…'} />
+          <FieldInput label={style === 'city' ? '流程操作步骤（每行一条）' : '说明'} value={point.desc} onChange={v => upd({ desc: v })} accent={accent} multiline allowAddLine={style === 'city'} placeholder={style === 'city' ? '打开设置\n选择插件\n点击安装' : '详细说明（可留空）…'} />
           {style === 'city' && (
             <>
               <FieldInput label="界面截图地址（工具实操可选）" value={point.mediaUrl ?? ''} onChange={v => upd({ mediaUrl: v })} accent={accent} placeholder="https://…（请先处理隐私信息）" />

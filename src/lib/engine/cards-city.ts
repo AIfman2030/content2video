@@ -6,8 +6,6 @@ export const KNOWLEDGE_OUTRO_MS = 3800;
 const REVEAL_GAP = 720;
 const PAGE_HOLD = 1900;
 const PAGE_TRANSITION = 620;
-const PANORAMA_STAGGER = 150;
-const PANORAMA_HOLD = 1800;
 const FONT = '"Noto Sans SC", "PingFang SC", sans-serif';
 const PALETTES: Record<AIKnowledgeTheme, string[]> = {
   'deep-tech': ['#f6d365', '#45d6ff', '#67e8a5', '#78a9ff', '#c58aff', '#ff8e68'],
@@ -18,7 +16,6 @@ let COLORS = PALETTES['deep-tech'];
 let ANIMATION_STRENGTH = 1;
 const MAIN_SAFE_TOP = 205;
 const MAIN_SAFE_BOTTOM = 815;
-const DETAIL_TOP = 850;
 
 type Layout =
   | 'star' | 'ladder' | 'matrix' | 'orbit' | 'split' | 'statement'
@@ -26,12 +23,6 @@ type Layout =
 type KnowledgeRelation = 'sequence' | 'contrast' | 'causal' | 'hierarchy' | 'parallel';
 interface KnowledgePage { start: number; points: ContentPoint[]; layout: Layout; duration: number; sceneType: AIKnowledgeSceneType }
 
-const SCENE_LABELS: Record<AIKnowledgeSceneType, string> = {
-  'tool-steps': '工具实操',
-  'prompt-breakdown': '提示词拆解',
-  'before-after': '前后对比',
-  workflow: '流程教学',
-};
 
 export function directSceneType(content: GeneratedContent, point?: ContentPoint): AIKnowledgeSceneType {
   if (point?.sceneType) return point.sceneType;
@@ -119,41 +110,57 @@ export function buildKnowledgePages(content: GeneratedContent, animationSeed = 1
     for (let offset = 1; (layout === overviewLayout || layout === previous) && offset < candidates.length; offset++) {
       layout = candidates[(basis + offset) % candidates.length];
     }
-    pages.push({ start: cursor, points, layout, duration: points.length * REVEAL_GAP + PAGE_HOLD + PAGE_TRANSITION, sceneType });
+    const duration = sceneType === 'prompt-breakdown'
+      ? 2200 + points.length * 1050 + PAGE_HOLD + PAGE_TRANSITION
+      : sceneType === 'workflow'
+        ? 1600 + points.length * 1250 + PAGE_HOLD + PAGE_TRANSITION
+        : points.length * REVEAL_GAP + PAGE_HOLD + PAGE_TRANSITION;
+    pages.push({ start: cursor, points, layout, duration, sceneType });
     cursor += count;
   }
   return pages;
 }
 
 function panoramaDuration(n: number) {
-  return Math.max(3200, n * PANORAMA_STAGGER + PANORAMA_HOLD);
+  const pageCount = Math.max(1, Math.ceil(n / 6));
+  return pageCount * 4400;
+}
+
+function fixedKnowledgePages(content: GeneratedContent, maxItems: number, sceneType: AIKnowledgeSceneType): KnowledgePage[] {
+  const pageCount = Math.max(1, Math.ceil(content.points.length / maxItems));
+  const baseSize = Math.floor(content.points.length / pageCount);
+  const remainder = content.points.length % pageCount;
+  const pages: KnowledgePage[] = [];
+  let cursor = 0;
+  for (let index = 0; index < pageCount; index++) {
+    const count = baseSize + (index < remainder ? 1 : 0);
+    const points = content.points.slice(cursor, cursor + count);
+    const duration = sceneType === 'prompt-breakdown'
+      ? 2200 + points.length * 1050 + PAGE_HOLD + PAGE_TRANSITION
+      : 1600 + points.length * 1250 + PAGE_HOLD + PAGE_TRANSITION;
+    pages.push({ start: cursor, points, layout: sceneType === 'prompt-breakdown' ? 'ladder' : 'flow', duration, sceneType });
+    cursor += count;
+  }
+  return pages;
 }
 
 export function cityTotalMs(n: number, content?: GeneratedContent, animationSeed = 1): number {
   const safeContent = content ?? { title: '', points: Array.from({ length: n }, () => ({ label: '', short: '', desc: '', formatted: '' })) };
-  const pageMs = buildKnowledgePages(safeContent, animationSeed).reduce((sum, page) => sum + page.duration, 0);
-  return T.cardBase + panoramaDuration(n) + pageMs + KNOWLEDGE_OUTRO_MS;
+  const pyramidMs = fixedKnowledgePages(safeContent, 6, 'prompt-breakdown').reduce((sum, page) => sum + page.duration, 0);
+  const workflowMs = fixedKnowledgePages(safeContent, 3, 'workflow').reduce((sum, page) => sum + page.duration, 0);
+  return T.cardBase + panoramaDuration(n) + pyramidMs + workflowMs + KNOWLEDGE_OUTRO_MS;
 }
 
-function fitFont(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, preferred: number, min = 22, weight = 800) {
+function fitFont(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, preferred: number, min = 22, weight = 800, family = FONT) {
   let size = preferred;
   while (size > min) {
-    ctx.font = `${weight} ${size}px ${FONT}`;
+    ctx.font = `${weight} ${size}px ${family}`;
     if (ctx.measureText(text).width <= maxWidth) break;
     size -= 2;
   }
   return size;
 }
 
-function drawGrid(ctx: CanvasRenderingContext2D, alpha: number, hue: string) {
-  ctx.save();
-  ctx.globalAlpha = alpha * 0.045;
-  ctx.strokeStyle = hue;
-  ctx.lineWidth = 1;
-  for (let x = 90; x < CW; x += 105) { ctx.beginPath(); ctx.moveTo(x, 150); ctx.lineTo(x, CH); ctx.stroke(); }
-  for (let y = 180; y < CH; y += 105) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke(); }
-  ctx.restore();
-}
 
 function positions(layout: Layout, count: number): Array<{ x: number; y: number }> {
   if (layout === 'star') {
@@ -499,170 +506,187 @@ function drawStatementPage(ctx: CanvasRenderingContext2D, page: KnowledgePage, e
   });
 }
 
-function drawToolStepsPage(
-  ctx: CanvasRenderingContext2D, page: KnowledgePage, elapsed: number, alpha: number,
-  images: HTMLImageElement[],
-) {
-  const image = page.points.map((_, index) => images[page.start + index]).find(item => item?.naturalWidth > 0);
-  if (!image) { drawTimelinePage(ctx, page, elapsed, page.start + 73, alpha); return; }
-  const frame = { x: 105, y: 260, w: 920, h: 500 };
-  const scale = Math.min(frame.w / image.naturalWidth, frame.h / image.naturalHeight);
-  const w = image.naturalWidth * scale, h = image.naturalHeight * scale;
-  const reveal = easeOutCubic(clamp(elapsed / 620, 0, 1));
-  ctx.save(); ctx.globalAlpha = alpha * reveal;
-  ctx.fillStyle = 'rgba(3,8,15,0.96)'; ctx.strokeStyle = `${COLORS[1]}aa`; ctx.lineWidth = 3;
-  roundRect(ctx, frame.x, frame.y, frame.w, frame.h, 24); ctx.fill(); ctx.stroke();
-  ctx.save(); ctx.beginPath(); roundRect(ctx, frame.x + 12, frame.y + 12, frame.w - 24, frame.h - 24, 16); ctx.clip();
-  ctx.drawImage(image, frame.x + (frame.w - w) / 2, frame.y + (frame.h - h) / 2, w, h);
-  const shade = ctx.createLinearGradient(frame.x, 0, frame.x + frame.w, 0); shade.addColorStop(0, 'rgba(0,0,0,0)'); shade.addColorStop(1, 'rgba(0,0,0,0.28)');
-  ctx.fillStyle = shade; ctx.fillRect(frame.x, frame.y, frame.w, frame.h); ctx.restore(); ctx.restore();
+function pyramidExplanation(point: ContentPoint) {
+  return point.short?.trim() || point.desc?.trim() || '';
+}
 
-  const cardX = 1090, cardW = 715, cardH = 135, gap = 32;
+function workflowSteps(point: ContentPoint) {
+  return point.desc?.trim() || point.short?.trim() || '';
+}
+
+function drawPromptBreakdownPage(ctx: CanvasRenderingContext2D, page: KnowledgePage, elapsed: number, alpha: number, options?: CityOptions) {
+  const count = page.points.length;
+  const move = easeOutCubic(clamp((elapsed - 1550) / 650, 0, 1));
+  const centerX = lerp(CW / 2, 520, move);
+  const top = 260, bottom = 745;
   page.points.forEach((point, index) => {
-    const p = easeOutCubic(clamp((elapsed - index * REVEAL_GAP) / 480, 0, 1));
-    if (p <= 0) return;
-    const y = 275 + index * (cardH + gap), color = COLORS[(page.start + index) % COLORS.length];
-    ctx.save(); ctx.globalAlpha = alpha * p; ctx.translate((1 - p) * 120, 0);
-    ctx.fillStyle = 'rgba(5,10,18,0.94)'; ctx.strokeStyle = `${color}bb`; ctx.lineWidth = 3;
-    roundRect(ctx, cardX, y, cardW, cardH, 18); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cardX + 58, y + cardH / 2, 29, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#07101a'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `900 24px ${FONT}`; ctx.fillText(String(page.start + index + 1), cardX + 58, y + cardH / 2);
-    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.font = `800 ${fitFont(ctx, point.label, cardW - 145, 34, 22)}px ${FONT}`; ctx.fillText(point.label, cardX + 110, y + 48);
-    const short = point.short || point.desc; ctx.fillStyle = 'rgba(255,255,255,0.62)'; ctx.font = `550 ${fitFont(ctx, short, cardW - 145, 23, 17, 550)}px ${FONT}`; ctx.fillText(short, cardX + 110, y + 91); ctx.restore();
+    const build = easeOutBack(Math.min(clamp((elapsed - index * 230) / 520, 0, 1), 0.999));
+    if (build <= 0) return;
+    const y = count === 1 ? 500 : lerp(top, bottom, index / (count - 1));
+    const width = count === 1 ? 560 : lerp(360, 760, index / Math.max(1, count - 1));
+    const h = Math.min(102, 430 / Math.max(1, count));
+    const color = COLORS[(page.start + index) % COLORS.length];
+    const activeIndex = Math.floor(Math.max(0, elapsed - 2200) / 1050);
+    const dimmed = move > 0.95 && activeIndex < count && activeIndex !== index;
+    ctx.save(); ctx.globalAlpha = alpha * clamp(build, 0, 1) * (dimmed ? 0.32 : 1); ctx.translate(centerX, y); ctx.scale(build, build);
+    ctx.fillStyle = `${color}42`; ctx.strokeStyle = color; ctx.lineWidth = dimmed ? 2 : 4;
+    ctx.beginPath(); ctx.moveTo(-width / 2 + 35, -h / 2); ctx.lineTo(width / 2 - 35, -h / 2); ctx.lineTo(width / 2, h / 2); ctx.lineTo(-width / 2, h / 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = options?.pyramidLabelColor || '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `800 ${fitFont(ctx, point.label, width - 70, options?.pyramidLabelFontSize ?? 38, 20)}px ${FONT}`; ctx.fillText(point.label, 0, 0); ctx.restore();
+  });
+
+  if (move < 0.85) return;
+  page.points.forEach((point, index) => {
+    const start = 2200 + index * 1050;
+    const reveal = easeOutCubic(clamp((elapsed - start) / 260, 0, 1));
+    if (reveal <= 0) return;
+    const explanation = pyramidExplanation(point);
+    const chars = Math.floor(clamp((elapsed - start - 170) / 30, 0, explanation.length));
+    const y = 285 + index * (460 / Math.max(1, count - 1));
+    const color = COLORS[(page.start + index) % COLORS.length];
+    ctx.save(); ctx.globalAlpha = alpha * reveal; ctx.fillStyle = color; ctx.beginPath(); ctx.arc(1010, y, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.font = `650 ${fitFont(ctx, explanation, 700, options?.shortFontSize ?? 36, 20, 650)}px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillStyle = options?.shortColor || '#fff';
+    ctx.fillText(explanation.slice(0, chars), 1045, y);
+    if (chars < explanation.length && Math.floor(elapsed / 260) % 2 === 0) ctx.fillText('|', 1045 + ctx.measureText(explanation.slice(0, chars)).width + 5, y);
+    ctx.restore();
   });
 }
 
-function drawExplanation(ctx: CanvasRenderingContext2D, point: ContentPoint, absoluteIndex: number, elapsed: number, alpha: number) {
-  const color = COLORS[absoluteIndex % COLORS.length];
-  const short = (point.short || '').trim();
-  const desc = point.desc && point.desc !== point.short ? point.desc.trim() : '';
-  const combined = [short, desc].filter(Boolean).join('  ');
-  if (!combined) return;
-  const boxY = DETAIL_TOP;
-  ctx.save(); ctx.globalAlpha = alpha * easeOutCubic(clamp((elapsed - 160) / 380, 0, 1));
-  ctx.fillStyle = 'rgba(7,10,18,0.92)'; roundRect(ctx, 145, boxY, CW - 290, 150, 20); ctx.fill(); ctx.fillStyle = color; roundRect(ctx, 145, boxY, 12, 150, 6); ctx.fill();
-  let size = 38; let lines: string[] = [];
-  do { ctx.font = `600 ${size}px ${FONT}`; lines = wrapText(ctx, combined, CW - 430); if (lines.length <= 3) break; size -= 2; } while (size > 16);
-  const visible = Math.floor(clamp((elapsed - 360) / 24, 0, combined.length));
-  const visibleText = combined.slice(0, visible); ctx.font = `600 ${size}px ${FONT}`; lines = wrapText(ctx, visibleText, CW - 430);
-  ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; lines.forEach((line, i) => ctx.fillText(line, 205, boxY + 20 + i * (size + 8)));
-  if (point.source) {
-    const sourceText = `来源：${point.source}${point.verifiedAt ? ` · 核验于 ${point.verifiedAt}` : ''}`;
-    ctx.fillStyle = 'rgba(255,255,255,0.42)'; ctx.font = `500 19px ${FONT}`; ctx.textAlign = 'right';
-    ctx.fillText(sourceText, CW - 180, boxY + 118);
-  }
-  ctx.restore();
-}
-
-function drawSceneHeader(ctx: CanvasRenderingContext2D, scene: AIKnowledgeSceneType, alpha: number) {
-  const label = SCENE_LABELS[scene];
-  ctx.save(); ctx.globalAlpha = alpha; ctx.font = `750 22px ${FONT}`;
-  const width = ctx.measureText(label).width + 42;
-  ctx.fillStyle = `${COLORS[0]}18`; ctx.strokeStyle = `${COLORS[0]}99`; ctx.lineWidth = 2;
-  roundRect(ctx, CW / 2 - width / 2, 162, width, 42, 21); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = COLORS[0]; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, CW / 2, 183);
-  ctx.restore();
-}
-
-function drawPanorama(ctx: CanvasRenderingContext2D, content: GeneratedContent, elapsed: number, seed: number) {
-  const count = content.points.length;
-  ctx.save();
-  ctx.fillStyle = 'rgba(3,6,12,0.42)'; ctx.fillRect(0, 145, CW, CH - 145);
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = `700 34px ${FONT}`;
-  ctx.fillText(`主题全貌 · ${count} 个核心观点`, CW / 2, 190);
-
-  if (count <= 6) {
-    const layout = overviewLayoutFor(content, seed);
-    const overviewPage: KnowledgePage = { start: 0, points: content.points, layout, duration: panoramaDuration(count), sceneType: directSceneType(content, content.points[0]) };
-    const fastElapsed = elapsed * (REVEAL_GAP / PANORAMA_STAGGER);
-    ctx.save();
-    ctx.beginPath(); ctx.rect(70, MAIN_SAFE_TOP, CW - 140, MAIN_SAFE_BOTTOM - MAIN_SAFE_TOP); ctx.clip();
-    if (layout === 'timeline') drawTimelinePage(ctx, overviewPage, fastElapsed, seed + 31, 1);
-    else if (layout === 'compare') drawComparePage(ctx, overviewPage, fastElapsed, seed + 31, 1);
-    else if (layout === 'flow') drawFlowPage(ctx, overviewPage, fastElapsed, seed + 31, 1);
-    else if (layout === 'mindmap') drawMindmapPage(ctx, overviewPage, fastElapsed, seed + 31, 1, content.title);
-    else if (layout === 'ladder') drawLadderPage(ctx, overviewPage, fastElapsed, seed + 31, 1);
-    else if (layout === 'converge') drawConvergePage(ctx, overviewPage, fastElapsed, seed + 31, 1, content.title);
-    else drawGenericPage(ctx, overviewPage, fastElapsed, seed + 31, 1);
-    ctx.restore();
-  } else {
-    const cols = count <= 10 ? 5 : 4;
-    const rows = Math.ceil(count / cols);
-    const cardW = cols === 5 ? 320 : 380;
-    const cardH = rows <= 2 ? 170 : 116;
-    const gapX = 28, gapY = 35;
-    const totalW = cols * cardW + (cols - 1) * gapX;
-    const totalH = rows * cardH + (rows - 1) * gapY;
-    content.points.forEach((point, i) => {
-      const te = elapsed - i * PANORAMA_STAGGER;
-      const p = easeOutBack(Math.min(clamp(te / 430, 0, 1), 0.999));
-      if (p <= 0) return;
-      const col = i % cols, row = Math.floor(i / cols);
-      const x = (CW - totalW) / 2 + col * (cardW + gapX);
-      const y = MAIN_SAFE_TOP + (MAIN_SAFE_BOTTOM - MAIN_SAFE_TOP - totalH) / 2 + row * (cardH + gapY);
-      const color = COLORS[i % COLORS.length];
-      ctx.save(); ctx.globalAlpha = clamp(p, 0, 1); ctx.translate(x + cardW / 2, y + cardH / 2); ctx.scale(p, p); ctx.translate(-(x + cardW / 2), -(y + cardH / 2));
-      ctx.fillStyle = `${color}18`; ctx.strokeStyle = color; ctx.lineWidth = 2.5; roundRect(ctx, x, y, cardW, cardH, 18); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = color; ctx.font = `800 24px ${FONT}`; ctx.textAlign = 'left'; ctx.fillText(String(i + 1).padStart(2, '0'), x + 22, y + cardH / 2);
-      ctx.fillStyle = '#fff'; ctx.font = `800 ${fitFont(ctx, point.label, cardW - 105, 32, 19)}px ${FONT}`; ctx.fillText(point.label, x + 82, y + cardH / 2); ctx.restore();
+function drawWorkflowTeachingPage(ctx: CanvasRenderingContext2D, page: KnowledgePage, elapsed: number, alpha: number, options?: CityOptions) {
+  const count = page.points.length;
+  const left = 570, right = 1350, axisY = 345;
+  const namesDone = 360 + count * 240;
+  const lineP = easeOutCubic(clamp(elapsed / Math.max(650, count * 190), 0, 1));
+  ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(left, axisY); ctx.lineTo(lerp(left, right, lineP), axisY); ctx.stroke(); ctx.restore();
+  page.points.forEach((point, index) => {
+    const x = count === 1 ? CW / 2 : lerp(left, right, index / (count - 1));
+    const color = COLORS[(page.start + index) % COLORS.length];
+    const nameP = easeOutBack(Math.min(clamp((elapsed - 220 - index * 240) / 430, 0, 1), 0.999));
+    if (nameP > 0) {
+      ctx.save(); ctx.globalAlpha = alpha * clamp(nameP, 0, 1); ctx.translate(x, axisY); ctx.scale(nameP, nameP);
+      ctx.fillStyle = '#07101c'; ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, 29, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.font = `800 ${fitFont(ctx, point.label, 290, options?.workflowLabelFontSize ?? 40, 22)}px ${FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = options?.workflowLabelColor || '#ffffff'; ctx.fillText(point.label, 0, -72); ctx.restore();
+    }
+    const detailStart = namesDone + index * 1250;
+    const detailP = easeOutCubic(clamp((elapsed - detailStart) / 380, 0, 1));
+    if (detailP <= 0) return;
+    const raw = workflowSteps(point);
+    const steps = raw.split(/[\n→；;]/).map(step => step.trim()).filter(Boolean);
+    const cardW = Math.min(345, (right - left) / Math.max(1, count) - 18);
+    const stepFamily = options?.descFontFamily || FONT;
+    const stepSize = options?.descFontSize || 36;
+    const stepColor = options?.descColor || '#fff';
+    ctx.font = `650 ${stepSize}px ${stepFamily}`;
+    const numberColumnW = 50;
+    const textWidth = cardW - 40 - numberColumnW;
+    const stepLines = steps.map(step => wrapText(ctx, step, textWidth));
+    const lineHeight = stepSize + 5;
+    const rowHeights = stepLines.map(lines => Math.max(52, lines.length * lineHeight + 10));
+    const cardH = Math.max(118, 34 + rowHeights.reduce((sum, height) => sum + height, 0));
+    const cardX = x - cardW / 2, cardY = 430;
+    ctx.save(); ctx.globalAlpha = alpha * detailP; ctx.translate(0, (1 - detailP) * 45);
+    ctx.fillStyle = 'rgba(5,10,18,0.94)'; ctx.strokeStyle = `${color}bb`; ctx.lineWidth = 2.5; roundRect(ctx, cardX, cardY, cardW, cardH, 18); ctx.fill(); ctx.stroke();
+    steps.forEach((step, stepIndex) => {
+      const stepP = easeOutCubic(clamp((elapsed - detailStart - stepIndex * 210) / 280, 0, 1));
+      const rowY = cardY + 22 + rowHeights.slice(0, stepIndex).reduce((sum, height) => sum + height, 0);
+      const number = String(stepIndex + 1).padStart(2, '0');
+      ctx.globalAlpha = alpha * detailP * stepP; ctx.fillStyle = 'rgba(255,255,255,0.58)'; ctx.font = `800 21px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText(number, cardX + 20, rowY + 3);
+      const textX = cardX + 20 + numberColumnW;
+      ctx.fillStyle = stepColor; ctx.font = `650 ${stepSize}px ${stepFamily}`;
+      stepLines[stepIndex].forEach((line, lineIndex) => ctx.fillText(line, textX, rowY + lineIndex * lineHeight));
     });
+    ctx.restore();
+  });
+}
+
+function drawPanorama(ctx: CanvasRenderingContext2D, content: GeneratedContent, elapsed: number, seed: number, options?: CityOptions) {
+  const pageCount = Math.max(1, Math.ceil(content.points.length / 6));
+  const baseSize = Math.floor(content.points.length / pageCount);
+  const remainder = content.points.length % pageCount;
+  const pageIndex = Math.min(pageCount - 1, Math.floor(elapsed / 4400));
+  const pageStart = pageIndex * baseSize + Math.min(pageIndex, remainder);
+  const pageSize = baseSize + (pageIndex < remainder ? 1 : 0);
+  const points = content.points.slice(pageStart, pageStart + pageSize);
+  const local = elapsed - pageIndex * 4400;
+  const count = points.length;
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+  const left = 510, right = 1410;
+  const locations = points.map((_, index) => ({
+    x: count === 1 ? CW / 2 : lerp(left, right, index / (count - 1)),
+    y: index % 4 === 0 ? 600 : index % 4 === 1 ? 365 : index % 4 === 2 ? 560 : 420,
+  }));
+  const textPhaseEnd = 420 + count * 220;
+  const pointPhaseEnd = textPhaseEnd + count * 150;
+  locations.forEach((location, index) => {
+    const point = points[index];
+    const color = COLORS[(pageStart + index) % COLORS.length];
+    const textP = easeOutCubic(clamp((local - 260 - index * 220) / 420, 0, 1));
+    if (textP > 0) {
+      const labelY = location.y + (index % 2 === 0 ? 92 : -92);
+      ctx.save(); ctx.globalAlpha = textP; ctx.fillStyle = options?.labelColor || '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `800 ${fitFont(ctx, point.label, 260, options?.labelFontSize ?? 50, 24)}px ${FONT}`;
+      ctx.fillText(point.label, location.x, labelY + (1 - textP) * 28); ctx.restore();
+    }
+    const dotP = easeOutBack(Math.min(clamp((local - textPhaseEnd - index * 150) / 320, 0, 1), 0.999));
+    if (dotP > 0) {
+      ctx.save(); ctx.translate(location.x, location.y); ctx.scale(dotP, dotP); ctx.fillStyle = '#06101e'; ctx.strokeStyle = color; ctx.lineWidth = 10;
+      ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore();
+    }
+  });
+  for (let index = 1; index < locations.length; index++) {
+    const p = easeOutCubic(clamp((local - pointPhaseEnd - (index - 1) * 180) / 360, 0, 1));
+    if (p <= 0) continue;
+    const from = locations[index - 1], to = locations[index];
+    ctx.save(); ctx.strokeStyle = COLORS[(pageStart + index) % COLORS.length]; ctx.lineWidth = 6;
+    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(lerp(from.x, to.x, p), lerp(from.y, to.y, p)); ctx.stroke(); ctx.restore();
   }
   ctx.restore();
 }
 
 export function drawCityCards(
   ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent,
-  accent: string, _accent2: string, _shapeImg: HTMLImageElement,
-  _coverIndex: number, cityOptions?: CityOptions, knowledgeImages: HTMLImageElement[] = [],
+  _accent: string, _accent2: string, _shapeImg: HTMLImageElement,
+  _coverIndex: number, cityOptions?: CityOptions, _knowledgeImages: HTMLImageElement[] = [],
 ) {
   if (elapsed < T.cardBase || content.points.length === 0) return;
   COLORS = PALETTES[cityOptions?.visualTheme ?? 'deep-tech'];
   ANIMATION_STRENGTH = cityOptions?.animationIntensity === 'calm' ? 0.55
     : cityOptions?.animationIntensity === 'dynamic' ? 1.25 : 1;
   const seed = cityOptions?.animationSeed ?? 1;
-  const pages = buildKnowledgePages(content, seed);
   let local = elapsed - T.cardBase;
   const panoramaMs = panoramaDuration(content.points.length);
   if (local < panoramaMs) {
-    drawPanorama(ctx, content, local, seed);
+    drawPanorama(ctx, content, local, seed, cityOptions);
     return;
   }
   local -= panoramaMs;
+  const pyramidPages = fixedKnowledgePages(content, 6, 'prompt-breakdown');
+  const workflowPages = fixedKnowledgePages(content, 3, 'workflow');
   let page: KnowledgePage | undefined;
-  for (const candidate of pages) {
+  for (const candidate of pyramidPages) {
     if (local < candidate.duration) { page = candidate; break; }
     local -= candidate.duration;
   }
+  if (!page) {
+    for (const candidate of workflowPages) {
+      if (local < candidate.duration) { page = candidate; break; }
+      local -= candidate.duration;
+    }
+  }
   if (!page) return;
 
-  drawGrid(ctx, easeOutCubic(clamp(local / 700, 0, 1)), accent);
   const exitStart = page.duration - PAGE_TRANSITION;
   const pageAlpha = local > exitStart ? 1 - easeOutCubic(clamp((local - exitStart) / PAGE_TRANSITION, 0, 1)) : 1;
-  drawSceneHeader(ctx, page.sceneType, pageAlpha);
-  const variantSeed = hashText(`${content.title}|${seed}|${page.start}`);
   // Hard clipping is a final safety net: no layout may paint into the title or
   // explanation regions, even during overshooting entrance animations.
   ctx.save();
   ctx.beginPath();
   ctx.rect(70, MAIN_SAFE_TOP, CW - 140, MAIN_SAFE_BOTTOM - MAIN_SAFE_TOP);
   ctx.clip();
-  if (page.sceneType === 'tool-steps' && knowledgeImages.some(image => image?.naturalWidth > 0)) drawToolStepsPage(ctx, page, local, pageAlpha, knowledgeImages);
-  else if (page.layout === 'ladder') drawLadderPage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'matrix') drawMatrixPage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'split') drawSplitPage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'statement') drawStatementPage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'timeline') drawTimelinePage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'mindmap') drawMindmapPage(ctx, page, local, variantSeed, pageAlpha, content.title);
-  else if (page.layout === 'compare') drawComparePage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'flow') drawFlowPage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'flip') drawFlipPage(ctx, page, local, variantSeed, pageAlpha);
-  else if (page.layout === 'converge') drawConvergePage(ctx, page, local, variantSeed, pageAlpha, content.title);
-  else drawGenericPage(ctx, page, local, variantSeed, pageAlpha);
+  if (page.sceneType === 'prompt-breakdown') drawPromptBreakdownPage(ctx, page, local, pageAlpha, cityOptions);
+  else drawWorkflowTeachingPage(ctx, page, local, pageAlpha, cityOptions);
   ctx.restore();
 
-  const current = Math.min(page.points.length - 1, Math.max(0, Math.floor(local / REVEAL_GAP)));
-  drawExplanation(ctx, page.points[current], page.start + current, local - current * REVEAL_GAP, pageAlpha);
-  ctx.save(); ctx.globalAlpha = pageAlpha; ctx.fillStyle = 'rgba(255,255,255,0.38)'; ctx.font = `700 23px ${FONT}`; ctx.textAlign = 'right';
-  ctx.fillText(`${String(page.start + current + 1).padStart(2, '0')} / ${String(content.points.length).padStart(2, '0')}`, CW - 90, CH - 42); ctx.restore();
 }
