@@ -62,9 +62,7 @@ export async function drawCover(params: DrawCoverParams): Promise<void> {
       : undefined,
     items:       style === 'nature'
       ? (natureContent?.leftItems ?? [])
-      : style === 'city'
-        ? (content?.points.map(p => `${p.label ?? ''}${p.short ?? ''}${p.desc ?? ''}`) ?? [])
-        : (content?.points.map(p => p.label) ?? []),
+      : (content?.points.map(p => p.label) ?? []),
     commonItems: style === 'nature' ? (natureContent?.commonItems ?? []) : [],
     accent:     theme.accent,
     accent2:    theme.accent2,

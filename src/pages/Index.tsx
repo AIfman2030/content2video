@@ -326,7 +326,7 @@ export default function Index() {
   const canvasContent = isManga ? (mangaContent ? MANGA_DUMMY_CONTENT : null) : content;
   const hasRecordableContent = isManga ? !!mangaContent : (isGoblin ? !!content : !!content);
   const qualityIssues = style === 'city' && content ? validateKnowledgeContent(content) : [];
-  const canExport = hasRecordableContent && qualityIssues.length === 0;
+  const canExport = hasRecordableContent;
 
   // ─── Claude-style Layout ─────────────────────────────────────────────────
   return (
@@ -346,14 +346,12 @@ export default function Index() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {hasRecordableContent && (
-            <button onClick={() => canExport && setShowRecorder(true)} disabled={!canExport}
-              title={qualityIssues[0]?.message ?? '导出视频'}
-              className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-95"
-              style={{ background: canExport ? 'linear-gradient(135deg, #d97706, #f59e0b)' : 'rgba(255,255,255,0.08)', color: canExport ? '#fff' : 'rgba(255,255,255,0.32)', boxShadow: canExport ? '0 2px 16px rgba(217,119,6,0.3)' : 'none', cursor: canExport ? 'pointer' : 'not-allowed' }}>
-              <Video size={16} />导出视频
-            </button>
-          )}
+          <button onClick={() => canExport && setShowRecorder(true)} disabled={!canExport}
+            title={!hasRecordableContent ? '请先生成或填写内容' : '导出视频'}
+            className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-95"
+            style={{ background: canExport ? 'linear-gradient(135deg, #d97706, #f59e0b)' : 'rgba(255,255,255,0.08)', color: canExport ? '#fff' : 'rgba(255,255,255,0.32)', boxShadow: canExport ? '0 2px 16px rgba(217,119,6,0.3)' : 'none', cursor: canExport ? 'pointer' : 'not-allowed' }}>
+            <Video size={16} />导出视频
+          </button>
           <button onClick={() => setApiKeyOpen(true)}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-all duration-200"
             style={{ border: `1px solid ${CLAUDE_BORDER}`, color: getStoredApiKey() ? '#f59e0b' : 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.02)' }}>
@@ -443,7 +441,7 @@ export default function Index() {
               {qualityIssues.length > 0 && (
                 <div className="mt-3 rounded-lg p-3 text-[11px] leading-relaxed"
                   style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.24)', color: '#f7c66b' }}>
-                  <div className="font-semibold mb-1">导出前需修复 {qualityIssues.length} 项</div>
+                  <div className="font-semibold mb-1">内容优化建议 {qualityIssues.length} 项（不影响导出）</div>
                   {qualityIssues.slice(0, 3).map((issue, index) => <div key={`${issue.message}-${index}`}>· {issue.message}</div>)}
                   {qualityIssues.length > 3 && <div>· 另有 {qualityIssues.length - 3} 项</div>}
                 </div>

@@ -93,4 +93,3 @@ export function neonGrad(
   g.addColorStop(0, c1); g.addColorStop(1, c2);
   return g;
 }
-
