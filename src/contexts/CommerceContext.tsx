@@ -7,6 +7,7 @@ import { CommerceContext, type CommerceContextValue, type Membership } from './c
 export function CommerceProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
 
@@ -37,6 +38,16 @@ export function CommerceProvider({ children }: { children: ReactNode }) {
     } else setMembership(null);
   }, []);
 
+  const refreshAdmin = useCallback(async () => {
+    const { data: auth } = await supabase.auth.getSession();
+    if (!auth.session) {
+      setIsAdmin(false);
+      return;
+    }
+    const { data, error } = await supabase.rpc('is_admin');
+    setIsAdmin(!error && data === true);
+  }, []);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -44,31 +55,38 @@ export function CommerceProvider({ children }: { children: ReactNode }) {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (!nextSession) setMembership(null);
+      if (!nextSession) {
+        setMembership(null);
+        setIsAdmin(false);
+      }
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!loading) void refreshMembership();
-  }, [loading, session?.user.id, refreshMembership]);
+    if (!loading) {
+      void refreshMembership();
+      void refreshAdmin();
+    }
+  }, [loading, session?.user.id, refreshMembership, refreshAdmin]);
 
   const value = useMemo<CommerceContextValue>(() => ({
     user: session?.user ?? null,
     session,
     membership,
+    isAdmin,
     loading,
     hasPaidAccess: Boolean(
-      membership &&
+      isAdmin || (membership &&
       (membership.status === 'active' || membership.status === 'trialing') &&
-      (membership.lifetime || !membership.expiresAt || new Date(membership.expiresAt).getTime() > Date.now()),
+      (membership.lifetime || !membership.expiresAt || new Date(membership.expiresAt).getTime() > Date.now())),
     ),
     authOpen,
     openAuth: () => setAuthOpen(true),
     closeAuth: () => setAuthOpen(false),
     signOut: async () => { await supabase.auth.signOut(); },
     refreshMembership,
-  }), [session, membership, loading, authOpen, refreshMembership]);
+  }), [session, membership, isAdmin, loading, authOpen, refreshMembership]);
 
   return <CommerceContext.Provider value={value}>{children}</CommerceContext.Provider>;
 }
