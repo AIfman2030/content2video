@@ -3109,6 +3109,12 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_users: {
+        Row: { user_id: string; created_at: string }
+        Insert: { user_id: string; created_at?: string }
+        Update: { user_id?: string; created_at?: string }
+        Relationships: []
+      }
       memberships: {
         Row: {
           user_id: string
@@ -3177,7 +3183,23 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      admin_list_accounts: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          user_id: string
+          email: string | null
+          created_at: string
+          last_sign_in_at: string | null
+          plan_id: string | null
+          membership_status: string | null
+          expires_at: string | null
+          lifetime: boolean | null
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

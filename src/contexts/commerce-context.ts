@@ -13,6 +13,7 @@ export type CommerceContextValue = {
   user: User | null;
   session: Session | null;
   membership: Membership | null;
+  isAdmin: boolean;
   loading: boolean;
   hasPaidAccess: boolean;
   authOpen: boolean;

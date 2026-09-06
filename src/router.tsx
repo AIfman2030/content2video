@@ -4,6 +4,7 @@ import Home from "./pages/Home";
 import Pricing from "./pages/Pricing";
 import Account from "./pages/Account";
 import Legal from "./pages/Legal";
+import Admin from "./pages/Admin";
 
 export const routers = [
     {
@@ -25,6 +26,11 @@ export const routers = [
       path: "/account",
       name: 'account',
       element: <Account />,
+    },
+    {
+      path: "/admin",
+      name: 'admin',
+      element: <Admin />,
     },
     {
       path: "/terms",
