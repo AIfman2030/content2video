@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music, AlertCircle, FileVideo } from 'lucide-react';
+import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music, AlertCircle } from 'lucide-react';
 import type {
   GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions,
@@ -7,6 +7,7 @@ import type {
 } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
+import { assertMp4, canEncodeMp4Directly, encodeCanvasToMp4 } from '../lib/webCodecsMp4';
 import { CoverPreview } from './CoverPreview';
 import { synthesize } from '../services/tts';
 import { fetchAudioAsBuffer } from '../services/sunoRap';
@@ -32,9 +33,6 @@ interface Props {
   aigoblinOptions?: AIGoblinOptions;
 }
 
-const PREVIEW_W_BASE = 512;
-const calcPreviewH = (w: number, h: number) => Math.round(PREVIEW_W_BASE * h / w);
-
 type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'done';
 
 // ── Persist ALL critical state on window — survives Vite HMR module re-execution ─
@@ -42,21 +40,21 @@ type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'd
 // `phase` MUST be persisted — without it, HMR resets phase to 'cover' which
 // looks like the overlay "automatically closes" during MP4 conversion.
 interface WinStore {
-  webmUrl: string;
   mp4Url: string;
   convError: string;
+  recordState: RecordState;
   phase: 'cover' | 'video';
 }
 const ws = (): WinStore => {
   const w = window as Record<string, unknown>;
   if (!w['__vrVidStore__'])
-    w['__vrVidStore__'] = { webmUrl: '', mp4Url: '', convError: '', phase: 'cover' };
+    w['__vrVidStore__'] = { mp4Url: '', convError: '', recordState: 'idle', phase: 'cover' };
   return w['__vrVidStore__'] as WinStore;
 };
 
 // Custom events so a remounted VideoGenerator can receive results from an
 // FFmpeg job that started in the previous (unmounted) component instance.
-const EV_WEBM = 'vr:webmready';
+const EV_CONVERTING = 'vr:converting';
 const EV_MP4  = 'vr:mp4ready';
 const EV_ERR  = 'vr:converror';
 
@@ -86,18 +84,15 @@ export default function VideoGenerator({
 
   const [phase, setPhase]           = useState<'cover' | 'video'>(ws().phase ?? 'cover');
   const [engineReady, setEngineReady] = useState(false);
-  const [recordState, setRecordState] = useState<RecordState>(ws().mp4Url || ws().webmUrl ? 'done' : 'idle');
+  const [recordState, setRecordState] = useState<RecordState>(ws().recordState ?? (ws().mp4Url ? 'done' : 'idle'));
   const [progress, setProgress]     = useState(0);
   const [ttsStep, setTtsStep]       = useState({ done: 0, total: 0 });
-  const [webmUrl, setWebmUrl]       = useState(ws().webmUrl);
   const [mp4Url, setMp4Url]         = useState(ws().mp4Url);
   const [initError, setInitError]   = useState('');
   const [convError, setConvError]   = useState(ws().convError);
   const [cvW, setCvW]               = useState(CW);
   const [cvH, setCvH]               = useState(CH);
 
-  const previewW = PREVIEW_W_BASE;
-  const previewH = calcPreviewH(cvW, cvH);
   const isGeneratingAudio = recordState === 'generating_audio';
   const isRecording       = recordState === 'recording';
   const isConverting      = recordState === 'converting';
@@ -107,30 +102,29 @@ export default function VideoGenerator({
 
   const accent = style === 'chinese' ? '#e74c3c'
     : style === 'city' ? '#f5d87a'
+    : style === 'semantic' ? '#f4cc63'
     : style === 'nature' ? '#4ade80' : '#a855f7';
 
   // ── Listen for cross-instance events (FFmpeg result from old instance) ──
   useEffect(() => {
-    const onWebm = (e: Event) => {
-      const url = (e as CustomEvent<string>).detail;
-      ws().webmUrl = url; setWebmUrl(url);
+    const onConverting = () => {
       setRecordState('converting');
     };
     const onMp4 = (e: Event) => {
       const url = (e as CustomEvent<string>).detail;
       ws().mp4Url = url; setMp4Url(url);
-      setProgress(100); setRecordState('done');
+      ws().recordState = 'done'; setProgress(100); setRecordState('done');
     };
     const onErr = (e: Event) => {
       const msg = (e as CustomEvent<string>).detail;
       ws().convError = msg; setConvError(msg);
-      setRecordState('done');
+      ws().recordState = 'done'; setRecordState('done');
     };
-    window.addEventListener(EV_WEBM, onWebm);
+    window.addEventListener(EV_CONVERTING, onConverting);
     window.addEventListener(EV_MP4, onMp4);
     window.addEventListener(EV_ERR, onErr);
     return () => {
-      window.removeEventListener(EV_WEBM, onWebm);
+      window.removeEventListener(EV_CONVERTING, onConverting);
       window.removeEventListener(EV_MP4, onMp4);
       window.removeEventListener(EV_ERR, onErr);
     };
@@ -240,8 +234,8 @@ export default function VideoGenerator({
     stopAllAudio();
     // Clear previous download state
     setInitError(''); setConvError('');
-    ws().webmUrl = ''; ws().mp4Url = ''; ws().convError = '';
-    setWebmUrl(''); setMp4Url('');
+    ws().mp4Url = ''; ws().convError = ''; ws().recordState = 'idle';
+    setMp4Url('');
     setRecordState('idle');
     chunksRef.current = [];
 
@@ -308,16 +302,51 @@ export default function VideoGenerator({
 
     // Prefer native H.264/MP4 recording when no external audio needs mixing.
     // This avoids a full-resolution FFmpeg/WASM re-encode, which is the slowest
-    // part of the export flow. Browsers without MP4 MediaRecorder support keep
-    // the existing VP8 WebM → MP4 fallback.
+    // part of the export flow. Browsers without MP4 MediaRecorder support are
+    // transcoded in-browser before exposing the single MP4 download action.
+    if (!('MediaRecorder' in window) || typeof canvas.captureStream !== 'function') {
+      setInitError('当前浏览器不支持视频录制。请使用最新版 Chrome、Safari、Edge 或 Firefox。');
+      return;
+    }
+
     const needsAudioMix = !!rapAudioBuffer || hasTtsAudio;
+
+    // Modern Android browsers expose a hardware H.264 encoder through
+    // WebCodecs. Writing those frames straight into an MP4 avoids the large
+    // WebM -> MP4 WASM conversion that commonly fails on memory-constrained
+    // phones. Audio projects still use the existing FFmpeg mixing path.
+    if (!needsAudioMix && canEncodeMp4Directly()) {
+      try {
+        const mp4 = await encodeCanvasToMp4(
+          canvas,
+          engine,
+          ratio => setProgress(Math.round(ratio * 100)),
+        );
+        await assertMp4(mp4);
+        const url = URL.createObjectURL(mp4);
+        ws().mp4Url = url;
+        ws().recordState = 'done';
+        setMp4Url(url);
+        setProgress(100);
+        setRecordState('done');
+        window.dispatchEvent(new CustomEvent(EV_MP4, { detail: url }));
+        return;
+      } catch (error) {
+        console.warn('[VideoGenerator] Direct MP4 encoding unavailable, using recorder fallback:', error);
+        setProgress(0);
+      }
+    }
+
     const nativeMp4Mime = !needsAudioMix
       ? ['video/mp4;codecs=avc1.42E01E', 'video/mp4'].find(type => MediaRecorder.isTypeSupported(type))
       : undefined;
-    const mimeType = nativeMp4Mime
-      ?? (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-        ? 'video/webm;codecs=vp8'
-        : 'video/webm');
+    const webmMime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']
+      .find(type => MediaRecorder.isTypeSupported(type));
+    const mimeType = nativeMp4Mime ?? webmMime;
+    if (!mimeType) {
+      setInitError('当前浏览器没有可用的视频编码器，无法生成 MP4。请使用最新版 Chrome、Safari、Edge 或 Firefox。');
+      return;
+    }
     const recordsMp4Directly = mimeType.startsWith('video/mp4');
 
     const videoStream = canvas.captureStream(30);
@@ -334,8 +363,10 @@ export default function VideoGenerator({
       // Native MP4 path: the browser has already encoded H.264, so the export
       // is ready immediately and FFmpeg does not need to load or transcode.
       if (recordsMp4Directly) {
+        await assertMp4(videoBlob);
         const url = URL.createObjectURL(videoBlob);
         ws().mp4Url = url;
+        ws().recordState = 'done';
         setMp4Url(url);
         setProgress(100);
         setRecordState('done');
@@ -343,13 +374,9 @@ export default function VideoGenerator({
         return;
       }
 
-      // ── Step 1: Immediate WebM download (no conversion wait) ─────────────
-      const immediateWebmUrl = URL.createObjectURL(videoBlob);
-      ws().webmUrl = immediateWebmUrl;
-      setWebmUrl(immediateWebmUrl);
-      window.dispatchEvent(new CustomEvent(EV_WEBM, { detail: immediateWebmUrl }));
-
       setRecordState('converting');
+      ws().recordState = 'converting';
+      window.dispatchEvent(new CustomEvent(EV_CONVERTING));
       setProgress(0);
 
       // ── Step 2: FFmpeg → MP4 in background ───────────────────────────────
@@ -375,9 +402,11 @@ export default function VideoGenerator({
         } else {
           mp4 = await webmToMp4(videoBlob, r => setProgress(Math.round(r * 100)));
         }
+        await assertMp4(mp4);
         const url = URL.createObjectURL(mp4);
         console.log('[VideoGenerator] MP4 ready:', mp4.size, 'bytes');
         ws().mp4Url = url;
+        ws().recordState = 'done';
         setMp4Url(url);
         setProgress(100);
         setRecordState('done');
@@ -387,6 +416,7 @@ export default function VideoGenerator({
         console.error('[VideoGenerator] MP4 conversion failed:', err);
         const msg = `MP4 转换失败: ${err instanceof Error ? err.message : String(err)}`;
         ws().convError = msg;
+        ws().recordState = 'done';
         setConvError(msg);
         setRecordState('done');
         window.dispatchEvent(new CustomEvent(EV_ERR, { detail: msg }));
@@ -409,28 +439,53 @@ export default function VideoGenerator({
     });
   }, [style, stopAllAudio]);
 
-  const handleDownloadMp4 = useCallback(() => {
+  const handleDownloadMp4 = useCallback(async () => {
     if (!mp4Url) return;
-    const a = document.createElement('a');
-    a.href = mp4Url; a.download = `${content.title.slice(0, 12) || 'video'}.mp4`; a.click();
+    const filename = `${content.title.slice(0, 12) || 'video'}.mp4`;
+
+    const blob = await fetch(mp4Url).then(res => res.blob());
+    await assertMp4(blob);
+    const file = new File([blob], filename, { type: 'video/mp4' });
+    const downloadUrl = URL.createObjectURL(file);
+
+    // Appending the anchor is required by several Android built-in browsers;
+    // clicking a detached element is silently ignored there.
+    const anchor = document.createElement('a');
+    anchor.href = downloadUrl;
+    anchor.download = filename;
+    anchor.rel = 'noopener';
+    document.body.appendChild(anchor);
+    anchor.click();
+    setTimeout(() => {
+      anchor.remove();
+      URL.revokeObjectURL(downloadUrl);
+    }, 30_000);
+
+    // Some embedded Android browsers ignore the download attribute. Their
+    // system share sheet still exposes "Save to Files" for the same MP4.
+    if (/Android/i.test(navigator.userAgent) && navigator.canShare && navigator.share) {
+      try {
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: content.title, text: 'MP4 视频已生成' });
+        }
+      } catch (err) {
+        if (!(err instanceof DOMException && err.name === 'AbortError')) {
+          console.warn('[VideoGenerator] Android file share unavailable:', err);
+        }
+      }
+    }
   }, [mp4Url, content.title]);
 
-  const handleDownloadWebm = useCallback(() => {
-    if (!webmUrl) return;
-    const a = document.createElement('a');
-    a.href = webmUrl; a.download = `${content.title.slice(0, 12) || 'video'}.webm`; a.click();
-  }, [webmUrl, content.title]);
-
   const handleReset = useCallback(() => {
-    ws().webmUrl = ''; ws().mp4Url = ''; ws().convError = '';
-    setWebmUrl(''); setMp4Url(''); setConvError('');
+    ws().mp4Url = ''; ws().convError = ''; ws().recordState = 'idle';
+    setMp4Url(''); setConvError('');
     setRecordState('idle'); setProgress(0);
   }, []);
 
   const handleClose = useCallback(() => {
     // Reset persisted phase so next open starts from cover
     ws().phase = 'cover';
-    ws().webmUrl = ''; ws().mp4Url = ''; ws().convError = '';
+    ws().mp4Url = ''; ws().convError = ''; ws().recordState = 'idle';
     onClose();
   }, [onClose]);
 
@@ -468,7 +523,7 @@ export default function VideoGenerator({
           width: `max(100vw, calc(100vh * ${aspect}))`,
           height: `max(100vh, calc(100vw / ${aspect}))`,
         } : {
-          position: 'relative', width: previewW, height: previewH,
+          position: 'relative', width: 'min(92vw, 512px)', aspectRatio: `${cvW} / ${cvH}`,
           borderRadius: '1rem', overflow: 'hidden',
           boxShadow: '0 20px 60px rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)',
         }}>
@@ -491,8 +546,8 @@ export default function VideoGenerator({
           )}
           <canvas ref={canvasRef} width={cvW} height={cvH} style={{
             display: 'block',
-            width: isRecording ? `max(100vw, calc(100vh * ${aspect}))` : previewW,
-            height: isRecording ? `max(100vh, calc(100vw / ${aspect}))` : previewH,
+            width: isRecording ? `max(100vw, calc(100vh * ${aspect}))` : '100%',
+            height: isRecording ? `max(100vh, calc(100vw / ${aspect}))` : '100%',
           }} />
           {isRecording && (
             <>
@@ -529,7 +584,7 @@ export default function VideoGenerator({
         </div>
       )}
 
-      {/* ── Converting overlay (WebM already available) ──────────────────── */}
+      {/* ── Converting overlay ───────────────────────────────────────────── */}
       {isConverting && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-5" style={{ zIndex: 2 }}>
           <Loader2 size={36} className="animate-spin" style={{ color: accent }} />
@@ -540,14 +595,6 @@ export default function VideoGenerator({
           <div className="w-48 h-1.5 rounded-full bg-white/10 overflow-hidden">
             <div className="h-full rounded-full transition-all duration-300" style={{ width: `${progress}%`, background: accent }} />
           </div>
-          {/* WebM available immediately — no need to wait for MP4 */}
-          {webmUrl && (
-            <button onClick={handleDownloadWebm}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium mt-1"
-              style={{ background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: 'rgba(255,255,255,0.75)' }}>
-              <FileVideo size={15} />不等了，先下载 WebM
-            </button>
-          )}
         </div>
       )}
 
@@ -569,21 +616,14 @@ export default function VideoGenerator({
                 <div className="flex items-start gap-2 px-4 py-2.5 rounded-xl max-w-xs mb-1"
                   style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)' }}>
                   <AlertCircle size={13} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-300 leading-relaxed">MP4 转换失败，可下载 WebM 格式</p>
+                  <p className="text-xs text-red-300 leading-relaxed">MP4 转换失败，请点击“重录”后重试。</p>
                 </div>
               )}
               {mp4Url && (
                 <button onClick={handleDownloadMp4}
                   className="flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl text-sm font-semibold"
                   style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#fff', boxShadow: '0 4px 20px #22c55e50' }}>
-                  <Download size={16} />下载 MP4（推荐）
-                </button>
-              )}
-              {webmUrl && (
-                <button onClick={handleDownloadWebm}
-                  className="flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium"
-                  style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.65)' }}>
-                  <FileVideo size={14} />{mp4Url ? '也可下载 WebM' : '下载 WebM（立即可用）'}
+                  <Download size={16} />下载 MP4
                 </button>
               )}
             </div>

@@ -124,3 +124,4 @@ async function drawKnowledgeCover(ctx: CanvasRenderingContext2D, opts: CoverOpts
 }
 
 registerCover('city', drawKnowledgeCover);
+registerCover('semantic', drawKnowledgeCover);

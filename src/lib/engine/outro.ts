@@ -84,7 +84,7 @@ export function drawOutro(
   _style: StyleType,
   cityOptions?: CityOptions,
 ) {
-  if (_style === 'city') {
+  if (_style === 'city' || _style === 'semantic') {
     drawKnowledgeOutro(ctx, elapsed, _content, cityOptions);
     return;
   }
@@ -102,7 +102,7 @@ export function drawOverlays(
   style: StyleType,
 ) {
   // Knowledge videos use a flat spatial background without edge vignettes.
-  if (style !== 'city') {
+  if (style !== 'city' && style !== 'semantic') {
     ctx.save();
     const vg = ctx.createRadialGradient(CW / 2, CH / 2, CH * 0.3, CW / 2, CH / 2, CH * 0.8);
     vg.addColorStop(0, 'rgba(0,0,0,0)');

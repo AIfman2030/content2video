@@ -2159,6 +2159,7 @@ export default function StyleConfigPanel({
       );
 
     case 'city':
+    case 'semantic':
       return (
         <div className="space-y-6">
           <TitlePanel opts={titleOptions} onChange={onTitleOptionsChange} accent={accent} />
@@ -2166,8 +2167,8 @@ export default function StyleConfigPanel({
           <CityPanel
             coverIndex={coverIndex}
             onCoverIndexChange={onCoverIndexChange}
-            accentColor={ov ?? '#ff8c00'}
-            onAccentColorChange={c => onAccentOverrideChange('city', c)}
+            accentColor={ov ?? (style === 'semantic' ? '#f4cc63' : '#ff8c00')}
+            onAccentColorChange={c => onAccentOverrideChange(style, c)}
             style={style}
             cityOptions={cityOptions}
             onCityOptionsChange={onCityOptionsChange}

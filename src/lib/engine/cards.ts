@@ -2,6 +2,7 @@ import type {
   GeneratedContent, StyleType, PolyShape, ChineseOptions, CityOptions, AItechOptions,
   ChineseCardLineConfig, ChineseLineEnterAnim, ChineseLineExitAnim, KeywordOptions,
 } from '../../types/video';
+import { drawSemanticCards } from './cards-semantic';
 import { CW, CH, clamp, easeOutBack, easeOutCubic, lerp, hex2rgba, roundRect, T, PAGE_HOLD, PAGE_TRANS } from './helpers';
 import { drawCityCards } from './cards-city';
 import { drawAITechCards } from './cards-aitech';
@@ -271,6 +272,7 @@ export function drawCards(
   knowledgeImages?: HTMLImageElement[],
 ) {
   if (style === 'city')    { drawCityCards(ctx, elapsed, content, accent, accent2, shapeImg, coverIndex, cityOptions, knowledgeImages); return; }
+  if (style === 'semantic') { drawSemanticCards(ctx, elapsed, content, accent); return; }
   if (style === 'aitech')  { drawAITechCards(ctx, elapsed, content, accent, accent2, polyShape ?? 'hexagon', aitechOptions); return; }
   if (style === 'chinese') { drawChineseCards(ctx, elapsed, content, accent, accent2, shapeImg!, coverIndex, chineseOptions); return; }
   if (style === 'keyword') { drawKeywordCards(ctx, elapsed, content, accent, accent2, keywordOptions); return; }

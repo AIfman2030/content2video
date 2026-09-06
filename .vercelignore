@@ -1,0 +1,9 @@
+.env
+.env.*
+.git
+.vercel
+auth-qr.png
+node_modules
+dist
+outputs
+*.log

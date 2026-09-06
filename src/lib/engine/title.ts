@@ -237,7 +237,7 @@ export function drawTitle(
   cityOptions?: CityOptions,
   hideCityAccount = false,
 ) {
-  const crispKnowledgeText = _style === 'city';
+  const crispKnowledgeText = _style === 'city' || _style === 'semantic';
   // Use provided options or fall back to default 2-line split
   const opts = titleOptions ?? {
     lines: [
@@ -371,7 +371,7 @@ export function drawTitle(
       // During fly, converge all lines to a single merged row at headerY
       // Font shrinks to headerFontSize
       const mergedParts = lines.map((ln, i) => resolveLineText(ln, i, content.title)).filter(Boolean);
-      const merged = mergedParts.join(crispKnowledgeText && mergedParts.length > 1 ? '｜' : '');
+      const merged = mergedParts.join('');
       let targetFsz = opts.headerFontSize;
       if (crispKnowledgeText) {
         ctx.font = fontStr(cfg, targetFsz);

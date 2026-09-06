@@ -3109,6 +3109,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      memberships: {
+        Row: {
+          user_id: string
+          plan_id: string
+          status: string
+          provider_customer_id: string | null
+          provider_subscription_id: string | null
+          provider_transaction_id: string | null
+          expires_at: string | null
+          lifetime: boolean
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          plan_id: string
+          status: string
+          provider_customer_id?: string | null
+          provider_subscription_id?: string | null
+          provider_transaction_id?: string | null
+          expires_at?: string | null
+          lifetime?: boolean
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          plan_id?: string
+          status?: string
+          provider_customer_id?: string | null
+          provider_subscription_id?: string | null
+          provider_transaction_id?: string | null
+          expires_at?: string | null
+          lifetime?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       suno_tasks: {
         Row: {
           audio_url: string | null

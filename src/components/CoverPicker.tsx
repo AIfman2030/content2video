@@ -13,6 +13,7 @@ interface Props {
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
   chinese:     '#e74c3c',
   city:        '#f5d87a',
+  semantic:    '#f4cc63',
   aitech:      '#a855f7',
   nature:      '#4ade80',
   subtitle:    '#ffd700',

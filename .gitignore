@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 code_template.zip
 .vercel
+auth-qr.png
+supabase/.temp/

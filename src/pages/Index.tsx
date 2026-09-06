@@ -1,5 +1,6 @@
 import { useState, useEffect, type ReactNode } from 'react';
-import { Film, Key, Video, Sparkles, Settings2 } from 'lucide-react';
+import { ArrowLeft, Film, Key, Video, Sparkles, Settings2, UserRound } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions,
@@ -28,6 +29,7 @@ import {
   generateMangaContent, type GenerationProgress,
 } from '../services/mangaGenerator';
 import { generateArkImage } from '../services/ark';
+import { useCommerce } from '../contexts/commerce-context';
 
 // ─── Subtitle parser ───────────────────────────────────────────────────────
 function parseSubtitleContent(text: string): GeneratedContent {
@@ -117,6 +119,7 @@ const CLAUDE_ACCENT = '#d97706';
 const BG_BY_STYLE: Record<StyleType, string> = {
   chinese:     CLAUDE_BG,
   city:        CLAUDE_BG,
+  semantic:    CLAUDE_BG,
   aitech:      CLAUDE_BG,
   nature:      CLAUDE_BG,
   subtitle:    CLAUDE_BG,
@@ -132,6 +135,7 @@ const BG_BY_STYLE: Record<StyleType, string> = {
 const ACCENT_BY_STYLE: Record<StyleType, string> = {
   chinese:     '#e74c3c',
   city:        '#f5d87a',
+  semantic:    '#f4cc63',
   aitech:      '#a855f7',
   nature:      '#4ade80',
   subtitle:    '#ffd700',
@@ -148,7 +152,11 @@ const MANGA_DUMMY_CONTENT: GeneratedContent = { title: '', points: [] };
 const MANGA_STORAGE_KEY = 'vreel_manga_content_v1';
 
 export default function Index() {
-  const [style, setStyle] = useState<StyleType>('city');
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { user, hasPaidAccess, openAuth } = useCommerce();
+  const initialStyle = searchParams.get('style');
+  const [style, setStyle] = useState<StyleType>(initialStyle === 'semantic' ? 'semantic' : 'city');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [content, setContent] = useState<GeneratedContent | null>(null);
@@ -217,7 +225,7 @@ export default function Index() {
   const handleGenerate = async (text: string, rawMode = false) => {
     setError('');
     setIsLoading(true);
-    if (style === 'city') {
+    if (style === 'city' || style === 'semantic') {
       setCityOptions(prev => ({ ...prev, animationSeed: (prev.animationSeed ?? 1) + 1 }));
     }
     try {
@@ -325,48 +333,63 @@ export default function Index() {
   const isGoblin = style === 'aigoblin';
   const canvasContent = isManga ? (mangaContent ? MANGA_DUMMY_CONTENT : null) : content;
   const hasRecordableContent = isManga ? !!mangaContent : (isGoblin ? !!content : !!content);
-  const qualityIssues = style === 'city' && content ? validateKnowledgeContent(content) : [];
+  const qualityIssues = (style === 'city' || style === 'semantic') && content ? validateKnowledgeContent(content) : [];
   const canExport = hasRecordableContent;
+
+  const requestExport = () => {
+    if (!user) {
+      openAuth();
+      return;
+    }
+    if (!hasPaidAccess) {
+      navigate('/pricing');
+      return;
+    }
+    if (canExport) setShowRecorder(true);
+  };
 
   // ─── Claude-style Layout ─────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen overflow-hidden" style={{ background: CLAUDE_BG }}>
+    <div className="flex min-h-screen flex-col md:h-screen md:overflow-hidden" style={{ background: CLAUDE_BG }}>
       {/* ── Minimal Header ──────────────────────────────────────────────── */}
-      <header className="flex-shrink-0 flex items-center justify-between px-6 py-3"
+      <header className="sticky top-0 z-30 flex flex-shrink-0 items-center justify-between px-4 py-3 md:px-6"
         style={{ borderBottom: `1px solid ${CLAUDE_BORDER}`, background: CLAUDE_BG }}>
         <div className="flex items-center gap-3">
+          <Link to="/" className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-white/5" aria-label="返回首页"><ArrowLeft size={16} className="text-white/60" /></Link>
           <div className="flex h-8 w-8 items-center justify-center rounded-lg"
             style={{ background: 'linear-gradient(135deg, #d97706, #f59e0b)' }}>
             <Film size={16} className="text-white" />
           </div>
           <div>
             <span className="text-sm font-semibold text-white tracking-tight">内容转视频</span>
-            <span className="ml-2 text-[10px] font-medium px-1.5 py-0.5 rounded"
-              style={{ background: 'rgba(217,119,6,0.15)', color: '#f59e0b' }}>BETA</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => canExport && setShowRecorder(true)} disabled={!canExport}
+          <Link to="/account" className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-all duration-200"
+            style={{ border: `1px solid ${CLAUDE_BORDER}`, color: 'rgba(255,255,255,0.55)', background: 'rgba(255,255,255,0.02)' }}>
+            <UserRound size={14} /><span className="hidden sm:inline">账户</span>
+          </Link>
+          <button onClick={requestExport} disabled={!canExport}
             title={!hasRecordableContent ? '请先生成或填写内容' : '导出视频'}
             className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 hover:scale-[1.02] active:scale-95"
             style={{ background: canExport ? 'linear-gradient(135deg, #d97706, #f59e0b)' : 'rgba(255,255,255,0.08)', color: canExport ? '#fff' : 'rgba(255,255,255,0.32)', boxShadow: canExport ? '0 2px 16px rgba(217,119,6,0.3)' : 'none', cursor: canExport ? 'pointer' : 'not-allowed' }}>
-            <Video size={16} />导出视频
+            <Video size={16} /><span className="hidden sm:inline">导出视频</span><span className="sm:hidden">导出</span>
           </button>
           <button onClick={() => setApiKeyOpen(true)}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs transition-all duration-200"
             style={{ border: `1px solid ${CLAUDE_BORDER}`, color: getStoredApiKey() ? '#f59e0b' : 'rgba(255,255,255,0.4)', background: 'rgba(255,255,255,0.02)' }}>
             <Key size={14} />
-            {getStoredApiKey() ? 'API 已配置' : '设置 API'}
+            <span className="hidden sm:inline">{getStoredApiKey() ? 'API 已配置' : '设置 API'}</span>
           </button>
         </div>
       </header>
 
       {/* ── Body: Two-column ─────────────────────────────────────────────── */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-visible md:flex-row md:overflow-hidden">
         {/* LEFT: Controls */}
-        <aside className="flex-shrink-0 overflow-y-auto custom-scroll border-r"
-          style={{ width: 380, borderColor: CLAUDE_BORDER, background: CLAUDE_SURFACE }}>
-          <div className="p-5 space-y-5">
+        <aside className="w-full flex-shrink-0 border-b border-r md:w-[380px] md:overflow-y-auto md:border-b-0 custom-scroll"
+          style={{ borderColor: CLAUDE_BORDER, background: CLAUDE_SURFACE }}>
+          <div className="space-y-5 p-4 md:p-5">
             {/* Style Selector */}
             <section>
               <Label>选择风格</Label>
@@ -451,7 +474,7 @@ export default function Index() {
         </aside>
 
         {/* RIGHT: Preview */}
-        <main className="flex-1 min-w-0 flex flex-col items-center justify-center p-8 overflow-hidden"
+        <main className="flex min-h-[400px] min-w-0 flex-1 flex-col items-center justify-center overflow-hidden p-4 md:min-h-0 md:p-8"
           style={{ background: CLAUDE_BG }}>
           {canvasContent ? (
             <div className="animate-fade-in-scale w-full max-w-[960px]">

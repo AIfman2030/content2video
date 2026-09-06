@@ -553,7 +553,9 @@ function drawPromptBreakdownPage(ctx: CanvasRenderingContext2D, page: KnowledgeP
 
 function drawWorkflowTeachingPage(ctx: CanvasRenderingContext2D, page: KnowledgePage, elapsed: number, alpha: number, options?: CityOptions) {
   const count = page.points.length;
-  const left = 570, right = 1350, axisY = 345;
+  const left = count >= 3 ? 400 : count === 2 ? 600 : CW / 2;
+  const right = count >= 3 ? 1520 : count === 2 ? 1320 : CW / 2;
+  const axisY = 345;
   const namesDone = 360 + count * 240;
   const lineP = easeOutCubic(clamp(elapsed / Math.max(650, count * 190), 0, 1));
   ctx.save(); ctx.globalAlpha = alpha; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 4;
@@ -572,18 +574,27 @@ function drawWorkflowTeachingPage(ctx: CanvasRenderingContext2D, page: Knowledge
     if (detailP <= 0) return;
     const raw = workflowSteps(point);
     const steps = raw.split(/[\n→；;]/).map(step => step.trim()).filter(Boolean);
-    const cardW = Math.min(345, (right - left) / Math.max(1, count) - 18);
+    const cardW = 345;
     const stepFamily = options?.descFontFamily || FONT;
-    const stepSize = options?.descFontSize || 36;
+    let stepSize = options?.descFontSize || 36;
     const stepColor = options?.descColor || '#fff';
-    ctx.font = `650 ${stepSize}px ${stepFamily}`;
     const numberColumnW = 50;
     const textWidth = cardW - 40 - numberColumnW;
-    const stepLines = steps.map(step => wrapText(ctx, step, textWidth));
-    const lineHeight = stepSize + 5;
-    const rowHeights = stepLines.map(lines => Math.max(52, lines.length * lineHeight + 10));
-    const cardH = Math.max(118, 34 + rowHeights.reduce((sum, height) => sum + height, 0));
     const cardX = x - cardW / 2, cardY = 430;
+    const maxCardH = MAIN_SAFE_BOTTOM - cardY - 12;
+    let stepLines: string[][] = [];
+    let lineHeight = 0;
+    let rowHeights: number[] = [];
+    let cardH = 0;
+    while (stepSize >= 24) {
+      ctx.font = `650 ${stepSize}px ${stepFamily}`;
+      stepLines = steps.map(step => wrapText(ctx, step, textWidth));
+      lineHeight = stepSize + 5;
+      rowHeights = stepLines.map(lines => Math.max(52, lines.length * lineHeight + 10));
+      cardH = Math.max(118, 34 + rowHeights.reduce((sum, height) => sum + height, 0));
+      if (cardH <= maxCardH || stepSize <= 24) break;
+      stepSize -= 2;
+    }
     ctx.save(); ctx.globalAlpha = alpha * detailP; ctx.translate(0, (1 - detailP) * 45);
     ctx.fillStyle = 'rgba(5,10,18,0.94)'; ctx.strokeStyle = `${color}bb`; ctx.lineWidth = 2.5; roundRect(ctx, cardX, cardY, cardW, cardH, 18); ctx.fill(); ctx.stroke();
     steps.forEach((step, stepIndex) => {

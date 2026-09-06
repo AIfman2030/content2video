@@ -1,4 +1,5 @@
 import type { StyleType } from '../types/video';
+import { ANIMATION_STYLES } from '../lib/animationStyles';
 
 interface Props {
   selected: StyleType;
@@ -6,22 +7,11 @@ interface Props {
   compact?: boolean;
 }
 
-const STYLES: { key: StyleType; name: string; desc: string; tag: string; bg: string; accent: string }[] = [
-  {
-    key: 'city',
-    name: '知识动画',
-    desc: '主题图形 · 动态讲解',
-    tag: '封面智能匹配',
-    bg: 'linear-gradient(135deg,#0d1b2a,#1a2a4a)',
-    accent: '#f5d87a',
-  },
-];
-
 export default function StyleSelector({ selected, onChange, compact = false }: Props) {
   if (compact) {
     return (
       <div className="grid grid-cols-1 gap-1.5">
-        {STYLES.map(s => (
+        {ANIMATION_STYLES.map(s => (
           <button
             key={s.key}
             onClick={() => onChange(s.key)}
@@ -52,7 +42,7 @@ export default function StyleSelector({ selected, onChange, compact = false }: P
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-      {STYLES.map(s => (
+      {ANIMATION_STYLES.map(s => (
         <button
           key={s.key}
           onClick={() => onChange(s.key)}

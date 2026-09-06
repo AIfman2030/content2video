@@ -13,6 +13,7 @@ import { drawCards } from './engine/cards';
 import { drawOutro, drawOverlays } from './engine/outro';
 import { drawNatureScene, natureTotalMs } from './engine/nature-scene';
 import { cityTotalMs, KNOWLEDGE_OUTRO_MS } from './engine/cards-city';
+import { semanticTotalMs } from './engine/cards-semantic';
 import {
   drawSubtitle, subtitleTotalMs,
   initSubtitleParticles, type SubParticle,
@@ -139,12 +140,13 @@ export async function createAnimEngine(
   const isManga       = style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite';
   const isGoblin      = style === 'aigoblin';
   const isKeyword     = style === 'keyword';
+  const isSemantic    = style === 'semantic';
 
   const rand = seededRandom(coverIndex * 31 + content.points.length * 17 + 7);
 
   // Shape image not needed for nature, subtitle, translation, manga, goblin, or keyword styles
   let shapeImg: HTMLImageElement | null = null;
-  if (!isNature && !isSubtitle && !isTranslation && !isManga && !isKeyword && !isGoblin) {
+  if (!isNature && !isSubtitle && !isTranslation && !isManga && !isKeyword && !isGoblin && !isSemantic) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     // For Chinese: pick shape by content keywords; other styles cycle by coverIndex
@@ -211,6 +213,8 @@ export async function createAnimEngine(
           ? TR_TOTAL_MS
           : style === 'city'
             ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed)
+            : style === 'semantic'
+              ? semanticTotalMs(content.points.length)
             : style === 'aitech'
               ? aiTechPhases(content.points.length).total
               : style === 'chinese'
@@ -271,7 +275,7 @@ export async function createAnimEngine(
       glow.addColorStop(0, `${accent}0a`);
       glow.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glow; ctx.fillRect(0, 0, CW, CH);
-    } else if (style === 'city' && cityEffects) {
+    } else if ((style === 'city' && cityEffects) || style === 'semantic') {
       drawPerspectiveGridBackground(ctx);
     } else if (style === 'aitech' && aiEffects) {
       ctx.fillStyle = '#000000';
@@ -290,13 +294,15 @@ export async function createAnimEngine(
 
     // Shape decoration removed — background is plain black
     // For keyword style: title is handled internally (no header)
-    const cityOutroStart = style === 'city'
-      ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed) - KNOWLEDGE_OUTRO_MS
+    const cityOutroStart = style === 'city' || style === 'semantic'
+      ? (style === 'city'
+        ? cityTotalMs(content.points.length, content, cityOptions?.animationSeed)
+        : semanticTotalMs(content.points.length)) - KNOWLEDGE_OUTRO_MS
       : Number.POSITIVE_INFINITY;
     if (!isKeyword && elapsed <= cityOutroStart) drawTitle(ctx, elapsed, content, accent, accent2, style, titleOptions, cityOptions);
     drawCards(ctx, elapsed, content, accent, accent2, style, shapeImg!, aitechOptions?.polyShape ?? aiOptions?.polyShape, coverIndex, chineseOptions, cityOptions, aitechOptions, keywordOptions, knowledgeImages);
 
-    const outroStart = style === 'city'
+    const outroStart = style === 'city' || style === 'semantic'
       ? cityOutroStart
       : (style === 'chinese'
         ? chineseSlideDuration(content.points.length)

@@ -30,6 +30,15 @@ export function getThemeConfig(style: StyleType, chineseOptions?: ChineseOptions
       gridColor: '#f5d87a',
     };
   }
+  if (style === 'semantic') {
+    return {
+      bg: ['#081a2f', '#081a2f', '#061426'],
+      accent: '#f4cc63',
+      accent2: '#ff941a',
+      particle: '#f4cc63',
+      gridColor: '#9ec9e6',
+    };
+  }
   if (style === 'nature') {
     return {
       bg: ['#060e06', '#0d1a0e', '#111f12'],
@@ -225,7 +234,7 @@ export const NATURE_PAIRS: ShapeItem[] = [
 
 export function getShapeList(style: StyleType): ShapeItem[] {
   if (style === 'chinese') return CHINESE_SHAPES;
-  if (style === 'city') return CITY_SHAPES;
+  if (style === 'city' || style === 'semantic') return CITY_SHAPES;
   if (style === 'nature') return NATURE_PAIRS;
   if (style === 'subtitle') return [];
   if (style === 'translation') return [];

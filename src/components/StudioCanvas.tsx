@@ -182,7 +182,7 @@ export default function StudioCanvas({
   const displayAccent = accentOverride ?? accent;
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full h-full">
+    <div className="flex min-h-[360px] w-full flex-col items-center gap-4 md:h-full md:min-h-0">
 
       {/* ── Canvas area ──────────────────────────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center w-full min-h-0">
