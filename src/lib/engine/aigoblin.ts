@@ -289,7 +289,7 @@ export function drawAIGoblin(
     }
 
     // Tags
-    const tags: string[] = (pt as any).tags || opts.tags || [];
+    const tags = opts.tags || [];
     if (tags.length > 0 && isActive && segProgress > 0.2) {
       const tagAlpha = Math.min(1, (segProgress - 0.2) * 5);
       ctx.globalAlpha = Math.min(1, alpha * tagAlpha);
