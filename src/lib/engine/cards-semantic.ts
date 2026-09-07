@@ -6,11 +6,11 @@ const FONT = '"Noto Sans SC", "PingFang SC", sans-serif';
 const SCENE_MS = 5200;
 const ENTER_MS = 520;
 const EXIT_MS = 420;
-const LEFT_X = 96;
-const LEFT_W = 900;
+const LEFT_X = 154;
+const LEFT_W = 820;
 const GRAPHIC_CX = 1450;
 const GRAPHIC_CY = 555;
-const GRAPHIC_SCALE = 0.72;
+const GRAPHIC_SCALE = 0.78;
 
 type GraphicKind =
   | 'orbit'
@@ -65,13 +65,6 @@ function fitFont(
   return size;
 }
 
-function reveal(ctx: CanvasRenderingContext2D, delay: number, elapsed: number, offset = 34): number {
-  const progress = easeOutCubic(clamp((elapsed - delay) / 460, 0, 1));
-  ctx.globalAlpha *= progress;
-  ctx.translate(0, (1 - progress) * offset);
-  return progress;
-}
-
 function drawTextBlock(
   ctx: CanvasRenderingContext2D,
   point: ContentPoint,
@@ -82,9 +75,10 @@ function drawTextBlock(
   ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
+  const groupProgress = easeOutCubic(clamp((local - 100) / 520, 0, 1));
+  ctx.globalAlpha *= groupProgress;
+  ctx.translate((1 - groupProgress) * 36, 0);
 
-  ctx.save();
-  reveal(ctx, 80, local, 18);
   ctx.fillStyle = accent;
   ctx.font = `500 72px ${FONT}`;
   ctx.fillText(`${index + 1}.`, LEFT_X, 288);
@@ -93,25 +87,18 @@ function drawTextBlock(
   ctx.font = `900 ${labelSize}px ${FONT}`;
   ctx.fillStyle = '#ffffff';
   ctx.fillText(point.label, labelX, 288);
-  ctx.restore();
 
-  ctx.save();
-  reveal(ctx, 520, local);
   const shortSize = fitFont(ctx, point.short, LEFT_W, 64, 38, 700);
   ctx.font = `700 ${shortSize}px ${FONT}`;
   ctx.fillStyle = '#ff941a';
   ctx.fillText(point.short, LEFT_X, 535);
-  ctx.restore();
 
-  ctx.save();
-  reveal(ctx, 1380, local);
   ctx.font = `500 37px ${FONT}`;
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
   const sourceLines = point.desc.split(/\n+/).map(line => line.trim()).filter(Boolean);
   const lines = sourceLines.flatMap(line => wrapText(ctx, line, LEFT_W)).slice(0, 5);
   const startY = 720 - Math.max(0, lines.length - 2) * 12;
   lines.forEach((line, lineIndex) => ctx.fillText(line, LEFT_X, startY + lineIndex * 58));
-  ctx.restore();
 
   ctx.restore();
 }
@@ -151,7 +138,7 @@ function diamond(ctx: CanvasRenderingContext2D, x: number, y: number, size: numb
 }
 
 function drawGraphic(ctx: CanvasRenderingContext2D, point: ContentPoint, local: number, accent: string) {
-  const enter = easeOutBack(Math.min(clamp((local - 780) / 680, 0, 1), 0.999));
+  const enter = easeOutBack(Math.min(clamp((local - 100) / 620, 0, 1), 0.999));
   if (enter <= 0) return;
   const motion = Math.max(0, local - 1000) / 1000;
   const kind = graphicKind(point);
@@ -317,12 +304,6 @@ export function drawSemanticCards(
   ctx.save();
   ctx.globalAlpha = Math.min(fadeIn, fadeOut);
   ctx.beginPath(); ctx.rect(60, 155, CW - 120, CH - 210); ctx.clip();
-  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-  ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(1060, 205); ctx.lineTo(1060, 925); ctx.stroke();
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 5;
-  ctx.beginPath(); ctx.moveTo(64, 215); ctx.lineTo(64, 900); ctx.stroke();
   drawTextBlock(ctx, content.points[sceneIndex], sceneIndex, local, accent);
   drawGraphic(ctx, content.points[sceneIndex], local, accent);
   ctx.restore();
