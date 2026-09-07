@@ -68,7 +68,7 @@ export interface AnimEngine {
   getCanvasHeight: () => number;
 }
 
-function drawPerspectiveGridBackground(ctx: CanvasRenderingContext2D) {
+function drawPerspectiveGridBackground(ctx: CanvasRenderingContext2D, strongerDepth = false) {
   const inner = { x: 390, y: 205, w: 1140, h: 610 };
   ctx.save();
   ctx.shadowColor = 'transparent';
@@ -80,6 +80,15 @@ function drawPerspectiveGridBackground(ctx: CanvasRenderingContext2D) {
   ctx.fillRect(0, 0, CW, CH);
   ctx.fillStyle = '#061426';
   ctx.fillRect(inner.x, inner.y, inner.w, inner.h);
+
+  if (strongerDepth) {
+    const depthGlow = ctx.createRadialGradient(CW / 2, CH * 0.5, 40, CW / 2, CH * 0.5, 780);
+    depthGlow.addColorStop(0, 'rgba(48,112,164,0.16)');
+    depthGlow.addColorStop(0.55, 'rgba(14,54,88,0.08)');
+    depthGlow.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = depthGlow;
+    ctx.fillRect(0, 0, CW, CH);
+  }
 
   ctx.save();
   ctx.strokeStyle = 'rgba(150,195,225,0.16)';
@@ -106,6 +115,21 @@ function drawPerspectiveGridBackground(ctx: CanvasRenderingContext2D) {
   ctx.strokeStyle = 'rgba(175,215,240,0.24)';
   ctx.lineWidth = 2;
   ctx.strokeRect(inner.x, inner.y, inner.w, inner.h);
+
+  if (strongerDepth) {
+    ctx.strokeStyle = 'rgba(190,225,245,0.20)';
+    ctx.lineWidth = 1.5;
+    for (const inset of [42, 92, 158]) {
+      ctx.beginPath();
+      ctx.moveTo(inset, CH); ctx.lineTo(inner.x, inner.y + inner.h);
+      ctx.lineTo(inner.x + inner.w, inner.y + inner.h); ctx.lineTo(CW - inset, CH);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(inset, 0); ctx.lineTo(inner.x, inner.y);
+      ctx.lineTo(inner.x + inner.w, inner.y); ctx.lineTo(CW - inset, 0);
+      ctx.stroke();
+    }
+  }
   ctx.restore();
   ctx.restore();
 }
@@ -276,7 +300,7 @@ export async function createAnimEngine(
       glow.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = glow; ctx.fillRect(0, 0, CW, CH);
     } else if ((style === 'city' && cityEffects) || style === 'semantic') {
-      drawPerspectiveGridBackground(ctx);
+      drawPerspectiveGridBackground(ctx, isSemantic);
     } else if (style === 'aitech' && aiEffects) {
       ctx.fillStyle = '#000000';
       ctx.fillRect(0, 0, CW, CH);
