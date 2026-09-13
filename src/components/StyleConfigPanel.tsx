@@ -2139,6 +2139,23 @@ export default function StyleConfigPanel({
   const ov = accentOverrides[style];
 
   switch (style) {
+    case 'warning':
+      return (
+        <div className="space-y-3">
+          <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.36)' }}>
+            视频视觉与节奏已按案例锁定。封面使用黑底霓虹边框，上方显示标题，下方为随机几何图案。
+          </p>
+          <button
+            type="button"
+            onClick={() => onCoverIndexChange((coverIndex + 1) % 40)}
+            className="w-full rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+            style={{ color: '#f4dc70', background: 'rgba(244,220,112,0.1)', border: '1px solid rgba(244,220,112,0.28)' }}
+          >
+            换一个封面图案
+          </button>
+        </div>
+      );
+
     case 'chinese':
       return (
         <div className="space-y-6">
