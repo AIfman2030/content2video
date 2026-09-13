@@ -13,25 +13,41 @@ const PALETTES: Array<[string, string]> = [
   ['#37c8ff', '#ff45e6'], ['#f6ff45', '#00dca8'],
 ];
 
+function fitTitleFont(ctx: CanvasRenderingContext2D, text: string, preferredSize: number, maxWidth: number) {
+  let size = preferredSize;
+  while (size > 56) {
+    ctx.font = `900 ${size}px ${FONT}`;
+    if (ctx.measureText(text).width <= maxWidth) break;
+    size -= 2;
+  }
+  return size;
+}
+
 function drawTitle(ctx: CanvasRenderingContext2D, title: string, c1: string, c2: string) {
   const { kicker, headline } = parseWarningTitle(title);
+  const maxWidth = W - 190;
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.shadowColor = c1;
   ctx.shadowBlur = 24;
   ctx.fillStyle = '#fff';
-  ctx.font = `900 122px ${FONT}`;
+  const kickerSize = fitTitleFont(ctx, kicker, 142, maxWidth);
+  ctx.font = `900 ${kickerSize}px ${FONT}`;
   ctx.fillText(kicker, W / 2, 135);
-  ctx.shadowColor = '#f4dc70';
-  ctx.fillStyle = '#f4dc70';
-  ctx.font = `900 88px ${FONT}`;
-  ctx.fillText(headline, W / 2, 300);
+
+  const ruleY = 300;
   ctx.shadowBlur = 0;
-  const ruleY = 430;
   ctx.strokeStyle = neonGrad(ctx, 170, ruleY, W - 170, ruleY, c1, c2);
   ctx.lineWidth = 8;
   ctx.beginPath(); ctx.moveTo(170, ruleY); ctx.lineTo(W - 170, ruleY); ctx.stroke();
+
+  ctx.shadowColor = '#f4dc70';
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = '#f4dc70';
+  const headlineSize = fitTitleFont(ctx, headline, 104, maxWidth);
+  ctx.font = `900 ${headlineSize}px ${FONT}`;
+  ctx.fillText(headline, W / 2, 345);
   ctx.restore();
 }
 
