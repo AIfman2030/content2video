@@ -25,18 +25,18 @@ function fitTitleFont(ctx: CanvasRenderingContext2D, text: string, preferredSize
 
 function drawTitle(ctx: CanvasRenderingContext2D, title: string, c1: string, c2: string) {
   const { kicker, headline } = parseWarningTitle(title);
-  const maxWidth = W - 190;
+  const maxWidth = W - 150;
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.shadowColor = c1;
   ctx.shadowBlur = 24;
   ctx.fillStyle = '#fff';
-  const kickerSize = fitTitleFont(ctx, kicker, 142, maxWidth);
+  const kickerSize = fitTitleFont(ctx, kicker, 178, maxWidth);
   ctx.font = `900 ${kickerSize}px ${FONT}`;
-  ctx.fillText(kicker, W / 2, 135);
+  ctx.fillText(kicker, W / 2, 105);
 
-  const ruleY = 300;
+  const ruleY = 320;
   ctx.shadowBlur = 0;
   ctx.strokeStyle = neonGrad(ctx, 170, ruleY, W - 170, ruleY, c1, c2);
   ctx.lineWidth = 8;
@@ -45,9 +45,9 @@ function drawTitle(ctx: CanvasRenderingContext2D, title: string, c1: string, c2:
   ctx.shadowColor = '#f4dc70';
   ctx.shadowBlur = 20;
   ctx.fillStyle = '#f4dc70';
-  const headlineSize = fitTitleFont(ctx, headline, 104, maxWidth);
+  const headlineSize = fitTitleFont(ctx, headline, 124, maxWidth);
   ctx.font = `900 ${headlineSize}px ${FONT}`;
-  ctx.fillText(headline, W / 2, 345);
+  ctx.fillText(headline, W / 2, 365);
   ctx.restore();
 }
 
