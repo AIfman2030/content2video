@@ -265,6 +265,7 @@ export default function Index() {
         const result = rawMode ? parseRawContent(text) : await extractWarningContent(text);
         setContent(ensureKnowledgeLimit(result));
         setNatureContent(null);
+        setCoverIndex(prev => (prev + 1) % 40);
       } else if (rawMode) {
         setContent(ensureKnowledgeLimit(parseRawContent(text)));
         setNatureContent(null);
