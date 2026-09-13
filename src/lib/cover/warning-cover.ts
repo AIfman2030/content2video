@@ -2,6 +2,7 @@ import {
   COVER_H, COVER_W, type CoverOpts, drawRainbowBorder,
   neonGrad, registerCover, seededRandCover,
 } from './registry';
+import { parseWarningTitle } from '../warningTitle';
 
 const W = COVER_W;
 const H = COVER_H;
@@ -12,41 +13,22 @@ const PALETTES: Array<[string, string]> = [
   ['#37c8ff', '#ff45e6'], ['#f6ff45', '#00dca8'],
 ];
 
-function splitTitle(ctx: CanvasRenderingContext2D, title: string): string[] {
-  const chars = Array.from(title.trim() || '困住普通人的四大陷阱');
-  const lines: string[] = [];
-  let line = '';
-  for (const char of chars) {
-    const next = line + char;
-    if (line && ctx.measureText(next).width > 850) {
-      lines.push(line);
-      line = char;
-    } else line = next;
-  }
-  if (line) lines.push(line);
-  return lines.slice(0, 3);
-}
-
 function drawTitle(ctx: CanvasRenderingContext2D, title: string, c1: string, c2: string) {
-  let size = 112;
-  let lines: string[] = [];
-  while (size >= 72) {
-    ctx.font = `900 ${size}px ${FONT}`;
-    lines = splitTitle(ctx, title);
-    if (lines.length <= 2) break;
-    size -= 6;
-  }
-  const y = 150;
+  const { kicker, headline } = parseWarningTitle(title);
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.font = `900 ${size}px ${FONT}`;
   ctx.shadowColor = c1;
   ctx.shadowBlur = 24;
   ctx.fillStyle = '#fff';
-  lines.forEach((line, index) => ctx.fillText(line, W / 2, y + index * (size + 22)));
+  ctx.font = `900 122px ${FONT}`;
+  ctx.fillText(kicker, W / 2, 135);
+  ctx.shadowColor = '#f4dc70';
+  ctx.fillStyle = '#f4dc70';
+  ctx.font = `900 88px ${FONT}`;
+  ctx.fillText(headline, W / 2, 300);
   ctx.shadowBlur = 0;
-  const ruleY = y + lines.length * (size + 22) + 20;
+  const ruleY = 430;
   ctx.strokeStyle = neonGrad(ctx, 170, ruleY, W - 170, ruleY, c1, c2);
   ctx.lineWidth = 8;
   ctx.beginPath(); ctx.moveTo(170, ruleY); ctx.lineTo(W - 170, ruleY); ctx.stroke();

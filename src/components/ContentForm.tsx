@@ -47,6 +47,25 @@ const RAW_PLACEHOLDER = `直接输入文案内容，按序号分点：
    详细内容
 3. 更多要点…`;
 
+const WARNING_RAW_PLACEHOLDER = `严格按下面格式输入，可直接替换文字：
+
+管理智慧｜管理岗牢记五句话
+1. 先定标准
+规则不清努力都是内耗
+把目标、责任和完成标准一次说清楚
+2. 只抓结果
+没有结果过程毫无意义
+用可验证的成果代替模糊的工作汇报
+3. 及时反馈
+沉默管理只会放大问题
+发现偏差立即沟通不要拖到无法挽回
+4. 用人所长
+盯着缺点团队永远平庸
+把合适的人放在最能发挥优势的位置
+5. 复盘改进
+重复犯错就是管理失职
+每次结束都要留下下一次可复用的方法`;
+
 const SUBTITLE_PLACEHOLDER = `直接输入字幕内容，每个序号是一组字幕：
 
 1. 自媒体创作，首先要找准定位
@@ -129,6 +148,7 @@ export default function ContentForm({ style, onGenerate, isLoading, error, onMan
               style === 'subtitle'     ? SUBTITLE_PLACEHOLDER
               : style === 'translation' ? TRANSLATION_PLACEHOLDER
               : style === 'manga'       ? '输入你想要表达的内容，AI 会重写成短视频字幕脚本并为每段生成漫画插画…'
+              : rawMode && style === 'warning' ? WARNING_RAW_PLACEHOLDER
               : rawMode                 ? RAW_PLACEHOLDER
               : PLACEHOLDER
             }
@@ -158,7 +178,9 @@ export default function ContentForm({ style, onGenerate, isLoading, error, onMan
         )}
         {rawMode && (
           <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.28)' }}>
-            格式：第一行可选标题，之后用 1. 2. 3. 分点，每个序号下换行写短句和详细内容
+            {style === 'warning'
+              ? '格式：4字主标题｜5–8字副标题；每组依次填写陷阱名称、尖锐判断、具体行为或后果'
+              : '格式：第一行可选标题，之后用 1. 2. 3. 分点，每个序号下换行写短句和详细内容'}
           </p>
         )}
       </div>

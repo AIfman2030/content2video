@@ -1,5 +1,6 @@
 import type { GeneratedContent } from '../../types/video';
 import { CH, CW, clamp, easeOutCubic, lerp, wrapText } from './helpers';
+import { parseWarningTitle } from '../warningTitle';
 
 const FONT = '"Noto Sans SC", "PingFang SC", sans-serif';
 const INTRO_MS = 2700;
@@ -82,17 +83,15 @@ function drawIntro(ctx: CanvasRenderingContext2D, elapsed: number, content: Gene
   const exit = 1 - clamp((elapsed - 2250) / 380, 0, 1);
   ctx.save();
   ctx.globalAlpha = enter * exit;
-  const split = Math.max(4, Math.ceil(content.title.length * 0.55));
-  const first = content.title.slice(0, split);
-  const second = content.title.slice(split);
+  const { kicker: first, headline: second } = parseWarningTitle(content.title);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = `800 ${fitFont(ctx, first, 1050, 96, 58, 800)}px ${FONT}`;
   ctx.fillStyle = '#ffffff';
   ctx.fillText(first, CW / 2, 440);
-  ctx.font = `900 ${fitFont(ctx, second || first, 1050, 132, 72, 900)}px ${FONT}`;
+  ctx.font = `900 ${fitFont(ctx, second, 1050, 132, 72, 900)}px ${FONT}`;
   ctx.fillStyle = '#b4a20d';
-  ctx.fillText(second || first, CW / 2, 570);
+  ctx.fillText(second, CW / 2, 570);
   ctx.restore();
 }
 
@@ -106,9 +105,10 @@ function drawPage(ctx: CanvasRenderingContext2D, content: GeneratedContent, inde
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  ctx.font = `700 ${fitFont(ctx, content.title, 900, 55, 34, 700)}px ${FONT}`;
+  const displayTitle = parseWarningTitle(content.title).display;
+  ctx.font = `700 ${fitFont(ctx, displayTitle, 900, 55, 34, 700)}px ${FONT}`;
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText(content.title, 610, 72);
+  ctx.fillText(displayTitle, 610, 72);
 
   ctx.strokeStyle = 'rgba(244,220,112,0.48)';
   ctx.lineWidth = 3;
