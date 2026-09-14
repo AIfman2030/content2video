@@ -3,7 +3,7 @@ import { X, Play, Video, Download, RotateCcw, Loader2, Mic, Music, AlertCircle }
 import type {
   GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions,
-  PetCoverConfig, NatureOptions, TitleOptions, KeywordOptions, AIGoblinOptions,
+  PetCoverConfig, NatureOptions, TitleOptions, KeywordOptions, AIGoblinOptions, WarningOptions,
 } from '../types/video';
 import { createAnimEngine, CW, CH } from '../lib/canvasEngine';
 import { webmToMp4, webmToMp4WithAudio } from '../lib/mp4Converter';
@@ -31,6 +31,7 @@ interface Props {
   titleOptions?: TitleOptions;
   keywordOptions?: KeywordOptions;
   aigoblinOptions?: AIGoblinOptions;
+  warningOptions?: WarningOptions;
 }
 
 type RecordState = 'idle' | 'generating_audio' | 'recording' | 'converting' | 'done';
@@ -62,7 +63,7 @@ export default function VideoGenerator({
   content, style, coverIndex, chineseOptions, aiOptions, natureContent, onClose,
   subtitleOptions, accentOverride, cityOptions, mangaContent, mangaOptions,
   aitechOptions, petCoverConfig, natureOptions, titleOptions, keywordOptions,
-  aigoblinOptions,
+  aigoblinOptions, warningOptions,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Awaited<ReturnType<typeof createAnimEngine>> | null>(null);
@@ -140,7 +141,7 @@ export default function VideoGenerator({
       chineseOptions, aiOptions, natureContent, undefined,
       subtitleOptions, accentOverride, cityOptions,
       mangaContent, mangaOptions, aitechOptions,
-      natureOptions, titleOptions, keywordOptions, aigoblinOptions,
+      natureOptions, titleOptions, keywordOptions, aigoblinOptions, warningOptions,
     )
       .then(engine => {
         engineRef.current = engine;
@@ -506,6 +507,7 @@ export default function VideoGenerator({
               content={content} natureContent={natureContent ?? null}
               style={style} coverIndex={coverIndex}
               chineseOptions={chineseOptions} petCoverConfig={petCoverConfig}
+              warningOptions={warningOptions}
               onContinue={handleContinue} onBack={handleClose}
             />
           </div>

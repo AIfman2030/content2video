@@ -35,6 +35,34 @@ export interface AIOptions {
   polyShape: PolyShape;
 }
 
+export interface WarningOptions {
+  titleTopText: string;
+  titleBottomText: string;
+  titleTopFontSize: number;
+  titleBottomFontSize: number;
+  titleTopColor: string;
+  titleTopColorEnd: string;
+  titleBottomColor: string;
+  titleBottomColorEnd: string;
+  labelFontSize: number;
+  shortFontSize: number;
+  descFontSize: number;
+}
+
+export const DEFAULT_WARNING_OPTIONS: WarningOptions = {
+  titleTopText: '',
+  titleBottomText: '',
+  titleTopFontSize: 112,
+  titleBottomFontSize: 82,
+  titleTopColor: '#ffffff',
+  titleTopColorEnd: '',
+  titleBottomColor: '#f4dc70',
+  titleBottomColorEnd: '',
+  labelFontSize: 104,
+  shortFontSize: 72,
+  descFontSize: 48,
+};
+
 export interface ChineseOptions {
   colorScheme: ColorScheme;
   borderWidth: 1 | 2 | 3 | 4;

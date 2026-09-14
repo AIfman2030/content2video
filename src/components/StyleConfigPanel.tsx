@@ -14,6 +14,7 @@ import type {
   TitleOptions, TitleLineConfig, TitleLineEnterAnim,
   KeywordOptions, KeywordLayout, KeywordCenterAnim,
   AIGoblinOptions,
+  WarningOptions,
 } from '../types/video';
 import { DEFAULT_CARD_LINES, DEFAULT_TITLE_OPTIONS, DEFAULT_TITLE_LINE_1, DEFAULT_TITLE_LINE_2, DEFAULT_KEYWORD_OPTIONS } from '../types/video';
 import CoverPicker from './CoverPicker';
@@ -54,6 +55,8 @@ interface Props {
   // ── AI Goblin style ────────────────────────────────────────────────────────
   aigoblinOptions: AIGoblinOptions;
   onAigoblinOptionsChange: (v: AIGoblinOptions) => void;
+  warningOptions: WarningOptions;
+  onWarningOptionsChange: (v: WarningOptions) => void;
 }
 
 // ─── Shared colour presets ─────────────────────────────────────────────────────
@@ -2135,16 +2138,31 @@ export default function StyleConfigPanel({
   titleOptions, onTitleOptionsChange,
   keywordOptions, onKeywordOptionsChange,
   aigoblinOptions, onAigoblinOptionsChange,
+  warningOptions, onWarningOptionsChange,
 }: Props) {
   const ov = accentOverrides[style];
 
   switch (style) {
     case 'warning':
+      {
+        const updateWarning = (patch: Partial<WarningOptions>) => onWarningOptionsChange({ ...warningOptions, ...patch });
       return (
-        <div className="space-y-3">
+        <div className="space-y-5">
           <p className="text-xs leading-relaxed" style={{ color: 'rgba(255,255,255,0.36)' }}>
-            视频视觉与节奏已按案例锁定。封面使用黑底霓虹边框，上方显示标题，下方为随机几何图案。
+            标题会先完整出现，再移动并固定在画面顶部。留空时使用文案自动生成的两行标题。
           </p>
+          <TextInput label="上行标题（四字）" value={warningOptions.titleTopText} onChange={v => updateWarning({ titleTopText: v })} placeholder="例如：管理智慧" />
+          <TextInput label="下行标题（5–8字）" value={warningOptions.titleBottomText} onChange={v => updateWarning({ titleBottomText: v })} placeholder="例如：管理岗牢记五句话" />
+          <NumericSlider label="上行标题字号" value={warningOptions.titleTopFontSize} min={72} max={160} onChange={v => updateWarning({ titleTopFontSize: v })} />
+          <NumericSlider label="下行标题字号" value={warningOptions.titleBottomFontSize} min={54} max={120} onChange={v => updateWarning({ titleBottomFontSize: v })} />
+          <ColorPicker label="上行标题颜色" value={warningOptions.titleTopColor} onChange={v => updateWarning({ titleTopColor: v })} accent="#f4dc70" />
+          <OptionalColorPicker label="上行渐变终点（空=纯色）" value={warningOptions.titleTopColorEnd} placeholder="纯色" onChange={v => updateWarning({ titleTopColorEnd: v })} accent="#f4dc70" />
+          <ColorPicker label="下行标题颜色" value={warningOptions.titleBottomColor} onChange={v => updateWarning({ titleBottomColor: v })} accent="#f4dc70" />
+          <OptionalColorPicker label="下行渐变终点（空=纯色）" value={warningOptions.titleBottomColorEnd} placeholder="纯色" onChange={v => updateWarning({ titleBottomColorEnd: v })} accent="#f4dc70" />
+          <div className="h-px" style={{ background: 'rgba(255,255,255,0.06)' }} />
+          <NumericSlider label="第一行内容字号" value={warningOptions.labelFontSize} min={64} max={130} onChange={v => updateWarning({ labelFontSize: v })} />
+          <NumericSlider label="第二行内容字号" value={warningOptions.shortFontSize} min={44} max={96} onChange={v => updateWarning({ shortFontSize: v })} />
+          <NumericSlider label="第三行内容字号" value={warningOptions.descFontSize} min={34} max={64} onChange={v => updateWarning({ descFontSize: v })} />
           <button
             type="button"
             onClick={() => onCoverIndexChange((coverIndex + 1) % 40)}
@@ -2155,6 +2173,7 @@ export default function StyleConfigPanel({
           </button>
         </div>
       );
+      }
 
     case 'chinese':
       return (

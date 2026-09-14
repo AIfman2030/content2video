@@ -13,7 +13,7 @@ import './cover/warning-cover';
 
 import { COVER_REGISTRY, COVER_W, COVER_H, CoverOpts } from './cover/registry';
 import { drawPetCover } from './cover/pet-cover';
-import type { StyleType, GeneratedContent, NatureContent, ChineseOptions, PetCoverConfig } from '../types/video';
+import type { StyleType, GeneratedContent, NatureContent, ChineseOptions, PetCoverConfig, WarningOptions } from '../types/video';
 import { getThemeConfig } from './themes';
 
 export { COVER_W, COVER_H };
@@ -26,10 +26,11 @@ export interface DrawCoverParams {
   coverIndex: number;
   chineseOptions?: ChineseOptions;
   petCoverConfig?: PetCoverConfig;
+  warningOptions?: WarningOptions;
 }
 
 export async function drawCover(params: DrawCoverParams): Promise<void> {
-  const { canvas, style, content, natureContent, coverIndex, chineseOptions, petCoverConfig } = params;
+  const { canvas, style, content, natureContent, coverIndex, chineseOptions, petCoverConfig, warningOptions } = params;
 
   canvas.width  = COVER_W;
   canvas.height = COVER_H;
@@ -68,6 +69,7 @@ export async function drawCover(params: DrawCoverParams): Promise<void> {
     accent:     theme.accent,
     accent2:    theme.accent2,
     coverIndex,
+    warningOptions,
   };
 
   const fn = COVER_REGISTRY[style];
