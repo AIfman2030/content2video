@@ -4,12 +4,12 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type {
   StyleType, ChineseOptions, AIOptions, NatureContent, GeneratedContent,
   SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions,
-  TitleOptions, KeywordOptions, AIGoblinOptions,
+  TitleOptions, KeywordOptions, AIGoblinOptions, WarningOptions,
 } from '../types/video';
 import {
   DEFAULT_SUBTITLE_OPTIONS, DEFAULT_CITY_OPTIONS, DEFAULT_MANGA_OPTIONS, DEFAULT_AITECH_OPTIONS,
   DEFAULT_PET_COVER_CONFIG, DEFAULT_NATURE_OPTIONS, DEFAULT_TITLE_OPTIONS, DEFAULT_KEYWORD_OPTIONS,
-  DEFAULT_AIGOBLIN_OPTIONS, type PetCoverConfig,
+  DEFAULT_AIGOBLIN_OPTIONS, DEFAULT_WARNING_OPTIONS, type PetCoverConfig,
 } from '../types/video';
 import StyleSelector from '../components/StyleSelector';
 import ContentForm from '../components/ContentForm';
@@ -189,6 +189,7 @@ export default function Index() {
   const [titleOptions, setTitleOptions] = useState<TitleOptions>(DEFAULT_TITLE_OPTIONS);
   const [keywordOptions, setKeywordOptions] = useState<KeywordOptions>(DEFAULT_KEYWORD_OPTIONS);
   const [aigoblinOptions, setAigoblinOptions] = useState<AIGoblinOptions>(DEFAULT_AIGOBLIN_OPTIONS);
+  const [warningOptions, setWarningOptions] = useState<WarningOptions>(DEFAULT_WARNING_OPTIONS);
   const [accentOverrides, setAccentOverrides] = useState<Partial<Record<StyleType, string>>>({});
   const [petCoverConfig, setPetCoverConfig] = useState<PetCoverConfig>(DEFAULT_PET_COVER_CONFIG);
 
@@ -429,6 +430,7 @@ export default function Index() {
                   titleOptions={titleOptions} onTitleOptionsChange={setTitleOptions}
                   keywordOptions={keywordOptions} onKeywordOptionsChange={setKeywordOptions}
                   aigoblinOptions={aigoblinOptions} onAigoblinOptionsChange={setAigoblinOptions}
+                  warningOptions={warningOptions} onWarningOptionsChange={setWarningOptions}
                   accentOverrides={accentOverrides}
                   onAccentOverrideChange={(sty, color) => setAccentOverrides(prev => ({ ...prev, [sty]: color }))}
                   petCoverConfig={petCoverConfig} onPetCoverConfigChange={setPetCoverConfig}
@@ -493,7 +495,7 @@ export default function Index() {
                 cityOptions={cityOptions} mangaContent={mangaContent ?? undefined}
                 mangaOptions={mangaOptions} aitechOptions={aitechOptions}
                 natureOptions={natureOptions} titleOptions={titleOptions}
-                keywordOptions={keywordOptions} />
+                keywordOptions={keywordOptions} warningOptions={warningOptions} />
             </div>
           ) : (
             <div className="text-center animate-fade-in">
@@ -523,7 +525,7 @@ export default function Index() {
           mangaOptions={mangaOptions} aitechOptions={aitechOptions}
           petCoverConfig={petCoverConfig} natureOptions={natureOptions}
           titleOptions={titleOptions} keywordOptions={keywordOptions}
-          aigoblinOptions={aigoblinOptions} />
+          aigoblinOptions={aigoblinOptions} warningOptions={warningOptions} />
       )}
 
       {/* ── API Key Dialog ────────────────────────────────────────────────── */}

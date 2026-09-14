@@ -23,31 +23,48 @@ function fitTitleFont(ctx: CanvasRenderingContext2D, text: string, preferredSize
   return size;
 }
 
-function drawTitle(ctx: CanvasRenderingContext2D, title: string, c1: string, c2: string) {
-  const { kicker, headline } = parseWarningTitle(title);
-  const maxWidth = W - 150;
+function titleFill(ctx: CanvasRenderingContext2D, start: string, end: string, maxWidth: number) {
+  if (!end) return start;
+  return neonGrad(ctx, W / 2 - maxWidth / 2, 0, W / 2 + maxWidth / 2, 0, start, end);
+}
+
+function drawTitle(ctx: CanvasRenderingContext2D, opts: CoverOpts, c1: string, c2: string) {
+  const parsed = parseWarningTitle(opts.title);
+  const kicker = opts.warningOptions?.titleTopText.trim() || parsed.kicker;
+  const headline = opts.warningOptions?.titleBottomText.trim() || parsed.headline;
+  const maxWidth = W - 110;
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.shadowColor = c1;
+  ctx.shadowColor = opts.warningOptions?.titleTopColor || c1;
   ctx.shadowBlur = 24;
-  ctx.fillStyle = '#fff';
-  const kickerSize = fitTitleFont(ctx, kicker, 178, maxWidth);
+  ctx.fillStyle = titleFill(
+    ctx,
+    opts.warningOptions?.titleTopColor || '#ffffff',
+    opts.warningOptions?.titleTopColorEnd || '',
+    maxWidth,
+  );
+  const kickerSize = fitTitleFont(ctx, kicker, 220, maxWidth);
   ctx.font = `900 ${kickerSize}px ${FONT}`;
-  ctx.fillText(kicker, W / 2, 105);
+  ctx.fillText(kicker, W / 2, 75);
 
-  const ruleY = 320;
+  const ruleY = 315;
   ctx.shadowBlur = 0;
   ctx.strokeStyle = neonGrad(ctx, 170, ruleY, W - 170, ruleY, c1, c2);
   ctx.lineWidth = 8;
   ctx.beginPath(); ctx.moveTo(170, ruleY); ctx.lineTo(W - 170, ruleY); ctx.stroke();
 
-  ctx.shadowColor = '#f4dc70';
+  ctx.shadowColor = opts.warningOptions?.titleBottomColor || '#f4dc70';
   ctx.shadowBlur = 20;
-  ctx.fillStyle = '#f4dc70';
-  const headlineSize = fitTitleFont(ctx, headline, 124, maxWidth);
+  ctx.fillStyle = titleFill(
+    ctx,
+    opts.warningOptions?.titleBottomColor || '#f4dc70',
+    opts.warningOptions?.titleBottomColorEnd || '',
+    maxWidth,
+  );
+  const headlineSize = fitTitleFont(ctx, headline, 146, maxWidth);
   ctx.font = `900 ${headlineSize}px ${FONT}`;
-  ctx.fillText(headline, W / 2, 365);
+  ctx.fillText(headline, W / 2, 350);
   ctx.restore();
 }
 
@@ -107,7 +124,7 @@ function drawWarningCover(ctx: CanvasRenderingContext2D, opts: CoverOpts) {
   const [c1, c2] = opts.coverIndex % 2 ? palette : [palette[1], palette[0]];
   ctx.fillStyle = '#020205'; ctx.fillRect(0, 0, W, H);
   drawRainbowBorder(ctx, W, H, 14, 14, 15, 34);
-  drawTitle(ctx, opts.title, c1, c2);
+  drawTitle(ctx, opts, c1, c2);
   drawPattern(ctx, opts.coverIndex, c1, c2);
 }
 

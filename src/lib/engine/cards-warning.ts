@@ -1,4 +1,4 @@
-import type { GeneratedContent } from '../../types/video';
+import { DEFAULT_WARNING_OPTIONS, type GeneratedContent, type WarningOptions } from '../../types/video';
 import { CH, CW, clamp, easeOutCubic, lerp, wrapText } from './helpers';
 import { parseWarningTitle } from '../warningTitle';
 
@@ -19,6 +19,22 @@ function fitFont(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, 
     size -= 2;
   }
   return size;
+}
+
+function textFill(ctx: CanvasRenderingContext2D, start: string, end: string, maxWidth: number) {
+  if (!end) return start;
+  const gradient = ctx.createLinearGradient(CW / 2 - maxWidth / 2, 0, CW / 2 + maxWidth / 2, 0);
+  gradient.addColorStop(0, start);
+  gradient.addColorStop(1, end);
+  return gradient;
+}
+
+function warningTitles(content: GeneratedContent, options: WarningOptions) {
+  const parsed = parseWarningTitle(content.title);
+  return {
+    top: options.titleTopText.trim() || parsed.kicker,
+    bottom: options.titleBottomText.trim() || parsed.headline,
+  };
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, elapsed: number) {
@@ -78,24 +94,52 @@ function drawOrbit(ctx: CanvasRenderingContext2D, index: number, local: number) 
   ctx.restore();
 }
 
-function drawIntro(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent) {
-  const enter = easeOutCubic(clamp((elapsed - 250) / 700, 0, 1));
-  const exit = 1 - clamp((elapsed - 2250) / 380, 0, 1);
+function drawTitleBlock(
+  ctx: CanvasRenderingContext2D,
+  content: GeneratedContent,
+  options: WarningOptions,
+  topY: number,
+  bottomY: number,
+  topSize: number,
+  bottomSize: number,
+  alpha = 1,
+) {
+  const { top, bottom } = warningTitles(content, options);
+  const maxWidth = 1500;
   ctx.save();
-  ctx.globalAlpha = enter * exit;
-  const { kicker: first, headline: second } = parseWarningTitle(content.title);
+  ctx.globalAlpha = alpha;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = `800 ${fitFont(ctx, first, 1050, 96, 58, 800)}px ${FONT}`;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(first, CW / 2, 440);
-  ctx.font = `900 ${fitFont(ctx, second, 1050, 132, 72, 900)}px ${FONT}`;
-  ctx.fillStyle = '#b4a20d';
-  ctx.fillText(second, CW / 2, 570);
+  ctx.shadowBlur = 22;
+  ctx.shadowColor = options.titleTopColor;
+  ctx.font = `900 ${fitFont(ctx, top, maxWidth, topSize, 54, 900)}px ${FONT}`;
+  ctx.fillStyle = textFill(ctx, options.titleTopColor, options.titleTopColorEnd, maxWidth);
+  ctx.fillText(top, CW / 2, topY);
+  ctx.shadowColor = options.titleBottomColor;
+  ctx.font = `900 ${fitFont(ctx, bottom, maxWidth, bottomSize, 46, 900)}px ${FONT}`;
+  ctx.fillStyle = textFill(ctx, options.titleBottomColor, options.titleBottomColorEnd, maxWidth);
+  ctx.fillText(bottom, CW / 2, bottomY);
   ctx.restore();
 }
 
-function drawPage(ctx: CanvasRenderingContext2D, content: GeneratedContent, index: number, local: number) {
+function drawIntro(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent, options: WarningOptions) {
+  const enter = easeOutCubic(clamp((elapsed - 250) / 700, 0, 1));
+  const fly = easeOutCubic(clamp((elapsed - 1450) / 900, 0, 1));
+  const pinnedTopY = 36 + options.titleTopFontSize / 2;
+  const pinnedBottomY = 60 + options.titleTopFontSize + options.titleBottomFontSize / 2;
+  drawTitleBlock(
+    ctx,
+    content,
+    options,
+    lerp(420, pinnedTopY, fly),
+    lerp(585, pinnedBottomY, fly),
+    lerp(Math.max(options.titleTopFontSize, 154), options.titleTopFontSize, fly),
+    lerp(Math.max(options.titleBottomFontSize, 126), options.titleBottomFontSize, fly),
+    enter,
+  );
+}
+
+function drawPage(ctx: CanvasRenderingContext2D, content: GeneratedContent, index: number, local: number, options: WarningOptions) {
   const point = content.points[index];
   const enter = easeOutCubic(clamp(local / 430, 0, 1));
   const exit = 1 - clamp((local - (SCENE_MS - 350)) / 350, 0, 1);
@@ -105,31 +149,22 @@ function drawPage(ctx: CanvasRenderingContext2D, content: GeneratedContent, inde
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
 
-  const displayTitle = parseWarningTitle(content.title).display;
-  ctx.font = `700 ${fitFont(ctx, displayTitle, 900, 55, 34, 700)}px ${FONT}`;
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillText(displayTitle, 610, 72);
-
-  ctx.strokeStyle = 'rgba(244,220,112,0.48)';
-  ctx.lineWidth = 3;
-  ctx.beginPath(); ctx.moveTo(350, 300); ctx.lineTo(350, 785); ctx.stroke();
-
   const label = `${index + 1}. ${point.label}`;
-  ctx.font = `800 ${fitFont(ctx, label, 850, 88, 52, 800)}px ${FONT}`;
+  ctx.font = `800 ${fitFont(ctx, label, 940, options.labelFontSize, 58, 800)}px ${FONT}`;
   ctx.fillStyle = '#f4dc70';
   ctx.shadowColor = 'rgba(244,220,112,0.52)';
   ctx.shadowBlur = 18;
-  ctx.fillText(label, 380, 365);
+  ctx.fillText(label, 300, 385);
   ctx.shadowBlur = 0;
 
-  ctx.font = `700 ${fitFont(ctx, point.short, 900, 60, 38, 700)}px ${FONT}`;
+  ctx.font = `700 ${fitFont(ctx, point.short, 940, options.shortFontSize, 42, 700)}px ${FONT}`;
   ctx.fillStyle = '#ff9d18';
-  ctx.fillText(point.short, 380, 565);
+  ctx.fillText(point.short, 300, 575);
 
-  ctx.font = `400 38px ${FONT}`;
+  ctx.font = `500 ${options.descFontSize}px ${FONT}`;
   ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  const lines = wrapText(ctx, point.desc, 900).slice(0, 2);
-  lines.forEach((line, lineIndex) => ctx.fillText(line, 380, 690 + lineIndex * 54));
+  const lines = wrapText(ctx, point.desc, 940).slice(0, 2);
+  lines.forEach((line, lineIndex) => ctx.fillText(line, 300, 720 + lineIndex * (options.descFontSize + 18)));
   ctx.restore();
 
   ctx.save();
@@ -146,13 +181,17 @@ function drawPage(ctx: CanvasRenderingContext2D, content: GeneratedContent, inde
   });
 }
 
-export function drawWarningScene(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent) {
+export function drawWarningScene(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent, warningOptions?: WarningOptions) {
+  const options = { ...DEFAULT_WARNING_OPTIONS, ...warningOptions };
   drawBackground(ctx, elapsed);
   if (elapsed < INTRO_MS) {
-    drawIntro(ctx, elapsed, content);
+    drawIntro(ctx, elapsed, content, options);
     return;
   }
+  const pinnedTopY = 36 + options.titleTopFontSize / 2;
+  const pinnedBottomY = 60 + options.titleTopFontSize + options.titleBottomFontSize / 2;
+  drawTitleBlock(ctx, content, options, pinnedTopY, pinnedBottomY, options.titleTopFontSize, options.titleBottomFontSize);
   const timeline = elapsed - INTRO_MS;
   const index = Math.min(content.points.length - 1, Math.floor(timeline / SCENE_MS));
-  if (index >= 0 && content.points[index]) drawPage(ctx, content, index, timeline - index * SCENE_MS);
+  if (index >= 0 && content.points[index]) drawPage(ctx, content, index, timeline - index * SCENE_MS, options);
 }

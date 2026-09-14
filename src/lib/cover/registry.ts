@@ -1,4 +1,4 @@
-import type { StyleType } from '../../types/video';
+import type { StyleType, WarningOptions } from '../../types/video';
 
 export const COVER_W = 1080;
 export const COVER_H = 1440;   // 3:4 ratio (was 1920 for 9:16)
@@ -16,6 +16,7 @@ export interface CoverOpts {
   accent: string;
   accent2: string;
   coverIndex: number;
+  warningOptions?: WarningOptions;
 }
 
 export type CoverDrawFn = (

@@ -1,5 +1,5 @@
 // Main canvas engine — split into focused sub-modules to keep files manageable.
-import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions, KeywordOptions, AIGoblinOptions } from '../types/video';
+import type { GeneratedContent, StyleType, ChineseOptions, AIOptions, NatureContent, SubtitleOptions, CityOptions, MangaContent, MangaOptions, AItechOptions, NatureOptions, TitleOptions, KeywordOptions, AIGoblinOptions, WarningOptions } from '../types/video';
 import { getThemeConfig, pickChineseShapeByTitle } from './themes';
 import { loadShapeImage } from './shapes';
 import { CHINESE_SHAPES, CITY_SHAPES, AI_SHAPES, pickKnowledgeShapeByTitle } from './themes';
@@ -154,6 +154,7 @@ export async function createAnimEngine(
   titleOptions?: TitleOptions,
   keywordOptions?: KeywordOptions,
   aigoblinOptions?: AIGoblinOptions,
+  warningOptions?: WarningOptions,
 ): Promise<AnimEngine> {
   const theme = getThemeConfig(style, chineseOptions);
   // Allow per-style accent override (affects BG, title, overlays, shape decoration)
@@ -292,7 +293,7 @@ export async function createAnimEngine(
     }
 
     if (isWarning) {
-      drawWarningScene(ctx, elapsed, content);
+      drawWarningScene(ctx, elapsed, content, warningOptions);
       return;
     }
 
