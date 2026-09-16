@@ -122,21 +122,63 @@ function drawTitleBlock(
   ctx.restore();
 }
 
+function drawPinnedTitle(
+  ctx: CanvasRenderingContext2D,
+  content: GeneratedContent,
+  options: WarningOptions,
+  y: number,
+  alpha = 1,
+) {
+  const { top, bottom } = warningTitles(content, options);
+  const maxWidth = 1500;
+  const gap = 34;
+  let topSize = options.titleTopFontSize;
+  let bottomSize = options.titleBottomFontSize;
+
+  ctx.save();
+  ctx.font = `900 ${topSize}px ${FONT}`;
+  const initialTopWidth = ctx.measureText(top).width;
+  ctx.font = `900 ${bottomSize}px ${FONT}`;
+  const initialBottomWidth = ctx.measureText(bottom).width;
+  const scale = Math.min(1, maxWidth / (initialTopWidth + gap + initialBottomWidth));
+  topSize = Math.max(54, Math.round(topSize * scale));
+  bottomSize = Math.max(46, Math.round(bottomSize * scale));
+
+  ctx.font = `900 ${topSize}px ${FONT}`;
+  const topWidth = ctx.measureText(top).width;
+  ctx.font = `900 ${bottomSize}px ${FONT}`;
+  const bottomWidth = ctx.measureText(bottom).width;
+  const startX = (CW - topWidth - gap - bottomWidth) / 2;
+
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = options.titleTopColor;
+  ctx.font = `900 ${topSize}px ${FONT}`;
+  ctx.fillStyle = textFill(ctx, options.titleTopColor, options.titleTopColorEnd, maxWidth);
+  ctx.fillText(top, startX, y);
+  ctx.shadowColor = options.titleBottomColor;
+  ctx.font = `900 ${bottomSize}px ${FONT}`;
+  ctx.fillStyle = textFill(ctx, options.titleBottomColor, options.titleBottomColorEnd, maxWidth);
+  ctx.fillText(bottom, startX + topWidth + gap, y);
+  ctx.restore();
+}
+
 function drawIntro(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent, options: WarningOptions) {
   const enter = easeOutCubic(clamp((elapsed - 250) / 700, 0, 1));
   const fly = easeOutCubic(clamp((elapsed - 1450) / 900, 0, 1));
-  const pinnedTopY = 36 + options.titleTopFontSize / 2;
-  const pinnedBottomY = 60 + options.titleTopFontSize + options.titleBottomFontSize / 2;
   drawTitleBlock(
     ctx,
     content,
     options,
-    lerp(420, pinnedTopY, fly),
-    lerp(585, pinnedBottomY, fly),
+    lerp(420, 230, fly),
+    lerp(585, 300, fly),
     lerp(Math.max(options.titleTopFontSize, 154), options.titleTopFontSize, fly),
     lerp(Math.max(options.titleBottomFontSize, 126), options.titleBottomFontSize, fly),
-    enter,
+    enter * (1 - fly),
   );
+  drawPinnedTitle(ctx, content, options, lerp(500, 105, fly), enter * fly);
 }
 
 function drawPage(ctx: CanvasRenderingContext2D, content: GeneratedContent, index: number, local: number, options: WarningOptions) {
@@ -188,9 +230,7 @@ export function drawWarningScene(ctx: CanvasRenderingContext2D, elapsed: number,
     drawIntro(ctx, elapsed, content, options);
     return;
   }
-  const pinnedTopY = 36 + options.titleTopFontSize / 2;
-  const pinnedBottomY = 60 + options.titleTopFontSize + options.titleBottomFontSize / 2;
-  drawTitleBlock(ctx, content, options, pinnedTopY, pinnedBottomY, options.titleTopFontSize, options.titleBottomFontSize);
+  drawPinnedTitle(ctx, content, options, 105);
   const timeline = elapsed - INTRO_MS;
   const index = Math.min(content.points.length - 1, Math.floor(timeline / SCENE_MS));
   if (index >= 0 && content.points[index]) drawPage(ctx, content, index, timeline - index * SCENE_MS, options);
