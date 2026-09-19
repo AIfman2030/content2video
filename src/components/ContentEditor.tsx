@@ -16,15 +16,18 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   city:        '#f5d87a',
   semantic:    '#f4cc63',
   warning:     '#f4dc70',
+  stickman:    '#d62f2f',
   aitech:      '#a855f7',
   nature:      '#4ade80',
   subtitle:    '#ffd700',
   translation: '#ffe44d',
   manga:       '#f59e0b',
+  keyword: '#00d4ff', cat3d: '#60a5fa', zen: '#fbbf24', elite: '#818cf8', aigoblin: '#f59e0b',
 };
 
 const MAX_POINTS: Record<StyleType, number> = {
-  chinese: 12, city: 16, semantic: 16, warning: 12, aitech: 12, nature: 1, subtitle: 20, translation: 1,
+  chinese: 12, city: 16, semantic: 16, warning: 12, stickman: 12, aitech: 12, nature: 1, subtitle: 20, translation: 1,
+  manga: 12, keyword: 16, cat3d: 12, zen: 12, elite: 12, aigoblin: 12,
 };
 
 // ── Shared primitive inputs ────────────────────────────────────────────────────

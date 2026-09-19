@@ -30,6 +30,7 @@ import {
 } from '../services/mangaGenerator';
 import { generateArkImage } from '../services/ark';
 import { useCommerce } from '../contexts/commerce-context';
+import { parseStickmanContent } from '../lib/stickmanContent';
 
 // ─── Subtitle parser ───────────────────────────────────────────────────────
 function parseSubtitleContent(text: string): GeneratedContent {
@@ -121,6 +122,7 @@ const BG_BY_STYLE: Record<StyleType, string> = {
   city:        CLAUDE_BG,
   semantic:    CLAUDE_BG,
   warning:     CLAUDE_BG,
+  stickman:    CLAUDE_BG,
   aitech:      CLAUDE_BG,
   nature:      CLAUDE_BG,
   subtitle:    CLAUDE_BG,
@@ -138,6 +140,7 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   city:        '#f5d87a',
   semantic:    '#f4cc63',
   warning:     '#f4dc70',
+  stickman:    '#d62f2f',
   aitech:      '#a855f7',
   nature:      '#4ade80',
   subtitle:    '#ffd700',
@@ -158,7 +161,7 @@ export default function Index() {
   const [searchParams] = useSearchParams();
   const { user, hasPaidAccess, openAuth } = useCommerce();
   const initialStyle = searchParams.get('style');
-  const [style, setStyle] = useState<StyleType>(initialStyle === 'semantic' || initialStyle === 'warning' ? initialStyle : 'city');
+  const [style, setStyle] = useState<StyleType>(initialStyle === 'semantic' || initialStyle === 'warning' || initialStyle === 'stickman' ? initialStyle : 'city');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [content, setContent] = useState<GeneratedContent | null>(null);
@@ -267,6 +270,9 @@ export default function Index() {
         setContent(ensureKnowledgeLimit(result));
         setNatureContent(null);
         setCoverIndex(prev => (prev + 1) % 40);
+      } else if (style === 'stickman') {
+        setContent(ensureKnowledgeLimit(parseStickmanContent(text)));
+        setNatureContent(null);
       } else if (rawMode) {
         setContent(ensureKnowledgeLimit(parseRawContent(text)));
         setNatureContent(null);

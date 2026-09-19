@@ -36,4 +36,12 @@ export const ANIMATION_STYLES: AnimationStyleDefinition[] = [
     bg: 'radial-gradient(circle,#050505,#3b3512)',
     accent: '#f4dc70',
   },
+  {
+    key: 'stickman',
+    name: '火柴人讽刺',
+    desc: '手绘演绎 · 口播字幕',
+    tag: '观点故事',
+    bg: 'linear-gradient(135deg,#f7f7f2,#d9d9d2)',
+    accent: '#d62f2f',
+  },
 ];

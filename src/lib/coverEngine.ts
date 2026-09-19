@@ -10,6 +10,7 @@ import './cover/nature-cover';
 import './cover/subtitle-cover';
 import './cover/keyword-cover';
 import './cover/warning-cover';
+import './cover/stickman-cover';
 
 import { COVER_REGISTRY, COVER_W, COVER_H, CoverOpts } from './cover/registry';
 import { drawPetCover } from './cover/pet-cover';
