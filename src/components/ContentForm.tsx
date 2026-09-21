@@ -18,12 +18,22 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   city:        '#f5d87a',
   semantic:    '#f4cc63',
   warning:     '#f4dc70',
+  stickman:    '#d62f2f',
   aitech:      '#a855f7',
   nature:      '#4ade80',
   subtitle:    '#ffd700',
   translation: '#ffe44d',
   manga:       '#f59e0b',
+  keyword:     '#00d4ff',
+  cat3d:       '#60a5fa',
+  zen:         '#fbbf24',
+  elite:       '#818cf8',
+  aigoblin:    '#f59e0b',
 };
+
+const STICKMAN_PLACEHOLDER = `直接粘贴一段完整观点文案，系统会在本地拆成火柴人镜头，不消耗 AI 提炼 token：
+
+判断一个领导水平怎么样，就看他上任后是不是抓考勤、抓卫生、抓着装、抓开会纪律、抓日报、周报、月报，抠文档格式和标点符号，抓谁口号喊得够不够响，盯着谁下班走得早。如果占了三条，那他有99%的概率就是个草包。希望我说的不是你领导。`;
 
 const PLACEHOLDER = `粘贴你的文章内容，或者直接输入任何文字…
 
@@ -130,7 +140,9 @@ export default function ContentForm({ style, onGenerate, isLoading, error, onMan
       {/* Text area */}
       <div className="space-y-2">
         <label className="text-xs font-medium" style={{ color: 'rgba(255,255,255,0.5)' }}>
-          {style === 'subtitle'
+          {style === 'stickman'
+            ? '输入完整观点文案（本地自动拆镜头）'
+            : style === 'subtitle'
             ? '输入字幕内容（按序号分组）'
             : style === 'translation'
               ? '输入一句中文话语'
@@ -145,7 +157,8 @@ export default function ContentForm({ style, onGenerate, isLoading, error, onMan
             value={text}
             onChange={e => setText(e.target.value)}
             placeholder={
-              style === 'subtitle'     ? SUBTITLE_PLACEHOLDER
+              style === 'stickman'      ? STICKMAN_PLACEHOLDER
+              : style === 'subtitle'     ? SUBTITLE_PLACEHOLDER
               : style === 'translation' ? TRANSLATION_PLACEHOLDER
               : style === 'manga'       ? '输入你想要表达的内容，AI 会重写成短视频字幕脚本并为每段生成漫画插画…'
               : rawMode && style === 'warning' ? WARNING_RAW_PLACEHOLDER

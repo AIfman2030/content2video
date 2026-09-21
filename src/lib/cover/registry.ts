@@ -10,6 +10,8 @@ export const ICON_R  = 300;
 
 export interface CoverOpts {
   title: string;
+  coverTitle?: string;
+  coverSubtitle?: string;
   subtitle?: string;
   items?: string[];
   commonItems?: string[];

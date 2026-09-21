@@ -15,6 +15,7 @@ import { drawNatureScene, natureTotalMs } from './engine/nature-scene';
 import { cityTotalMs, KNOWLEDGE_OUTRO_MS } from './engine/cards-city';
 import { semanticTotalMs } from './engine/cards-semantic';
 import { drawWarningScene, warningTotalMs } from './engine/cards-warning';
+import { drawStickmanScene, stickmanTotalMs } from './engine/stickman';
 import {
   drawSubtitle, subtitleTotalMs,
   initSubtitleParticles, type SubParticle,
@@ -168,12 +169,13 @@ export async function createAnimEngine(
   const isKeyword     = style === 'keyword';
   const isSemantic    = style === 'semantic';
   const isWarning     = style === 'warning';
+  const isStickman    = style === 'stickman';
 
   const rand = seededRandom(coverIndex * 31 + content.points.length * 17 + 7);
 
   // Shape image not needed for nature, subtitle, translation, manga, goblin, or keyword styles
   let shapeImg: HTMLImageElement | null = null;
-  if (!isNature && !isSubtitle && !isTranslation && !isManga && !isKeyword && !isGoblin && !isSemantic && !isWarning) {
+  if (!isNature && !isSubtitle && !isTranslation && !isManga && !isKeyword && !isGoblin && !isSemantic && !isWarning && !isStickman) {
     const shapeList = style === 'chinese' ? CHINESE_SHAPES
       : style === 'city' ? CITY_SHAPES : AI_SHAPES;
     // For Chinese: pick shape by content keywords; other styles cycle by coverIndex
@@ -244,6 +246,8 @@ export async function createAnimEngine(
               ? semanticTotalMs(content.points.length)
             : style === 'warning'
               ? warningTotalMs(content.points.length)
+            : style === 'stickman'
+              ? stickmanTotalMs(content.points.length)
             : style === 'aitech'
               ? aiTechPhases(content.points.length).total
               : style === 'chinese'
@@ -294,6 +298,11 @@ export async function createAnimEngine(
 
     if (isWarning) {
       drawWarningScene(ctx, elapsed, content, warningOptions);
+      return;
+    }
+
+    if (isStickman) {
+      drawStickmanScene(ctx, elapsed, content);
       return;
     }
 

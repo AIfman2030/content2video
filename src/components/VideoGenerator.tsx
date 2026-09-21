@@ -11,6 +11,7 @@ import { assertMp4, canEncodeMp4Directly, encodeCanvasToMp4 } from '../lib/webCo
 import { CoverPreview } from './CoverPreview';
 import { synthesize } from '../services/tts';
 import { fetchAudioAsBuffer } from '../services/sunoRap';
+import { STICKMAN_INTRO_MS, STICKMAN_SCENE_MS } from '../lib/engine/stickman';
 
 interface Props {
   content: GeneratedContent;
@@ -203,13 +204,13 @@ export default function VideoGenerator({
 
     // TTS preview — play cached mp3 segments via AudioContext
     const cachedMp3s = ttsRawMp3sRef.current;
-    if (cachedMp3s?.some(b => b !== null) && opts) {
-      const slideDurationSec = (opts.slideDurationMs ?? 4000) / 1000;
+    if (cachedMp3s?.some(b => b !== null) && (opts || style === 'stickman')) {
+      const slideDurationSec = style === 'stickman' ? STICKMAN_SCENE_MS / 1000 : (opts!.slideDurationMs ?? 4000) / 1000;
       type ACtx = typeof AudioContext;
       const CtxCls: ACtx = window.AudioContext ?? (window as Record<string, unknown>)['webkitAudioContext'] as ACtx;
       const ctx = new CtxCls();
       const sources: AudioBufferSourceNode[] = [];
-      let offset = ctx.currentTime + 0.05;
+      let offset = ctx.currentTime + 0.05 + (style === 'stickman' ? STICKMAN_INTRO_MS / 1000 : 0);
       for (const mp3 of cachedMp3s) {
         if (mp3) {
           try {
@@ -226,7 +227,7 @@ export default function VideoGenerator({
         ctx.close().catch(() => {});
       };
     }
-  }, [stopAllAudio]);
+  }, [stopAllAudio, style]);
 
   // ── Record + convert ────────────────────────────────────────────────────
   const handleRecord = useCallback(async () => {
@@ -246,6 +247,7 @@ export default function VideoGenerator({
     const isMangaStyle = style === 'manga' || style === 'cat3d' || style === 'zen' || style === 'elite';
     const isRapMode  = isMangaStyle && !!(opts?.rapMode) && !!mc?.rapAudioUrl;
     const isMangaTts = isMangaStyle && !!(opts?.ttsEnabled) && !!mc?.segments?.length && !isRapMode;
+    const isStickmanTts = style === 'stickman' && content.points.length > 0;
 
     // ── Phase A-RAP: Fetch Suno audio ──────────────────────────────────────
     let rapAudioBuffer: ArrayBuffer | null = null;
@@ -267,11 +269,13 @@ export default function VideoGenerator({
     let hasTtsAudio = false;
     let ttsVolume = 80;
 
-    if (isMangaTts) {
-      const segments = mc!.segments;
-      const voice    = opts!.ttsCustomVoice?.trim() || opts!.ttsVoice || 'longxiaochun';
-      const rate     = opts!.ttsRate ?? 1.0;
-      ttsVolume      = opts!.ttsVolume ?? 80;
+    if (isMangaTts || isStickmanTts) {
+      const segments = isStickmanTts
+        ? content.points.map(point => ({ text: point.desc || point.formatted || point.short || point.label }))
+        : mc!.segments;
+      const voice    = isStickmanTts ? 'longxiaochun' : (opts!.ttsCustomVoice?.trim() || opts!.ttsVoice || 'longxiaochun');
+      const rate     = isStickmanTts ? 1.05 : (opts!.ttsRate ?? 1.0);
+      ttsVolume      = isStickmanTts ? 88 : (opts!.ttsVolume ?? 80);
 
       setRecordState('generating_audio');
       setTtsStep({ done: 0, total: segments.length }); setProgress(0);
@@ -394,8 +398,9 @@ export default function VideoGenerator({
             opts?.ttsVolume ?? 85,
           );
         } else if (hasTtsAudio) {
-          const slideDurationMs = opts!.slideDurationMs ?? 4000;
-          const audioSegs = rawMp3s.map((mp3, i) => mp3 ? { mp3, startMs: i * slideDurationMs } : null);
+          const slideDurationMs = isStickmanTts ? STICKMAN_SCENE_MS : (opts!.slideDurationMs ?? 4000);
+          const startOffsetMs = isStickmanTts ? STICKMAN_INTRO_MS : 0;
+          const audioSegs = rawMp3s.map((mp3, i) => mp3 ? { mp3, startMs: startOffsetMs + i * slideDurationMs } : null);
           mp4 = await webmToMp4WithAudio(
             videoBlob, audioSegs,
             r => setProgress(Math.round(r * 100)),
@@ -439,7 +444,7 @@ export default function VideoGenerator({
         if (progressTimerRef.current) clearInterval(progressTimerRef.current);
       }, 500);
     });
-  }, [style, stopAllAudio]);
+  }, [content.points, style, stopAllAudio]);
 
   const handleDownloadMp4 = useCallback(async () => {
     if (!mp4Url) return;

@@ -1,4 +1,4 @@
-export type StyleType = 'chinese' | 'city' | 'semantic' | 'warning' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga' | 'keyword' | 'cat3d' | 'zen' | 'elite' | 'aigoblin';
+export type StyleType = 'chinese' | 'city' | 'semantic' | 'warning' | 'stickman' | 'aitech' | 'nature' | 'subtitle' | 'translation' | 'manga' | 'keyword' | 'cat3d' | 'zen' | 'elite' | 'aigoblin';
 export type ColorScheme = 'ink' | 'cinnabar' | 'jade' | 'gold' | 'porcelain';
 export type AnimMode = 'grid' | 'single';
 export type PolyShape = 'triangle' | 'quad' | 'pentagon' | 'hexagon' | 'octagon' | 'star5' | 'decagon';
@@ -341,6 +341,8 @@ export type AIKnowledgeAudience = 'beginner' | 'small-business';
 
 export interface GeneratedContent {
   title: string;
+  coverTitle?: string;
+  coverSubtitle?: string;
   points: ContentPoint[];
   audience?: AIKnowledgeAudience;
   actionPrompt?: string;

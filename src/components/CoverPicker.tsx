@@ -15,10 +15,12 @@ const ACCENT_BY_STYLE: Record<StyleType, string> = {
   city:        '#f5d87a',
   semantic:    '#f4cc63',
   warning:     '#f4dc70',
+  stickman:    '#d62f2f',
   aitech:      '#a855f7',
   nature:      '#4ade80',
   subtitle:    '#ffd700',
   translation: '#ffe44d',
+  manga: '#f59e0b', keyword: '#00d4ff', cat3d: '#60a5fa', zen: '#fbbf24', elite: '#818cf8', aigoblin: '#f59e0b',
 };
 
 const ShapeThumbnail = memo(function ShapeThumbnail({
