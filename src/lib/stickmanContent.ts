@@ -51,5 +51,10 @@ export function parseStickmanContent(input: string): GeneratedContent {
   if (!points.length) {
     points.push({ label: '观点观察', short: title, desc: text, formatted: text });
   }
-  return { title, points };
+  const leadershipTopic = /领导|上任|管理/.test(text);
+  const coverTitle = leadershipTopic && /草包|水平/.test(text) ? '草包领导' : title.slice(0, 4);
+  const coverSubtitle = leadershipTopic
+    ? '水平高低\n一看便知'
+    : `${title.slice(4, 8) || points[0]?.label || '认知破局'}\n${title.slice(8, 12) || points[1]?.label || '看清本质'}`;
+  return { title, coverTitle, coverSubtitle, points };
 }

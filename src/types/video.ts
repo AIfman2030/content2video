@@ -341,6 +341,8 @@ export type AIKnowledgeAudience = 'beginner' | 'small-business';
 
 export interface GeneratedContent {
   title: string;
+  coverTitle?: string;
+  coverSubtitle?: string;
   points: ContentPoint[];
   audience?: AIKnowledgeAudience;
   actionPrompt?: string;

@@ -206,6 +206,25 @@ export default function ContentEditor({ content, style, onChange, onReset }: Pro
           placeholder={style === 'translation' ? '要翻译的中文句子…' : '视频大标题…'}
         />
       )}
+      {style === 'stickman' && (
+        <div className="grid grid-cols-2 gap-2">
+          <FieldInput
+            label="封面四字标题"
+            value={content.coverTitle ?? ''}
+            onChange={v => onChange({ ...content, coverTitle: v.replace(/\s/g, '').slice(0, 4) })}
+            accent={accent}
+            placeholder="例如：草包领导"
+          />
+          <FieldInput
+            label="封面下方两行标题"
+            value={content.coverSubtitle ?? ''}
+            onChange={v => onChange({ ...content, coverSubtitle: v.split('\n').slice(0, 2).join('\n') })}
+            accent={accent}
+            multiline
+            placeholder={'水平高低\n一看便知'}
+          />
+        </div>
+      )}
       {style === 'city' && (
         <div className="grid grid-cols-2 gap-2">
           <div className="flex flex-col gap-1">

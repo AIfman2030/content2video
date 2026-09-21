@@ -58,6 +58,8 @@ export async function drawCover(params: DrawCoverParams): Promise<void> {
   // Build opts from whichever content model is active
   const opts: CoverOpts = {
     title:   (style === 'nature' ? natureContent?.title : content?.title) ?? '精彩内容',
+    coverTitle: content?.coverTitle,
+    coverSubtitle: content?.coverSubtitle,
     subtitle: style === 'nature'
       ? (natureContent?.leftTitle && natureContent?.rightTitle
           ? `${natureContent.leftTitle} vs ${natureContent.rightTitle}`
