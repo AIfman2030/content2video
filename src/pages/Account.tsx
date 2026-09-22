@@ -37,7 +37,7 @@ export default function Account() {
   const openPortal = async () => {
     setPortalError('');
     setPortalLoading(true);
-    const { data, error } = await supabase.functions.invoke('paddle-customer-portal');
+    const { data, error } = await supabase.functions.invoke('creem-customer-portal');
     setPortalLoading(false);
     if (error || !data?.url) {
       setPortalError(error?.message || '暂时无法打开账单管理，请稍后重试。');

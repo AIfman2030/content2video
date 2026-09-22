@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Check, LoaderCircle } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { PLANS, type Plan } from '@/commerce/plans';
-import { openPaddleCheckout } from '@/commerce/paddle';
+import { openCreemCheckout } from '@/commerce/creem';
 import { useCommerce } from '@/contexts/commerce-context';
 
 export default function PlanGrid({ compact = false }: { compact?: boolean }) {
@@ -21,7 +21,7 @@ export default function PlanGrid({ compact = false }: { compact?: boolean }) {
     }
     setPending(plan.id);
     try {
-      await openPaddleCheckout(plan, { id: user.id, email: user.email });
+      await openCreemCheckout(plan);
     } catch (checkoutError) {
       setError(checkoutError instanceof Error ? checkoutError.message : '暂时无法打开支付页面');
     } finally {

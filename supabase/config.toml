@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.video-history-1876af]
 verify_jwt = false
+
+[functions.creem-webhook]
+verify_jwt = false
