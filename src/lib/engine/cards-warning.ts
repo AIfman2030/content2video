@@ -7,6 +7,27 @@ const INTRO_MS = 2700;
 const SCENE_MS = 3000;
 const OUTRO_MS = 600;
 
+const INTRO_DROP_START = 420;
+const INTRO_DROP_LAND = 1080;
+const INTRO_TOP_FLY_START = 1720;
+const INTRO_TOP_FLY_END = 2200;
+const INTRO_BOTTOM_FLY_START = 2020;
+const INTRO_BOTTOM_FLY_END = 2550;
+
+const SMOKE_PUFFS = Array.from({ length: 76 }, (_, index) => {
+  const seed = Math.sin((index + 1) * 91.37) * 43758.5453;
+  const random = seed - Math.floor(seed);
+  const side = index % 2 === 0 ? -1 : 1;
+  return {
+    x: side * (18 + random * 430),
+    y: -28 + ((index * 37) % 72),
+    driftX: side * (150 + ((index * 29) % 260)),
+    driftY: 55 + ((index * 43) % 180),
+    size: 24 + ((index * 17) % 54),
+    alpha: 0.4 + ((index * 13) % 30) / 100,
+  };
+});
+
 export function warningTotalMs(pointCount: number): number {
   return INTRO_MS + Math.max(1, pointCount) * SCENE_MS + OUTRO_MS;
 }
@@ -94,34 +115,6 @@ function drawOrbit(ctx: CanvasRenderingContext2D, index: number, local: number) 
   ctx.restore();
 }
 
-function drawTitleBlock(
-  ctx: CanvasRenderingContext2D,
-  content: GeneratedContent,
-  options: WarningOptions,
-  topY: number,
-  bottomY: number,
-  topSize: number,
-  bottomSize: number,
-  alpha = 1,
-) {
-  const { top, bottom } = warningTitles(content, options);
-  const maxWidth = 1500;
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.shadowBlur = 22;
-  ctx.shadowColor = options.titleTopColor;
-  ctx.font = `900 ${fitFont(ctx, top, maxWidth, topSize, 54, 900)}px ${FONT}`;
-  ctx.fillStyle = textFill(ctx, options.titleTopColor, options.titleTopColorEnd, maxWidth);
-  ctx.fillText(top, CW / 2, topY);
-  ctx.shadowColor = options.titleBottomColor;
-  ctx.font = `900 ${fitFont(ctx, bottom, maxWidth, bottomSize, 46, 900)}px ${FONT}`;
-  ctx.fillStyle = textFill(ctx, options.titleBottomColor, options.titleBottomColorEnd, maxWidth);
-  ctx.fillText(bottom, CW / 2, bottomY);
-  ctx.restore();
-}
-
 function drawPinnedTitle(
   ctx: CanvasRenderingContext2D,
   content: GeneratedContent,
@@ -130,11 +123,30 @@ function drawPinnedTitle(
   alpha = 1,
 ) {
   const { top, bottom } = warningTitles(content, options);
+  const layout = pinnedTitleLayout(ctx, top, bottom, options);
+  const maxWidth = 1500;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.shadowBlur = 20;
+  ctx.shadowColor = options.titleTopColor;
+  ctx.font = `900 ${layout.topSize}px ${FONT}`;
+  ctx.fillStyle = textFill(ctx, options.titleTopColor, options.titleTopColorEnd, maxWidth);
+  ctx.fillText(top, layout.topX, y);
+  ctx.shadowColor = options.titleBottomColor;
+  ctx.font = `900 ${layout.bottomSize}px ${FONT}`;
+  ctx.fillStyle = textFill(ctx, options.titleBottomColor, options.titleBottomColorEnd, maxWidth);
+  ctx.fillText(bottom, layout.bottomX, y);
+  ctx.restore();
+}
+
+function pinnedTitleLayout(ctx: CanvasRenderingContext2D, top: string, bottom: string, options: WarningOptions) {
   const maxWidth = 1500;
   const gap = 34;
   let topSize = options.titleTopFontSize;
   let bottomSize = options.titleBottomFontSize;
-
   ctx.save();
   ctx.font = `900 ${topSize}px ${FONT}`;
   const initialTopWidth = ctx.measureText(top).width;
@@ -143,42 +155,142 @@ function drawPinnedTitle(
   const scale = Math.min(1, maxWidth / (initialTopWidth + gap + initialBottomWidth));
   topSize = Math.max(54, Math.round(topSize * scale));
   bottomSize = Math.max(46, Math.round(bottomSize * scale));
-
   ctx.font = `900 ${topSize}px ${FONT}`;
   const topWidth = ctx.measureText(top).width;
   ctx.font = `900 ${bottomSize}px ${FONT}`;
   const bottomWidth = ctx.measureText(bottom).width;
-  const startX = (CW - topWidth - gap - bottomWidth) / 2;
+  ctx.restore();
+  const topX = (CW - topWidth - gap - bottomWidth) / 2;
+  return { topSize, bottomSize, topWidth, bottomWidth, topX, bottomX: topX + topWidth + gap };
+}
 
+function drawLandingSmoke(ctx: CanvasRenderingContext2D, y: number, progress: number) {
+  if (progress <= 0 || progress >= 1) return;
+  const eased = easeOutCubic(progress);
+  ctx.save();
+  for (const puff of SMOKE_PUFFS) {
+    const x = CW / 2 + puff.x + puff.driftX * eased;
+    const py = y + puff.y - puff.driftY * eased;
+    const radius = puff.size * (0.7 + eased * 1.9);
+    const alpha = puff.alpha * (1 - progress) * (1 - progress * 0.35);
+    const haze = ctx.createRadialGradient(x, py, 0, x, py, radius);
+    haze.addColorStop(0, `rgba(255,255,255,${alpha})`);
+    haze.addColorStop(0.55, `rgba(238,241,245,${alpha * 0.65})`);
+    haze.addColorStop(1, 'rgba(220,225,232,0)');
+    ctx.fillStyle = haze;
+    ctx.beginPath();
+    ctx.arc(x, py, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawImpactExplosion(ctx: CanvasRenderingContext2D, y: number, progress: number) {
+  if (progress <= 0 || progress >= 1) return;
+  const burst = easeOutCubic(progress);
+  const fade = 1 - progress;
+  ctx.save();
+  const flash = ctx.createRadialGradient(CW / 2, y, 0, CW / 2, y, 420 * burst);
+  flash.addColorStop(0, `rgba(255,255,255,${0.72 * fade})`);
+  flash.addColorStop(0.18, `rgba(255,239,181,${0.48 * fade})`);
+  flash.addColorStop(1, 'rgba(244,220,112,0)');
+  ctx.fillStyle = flash;
+  ctx.fillRect(CW / 2 - 520, y - 360, 1040, 720);
+
+  for (let ring = 0; ring < 3; ring += 1) {
+    const ringT = clamp(progress - ring * 0.09, 0, 1);
+    if (!ringT) continue;
+    ctx.globalAlpha = (1 - ringT) * 0.75;
+    ctx.strokeStyle = ring === 0 ? '#ffffff' : '#f4dc70';
+    ctx.lineWidth = Math.max(2, 12 * (1 - ringT));
+    ctx.beginPath();
+    ctx.ellipse(CW / 2, y + 28, 650 * ringT, 120 * ringT, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.lineCap = 'round';
+  for (let index = 0; index < 28; index += 1) {
+    const angle = -Math.PI * 0.92 + (index / 27) * Math.PI * 0.84;
+    const inner = 110 + (index % 4) * 18;
+    const outer = inner + burst * (190 + (index % 7) * 34);
+    ctx.globalAlpha = fade * (0.48 + (index % 3) * 0.17);
+    ctx.strokeStyle = index % 3 === 0 ? '#ffffff' : '#f4dc70';
+    ctx.lineWidth = index % 4 === 0 ? 7 : 3;
+    ctx.beginPath();
+    ctx.moveTo(CW / 2 + Math.cos(angle) * inner, y + Math.sin(angle) * inner * 0.35);
+    ctx.lineTo(CW / 2 + Math.cos(angle) * outer, y + Math.sin(angle) * outer * 0.5);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawIntroTitleLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  y: number,
+  preferredSize: number,
+  color: string,
+  colorEnd: string,
+  alpha = 1,
+  scaleY = 1,
+) {
+  const maxWidth = 1500;
+  ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.textAlign = 'left';
+  ctx.translate(CW / 2, y);
+  ctx.scale(1, scaleY);
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowBlur = 20;
-  ctx.shadowColor = options.titleTopColor;
-  ctx.font = `900 ${topSize}px ${FONT}`;
-  ctx.fillStyle = textFill(ctx, options.titleTopColor, options.titleTopColorEnd, maxWidth);
-  ctx.fillText(top, startX, y);
-  ctx.shadowColor = options.titleBottomColor;
-  ctx.font = `900 ${bottomSize}px ${FONT}`;
-  ctx.fillStyle = textFill(ctx, options.titleBottomColor, options.titleBottomColorEnd, maxWidth);
-  ctx.fillText(bottom, startX + topWidth + gap, y);
+  ctx.shadowBlur = 24;
+  ctx.shadowColor = color;
+  ctx.font = `900 ${fitFont(ctx, text, maxWidth, preferredSize, 46, 900)}px ${FONT}`;
+  ctx.fillStyle = textFill(ctx, color, colorEnd, maxWidth);
+  ctx.fillText(text, 0, 0);
   ctx.restore();
 }
 
 function drawIntro(ctx: CanvasRenderingContext2D, elapsed: number, content: GeneratedContent, options: WarningOptions) {
-  const enter = easeOutCubic(clamp((elapsed - 250) / 700, 0, 1));
-  const fly = easeOutCubic(clamp((elapsed - 1450) / 900, 0, 1));
-  drawTitleBlock(
-    ctx,
-    content,
-    options,
-    lerp(420, 230, fly),
-    lerp(585, 300, fly),
-    lerp(Math.max(options.titleTopFontSize, 154), options.titleTopFontSize, fly),
-    lerp(Math.max(options.titleBottomFontSize, 126), options.titleBottomFontSize, fly),
-    enter * (1 - fly),
-  );
-  drawPinnedTitle(ctx, content, options, lerp(500, 105, fly), enter * fly);
+  const { top, bottom } = warningTitles(content, options);
+  const topFly = easeOutCubic(clamp((elapsed - INTRO_TOP_FLY_START) / (INTRO_TOP_FLY_END - INTRO_TOP_FLY_START), 0, 1));
+  const bottomFly = easeOutCubic(clamp((elapsed - INTRO_BOTTOM_FLY_START) / (INTRO_BOTTOM_FLY_END - INTRO_BOTTOM_FLY_START), 0, 1));
+  const drop = easeOutCubic(clamp((elapsed - INTRO_DROP_START) / (INTRO_DROP_LAND - INTRO_DROP_START), 0, 1));
+  const impactElapsed = elapsed - INTRO_DROP_LAND;
+  const impact = clamp(impactElapsed / 190, 0, 1);
+  const settle = clamp((impactElapsed - 190) / 260, 0, 1);
+  const bounceOffset = impactElapsed >= 0 && impactElapsed < 450
+    ? -Math.sin((impactElapsed / 450) * Math.PI) * 18 * (1 - impactElapsed / 450)
+    : 0;
+  const shake = impactElapsed >= 0 && impactElapsed < 260
+    ? Math.sin(impactElapsed * 0.12) * 7 * (1 - impactElapsed / 260)
+    : 0;
+  const bottomY = elapsed < INTRO_DROP_START
+    ? -260
+    : lerp(-260, 610, drop) + bounceOffset;
+  const squash = impactElapsed >= 0 && impactElapsed < 450
+    ? lerp(0.8, 1, settle) + Math.sin(impact * Math.PI) * 0.08
+    : 1;
+  const layout = pinnedTitleLayout(ctx, top, bottom, options);
+  const topIntroSize = Math.max(options.titleTopFontSize, 154);
+  const bottomIntroSize = Math.max(options.titleBottomFontSize, 126);
+  const topSize = lerp(topIntroSize, layout.topSize, topFly);
+  const bottomSize = lerp(bottomIntroSize, layout.bottomSize, bottomFly);
+  const topX = lerp(CW / 2, layout.topX + layout.topWidth / 2, topFly);
+  const topY = lerp(370, 105, topFly);
+  const movingBottomY = lerp(bottomY, 105, bottomFly);
+  const bottomX = lerp(CW / 2, layout.bottomX + layout.bottomWidth / 2, bottomFly);
+
+  drawImpactExplosion(ctx, 645, clamp(impactElapsed / 620, 0, 1));
+  drawLandingSmoke(ctx, 660, clamp(impactElapsed / 1050, 0, 1));
+
+  ctx.save();
+  ctx.translate(shake, impactElapsed >= 0 ? Math.abs(shake) * 0.25 : 0);
+  ctx.translate(topX - CW / 2, 0);
+  drawIntroTitleLine(ctx, top, topY, topSize, options.titleTopColor, options.titleTopColorEnd);
+  ctx.restore();
+  ctx.save();
+  ctx.translate(bottomX - CW / 2 + shake, impactElapsed >= 0 ? Math.abs(shake) * 0.25 : 0);
+  drawIntroTitleLine(ctx, bottom, movingBottomY, bottomSize, options.titleBottomColor, options.titleBottomColorEnd, drop, bottomFly > 0 ? 1 : squash);
+  ctx.restore();
 }
 
 function drawPage(ctx: CanvasRenderingContext2D, content: GeneratedContent, index: number, local: number, options: WarningOptions) {
